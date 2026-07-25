@@ -17,7 +17,7 @@
         <a href="/#features">Features</a>
         <a href="/#printers">Supported printers</a>
         <a href="/#how">How it works</a>
-        <a href="/signup">Launch your HQ</a>
+        <a href="/app">Launch your HQ</a>
       </div>
       <div class="col">
         <h4>Open</h4>
