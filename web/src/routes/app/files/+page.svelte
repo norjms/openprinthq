@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
+  import PresetSelect from '$lib/components/PresetSelect.svelte';
 
   let loading = $state(true);
   let error = $state(null);
@@ -94,6 +95,17 @@
   }
   function key(p) { return `${p.source}::${p.id}`; }
   function fromKey(list, k) { return list.find((p) => key(p) === k) || null; }
+
+  // Options for the searchable combobox, and a priority hint so presets that
+  // match the chosen printer's model+nozzle float to the top of process/filament.
+  const toOpts = (list) => list.map((p) => ({ value: key(p), label: p.name }));
+  const printerOpts = $derived(toOpts(printerPresets));
+  const processOpts = $derived(toOpts(processPresets));
+  const filamentOpts = $derived(toOpts(filamentPresets));
+  const printerPriority = $derived.by(() => {
+    const p = fromKey(printerPresets, selPrinter);
+    return p ? p.name.replace(/^(Bambu Lab|Prusa|Creality|Voron|Snapmaker|FlashForge|Anycubic|Elegoo)\s*/i, '').trim() : '';
+  });
 
   async function openSlice(f) {
     sliceFile = f; sliceErr = null; sliceMsg = null;
@@ -248,21 +260,15 @@
       {:else}
         <div class="field">
           <label for="pr">Printer</label>
-          <select id="pr" class="input" bind:value={selPrinter}>
-            {#each printerPresets as p}<option value={`${p.source}::${p.id}`}>{p.name}</option>{/each}
-          </select>
+          <PresetSelect id="pr" options={printerOpts} bind:value={selPrinter} placeholder="Search printers…" />
         </div>
         <div class="field">
           <label for="pc">Process / quality</label>
-          <select id="pc" class="input" bind:value={selProcess}>
-            {#each processPresets as p}<option value={`${p.source}::${p.id}`}>{p.name}</option>{/each}
-          </select>
+          <PresetSelect id="pc" options={processOpts} bind:value={selProcess} priority={printerPriority} placeholder="Search processes…" />
         </div>
         <div class="field">
           <label for="fl">Filament</label>
-          <select id="fl" class="input" bind:value={selFilament}>
-            {#each filamentPresets as p}<option value={`${p.source}::${p.id}`}>{p.name}</option>{/each}
-          </select>
+          <PresetSelect id="fl" options={filamentOpts} bind:value={selFilament} priority={printerPriority} placeholder="Search filaments…" />
         </div>
         <p class="muted hint">Presets must match the printer (model &amp; nozzle). If a combo is incompatible, OrcaSlicer says so — just adjust.</p>
         <label class="q-opt">
