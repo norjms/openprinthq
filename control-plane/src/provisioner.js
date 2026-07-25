@@ -15,6 +15,8 @@ const exec = promisify(execFile);
 
 const BASE_PORT = Number(process.env.OPHQ_BASE_PORT || 39000);
 const ENGINE_IMAGE = process.env.OPHQ_ENGINE_IMAGE || ''; // e.g. internal.example.com/openprinthq/openprinthq-engine:dev
+const ENGINE_HOST = process.env.OPHQ_ENGINE_HOST || '10.10.10.109';
+const SLICER_URL = process.env.OPHQ_SLICER_URL || 'http://10.10.10.109:3003'; // shared OrcaSlicer sidecar
 const PG_HOST = process.env.OPHQ_PG_HOST || '10.10.10.254';
 const PG_PORT = process.env.OPHQ_PG_PORT || '5432';
 const PG_USER = process.env.OPHQ_PG_USER || 'ophq_app';
@@ -65,6 +67,7 @@ async function startEngineContainer({ subdomain, port }) {
       '-p', `${port}:8000`,
       '-e', 'PORT=8000',
       '-e', `TZ=${process.env.OPHQ_TZ || 'America/Chicago'}`,
+      '-e', `SLICER_API_URL=${SLICER_URL}`,
       '-v', `ophq_${subdomain}_data:/app/data`,
       '-v', `ophq_${subdomain}_logs:/app/logs`,
       '--label', `openprinthq.tenant=${subdomain}`,
@@ -74,6 +77,31 @@ async function startEngineContainer({ subdomain, port }) {
   } catch (e) {
     return { started: false, reason: e.message };
   }
+}
+
+// After the engine boots, enable the built-in OrcaSlicer (shared sidecar).
+// Best-effort: never fail provisioning if the engine is slow or the call errors.
+async function configureEngine(port) {
+  const base = `http://${ENGINE_HOST}:${port}`;
+  for (let i = 0; i < 20; i++) {
+    try {
+      const r = await fetch(base + '/api/v1/settings', { method: 'GET' });
+      if (r.ok) {
+        await fetch(base + '/api/v1/settings', {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            use_slicer_api: true,
+            preferred_slicer: 'orcaslicer',
+            orcaslicer_api_url: SLICER_URL
+          })
+        }).catch(() => {});
+        return true;
+      }
+    } catch { /* engine still booting */ }
+    await new Promise((res) => setTimeout(res, 1500));
+  }
+  return false;
 }
 
 export async function provisionForUser(user) {
@@ -93,6 +121,7 @@ export async function provisionForUser(user) {
 
   await createTenantDb(dbName);
   const engine = await startEngineContainer({ subdomain, port });
+  if (engine.started) configureEngine(port); // fire-and-forget slicer setup
 
   const status = engine.started ? 'running' : 'provisioned';
   const { rows: upd } = await pool.query(
