@@ -30,5 +30,7 @@ export const api = {
   engine: (path, opts) => req('/engine' + path, opts),
   printers: () => req('/engine/api/v1/printers/'),
   queue: () => req('/engine/api/v1/queue/'),
-  files: () => req('/engine/api/v1/library/files')
+  files: () => req('/engine/api/v1/library/files'),
+  spools: () => req('/engine/api/v1/inventory/spools'),
+  printStats: () => req('/engine/api/v1/archives/stats')
 };
