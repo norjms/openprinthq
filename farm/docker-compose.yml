@@ -1,0 +1,45 @@
+# OpenPrintHQ — control-plane stack
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Runs the public website + control-plane API behind a single edge router.
+# Per-user engine instances are started dynamically by the control-plane
+# (which is why it gets the Docker socket), not declared here.
+
+services:
+  router:
+    build: ./infra/router
+    image: openprinthq/router:dev
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on: [web, control-plane]
+
+  web:
+    build: ./web
+    image: openprinthq/web:dev
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+    expose:
+      - "3000"
+
+  control-plane:
+    build: ./control-plane
+    image: openprinthq/control-plane:dev
+    restart: unless-stopped
+    environment:
+      - PORT=8080
+      - DATABASE_URL=${DATABASE_URL}
+      - SESSION_SECRET=${SESSION_SECRET}
+      - OPHQ_PG_HOST=${OPHQ_PG_HOST}
+      - OPHQ_PG_PORT=${OPHQ_PG_PORT}
+      - OPHQ_PG_USER=${OPHQ_PG_USER}
+      - OPHQ_PG_PASS=${OPHQ_PG_PASS}
+      - OPHQ_ENGINE_IMAGE=${OPHQ_ENGINE_IMAGE}
+      - OPHQ_BASE_PORT=${OPHQ_BASE_PORT}
+      - OIDC_ISSUER=${OIDC_ISSUER}
+    volumes:
+      # lets the provisioner start per-tenant engine containers
+      - /var/run/docker.sock:/var/run/docker.sock
+    expose:
+      - "8080"
