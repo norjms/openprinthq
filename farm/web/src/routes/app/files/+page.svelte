@@ -96,15 +96,63 @@
   function key(p) { return `${p.source}::${p.id}`; }
   function fromKey(list, k) { return list.find((p) => key(p) === k) || null; }
 
-  // Options for the searchable combobox, and a priority hint so presets that
-  // match the chosen printer's model+nozzle float to the top of process/filament.
   const toOpts = (list) => list.map((p) => ({ value: key(p), label: p.name }));
   const printerOpts = $derived(toOpts(printerPresets));
-  const processOpts = $derived(toOpts(processPresets));
-  const filamentOpts = $derived(toOpts(filamentPresets));
-  const printerPriority = $derived.by(() => {
+
+  // Real compatibility: the control-plane joins OrcaSlicer's compatible_printers
+  // data, so process/filament are filtered to what actually fits the printer
+  // (182→~10, 974→~69), not a name heuristic. `null` = not loaded yet / failed.
+  let compat = $state({ process: null, filament: null });
+  let showAllPresets = $state(false);
+  let compatLoading = $state(false);
+
+  const selPrinterName = $derived.by(() => {
     const p = fromKey(printerPresets, selPrinter);
-    return p ? p.name.replace(/^(Bambu Lab|Prusa|Creality|Voron|Snapmaker|FlashForge|Anycubic|Elegoo)\s*/i, '').trim() : '';
+    return p ? p.name : '';
+  });
+
+  function compatFilter(list, set) {
+    // Keep non-standard (user local/cloud) presets always; filter stock ones.
+    if (showAllPresets || !set || set.size === 0) return list;
+    return list.filter((p) => p.source !== 'standard' || set.has(p.name));
+  }
+  const processOpts = $derived(toOpts(compatFilter(processPresets, compat.process)));
+  const filamentOpts = $derived(toOpts(compatFilter(filamentPresets, compat.filament)));
+  const compatCount = $derived(
+    compat.process && compat.filament && !showAllPresets
+      ? { proc: processOpts.length, fil: filamentOpts.length } : null
+  );
+
+  function repickDefaults() {
+    const badNozzle = /0\.[2368]\s*nozzle/i;
+    const procList = compatFilter(processPresets, compat.process);
+    const dp = procList.find((p) => /0\.20mm.*standard/i.test(p.id) && !badNozzle.test(p.id))
+      || procList.find((p) => /standard/i.test(p.id) && !badNozzle.test(p.id))
+      || procList[0];
+    selProcess = dp ? key(dp) : '';
+    const filList = compatFilter(filamentPresets, compat.filament);
+    const df = filList.find((p) => /pla\s*basic/i.test(p.id))
+      || filList.find((p) => /\bpla\b/i.test(p.id))
+      || filList[0];
+    selFilament = df ? key(df) : '';
+  }
+
+  // Load compatibility whenever the chosen printer changes, then re-default
+  // process + filament to compatible picks.
+  $effect(() => {
+    const name = selPrinterName;
+    if (!name) { compat = { process: null, filament: null }; return; }
+    let cancelled = false;
+    compatLoading = true;
+    api.compatiblePresets(name)
+      .then((c) => {
+        if (cancelled) return;
+        compat = { process: new Set(c.process || []), filament: new Set(c.filament || []) };
+        repickDefaults();
+      })
+      .catch(() => { if (!cancelled) compat = { process: null, filament: null }; })
+      .finally(() => { if (!cancelled) compatLoading = false; });
+    return () => { cancelled = true; };
   });
 
   async function openSlice(f) {
@@ -122,19 +170,9 @@
         printerPresets.find((p) => /nozzle/i.test(p.id)) ||
         printerPresets[0];
       selPrinter = dfltPrinter ? key(dfltPrinter) : '';
-      // Prefer a 0.4-nozzle "Standard" process and a "PLA Basic" filament so the
-      // default triplet is a sensible, commonly-compatible starting point.
-      const badNozzle = /0\.[2368]\s*nozzle/i;
-      const dfltProcess =
-        processPresets.find((p) => /0\.20mm.*standard/i.test(p.id) && !badNozzle.test(p.id)) ||
-        processPresets.find((p) => /standard/i.test(p.id) && !badNozzle.test(p.id)) ||
-        processPresets[0];
-      const dfltFilament =
-        filamentPresets.find((p) => /pla\s*basic/i.test(p.id)) ||
-        filamentPresets.find((p) => /\bpla\b/i.test(p.id)) ||
-        filamentPresets[0];
-      selProcess = dfltProcess ? key(dfltProcess) : '';
-      selFilament = dfltFilament ? key(dfltFilament) : '';
+      // Process + filament defaults are chosen from the printer's COMPATIBLE
+      // presets by the $effect (repickDefaults) once compatibility loads.
+      selProcess = ''; selFilament = '';
     } catch (e) { sliceErr = e.message || 'could not load presets'; }
     finally { presetsLoading = false; }
   }
@@ -264,13 +302,21 @@
         </div>
         <div class="field">
           <label for="pc">Process / quality</label>
-          <PresetSelect id="pc" options={processOpts} bind:value={selProcess} priority={printerPriority} placeholder="Search processes…" />
+          <PresetSelect id="pc" options={processOpts} bind:value={selProcess} placeholder="Search processes…" />
         </div>
         <div class="field">
           <label for="fl">Filament</label>
-          <PresetSelect id="fl" options={filamentOpts} bind:value={selFilament} priority={printerPriority} placeholder="Search filaments…" />
+          <PresetSelect id="fl" options={filamentOpts} bind:value={selFilament} placeholder="Search filaments…" />
         </div>
-        <p class="muted hint">Presets must match the printer (model &amp; nozzle). If a combo is incompatible, OrcaSlicer says so — just adjust.</p>
+        <p class="muted hint">
+          {#if compatLoading}Checking compatible presets…
+          {:else if compatCount}Showing {compatCount.proc} process &amp; {compatCount.fil} filament presets compatible with this printer.
+          {:else}Presets must match the printer's model &amp; nozzle.{/if}
+        </p>
+        <label class="q-opt">
+          <input type="checkbox" bind:checked={showAllPresets} disabled={slicing} />
+          <span>Show all presets (ignore printer compatibility)</span>
+        </label>
         <label class="q-opt">
           <input type="checkbox" bind:checked={addQueueWhenDone} disabled={slicing} />
           <span>Add to print queue when slicing finishes</span>

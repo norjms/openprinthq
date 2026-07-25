@@ -60,6 +60,8 @@ export const api = {
   printStats: () => req('/engine/api/v1/archives/stats'),
   slicerModels: () => req('/engine/api/v1/slicer/printer-models'),
   slicerPresets: () => req('/engine/api/v1/slicer/presets'),
+  // Compatible process/filament preset names for a printer (control-plane join).
+  compatiblePresets: (printer) => req('/slicer/compatible?printer=' + encodeURIComponent(printer)),
   slice: (fileId, body) =>
     req('/engine/api/v1/library/files/' + fileId + '/slice', { method: 'POST', body: JSON.stringify(body) }),
   sliceJob: (jobId) => req('/engine/api/v1/slice-jobs/' + jobId),
