@@ -80,6 +80,8 @@ export const api = {
   slicerPresets: () => req('/engine/api/v1/slicer/presets'),
   // Compatible process/filament preset names for a printer (control-plane join).
   compatiblePresets: (printer) => req('/slicer/compatible?printer=' + encodeURIComponent(printer)),
+  // Bambu HMS error dictionary (short_code -> description) for decoding alerts.
+  hmsDescriptions: () => req('/hms/descriptions'),
   slice: (fileId, body) =>
     req('/engine/api/v1/library/files/' + fileId + '/slice', { method: 'POST', body: JSON.stringify(body) }),
   sliceJob: (jobId) => req('/engine/api/v1/slice-jobs/' + jobId),
