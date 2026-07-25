@@ -51,21 +51,26 @@ async function createTenantDb(dbName) {
   }
 }
 
-async function startEngineContainer({ subdomain, dbName, port }) {
+async function startEngineContainer({ subdomain, port }) {
   if (!ENGINE_IMAGE) return { started: false, reason: 'no-engine-image' };
   const name = `ophq-${subdomain}`;
-  const dbUrl = `postgresql://${PG_USER}:${PG_PASS}@${PG_HOST}:${PG_PORT}/${dbName}`;
+  // The engine (Bambuddy-derived) listens on PORT (default 8000) and keeps its
+  // state in /app/data. Each tenant gets an isolated container + named volumes,
+  // bridged with a unique host port. (Host networking — needed for LAN printer
+  // discovery — is a per-tenant hardening follow-up; see issue #8.)
   try {
     await exec('docker', ['rm', '-f', name]).catch(() => {});
     await exec('docker', [
       'run', '-d', '--name', name, '--restart', 'unless-stopped',
-      '-p', `${port}:8080`,
-      '-e', `DATABASE_URL=${dbUrl}`,
-      '-e', `OPHQ_SUBDOMAIN=${subdomain}`,
-      '--label', 'openprinthq.tenant=' + subdomain,
+      '-p', `${port}:8000`,
+      '-e', 'PORT=8000',
+      '-e', `TZ=${process.env.OPHQ_TZ || 'America/Chicago'}`,
+      '-v', `ophq_${subdomain}_data:/app/data`,
+      '-v', `ophq_${subdomain}_logs:/app/logs`,
+      '--label', `openprinthq.tenant=${subdomain}`,
       ENGINE_IMAGE
     ]);
-    return { started: true };
+    return { started: true, port };
   } catch (e) {
     return { started: false, reason: e.message };
   }
@@ -87,7 +92,7 @@ export async function provisionForUser(user) {
   const port = BASE_PORT + inst.id;
 
   await createTenantDb(dbName);
-  const engine = await startEngineContainer({ subdomain, dbName, port });
+  const engine = await startEngineContainer({ subdomain, port });
 
   const status = engine.started ? 'running' : 'provisioned';
   const { rows: upd } = await pool.query(
