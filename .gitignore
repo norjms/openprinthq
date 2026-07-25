@@ -1,0 +1,15 @@
+# deps / build
+node_modules/
+web/.svelte-kit/
+web/build/
+control-plane/dist/
+
+# env / secrets — NEVER commit
+.env
+*.local.md
+DEPLOY_SECRETS*
+
+# misc
+.DS_Store
+*.log
+npm-debug.log*
