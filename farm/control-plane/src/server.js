@@ -15,8 +15,13 @@ function engineBase(inst) {
   return inst && inst.port ? `http://${ENGINE_HOST}:${inst.port}` : null;
 }
 
-const app = Fastify({ logger: true, trustProxy: true });
+const app = Fastify({ logger: true, trustProxy: true, bodyLimit: 1024 * 1024 * 1024 });
 await app.register(cookie, { secret: SESSION_SECRET });
+
+// Buffer non-JSON bodies raw so the engine gateway can forward file uploads
+// (multipart) and binary verbatim, preserving the original content-type/boundary.
+app.addContentTypeParser(/^multipart\/form-data/, { parseAs: 'buffer' }, (req, body, done) => done(null, body));
+app.addContentTypeParser('application/octet-stream', { parseAs: 'buffer' }, (req, body, done) => done(null, body));
 
 function setSession(reply, email) {
   reply.setCookie(COOKIE, email, {
@@ -154,8 +159,14 @@ app.all('/api/engine/*', async (req, reply) => {
   const headers = { accept: req.headers['accept'] || 'application/json' };
   let body;
   if (!['GET', 'HEAD'].includes(method) && req.body !== undefined) {
-    headers['content-type'] = 'application/json';
-    body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+    if (Buffer.isBuffer(req.body)) {
+      // raw passthrough (multipart / binary) — keep the original content-type + boundary
+      headers['content-type'] = req.headers['content-type'] || 'application/octet-stream';
+      body = req.body;
+    } else {
+      headers['content-type'] = 'application/json';
+      body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+    }
   }
   try {
     const res = await fetch(base + enginePath, { method, headers, body });
