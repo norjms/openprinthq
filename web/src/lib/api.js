@@ -32,5 +32,18 @@ export const api = {
   queue: () => req('/engine/api/v1/queue/'),
   files: () => req('/engine/api/v1/library/files'),
   spools: () => req('/engine/api/v1/inventory/spools'),
-  printStats: () => req('/engine/api/v1/archives/stats')
+  printStats: () => req('/engine/api/v1/archives/stats'),
+  // Multipart upload straight through the gateway to the user's engine library.
+  async uploadFile(file) {
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch(base + '/engine/api/v1/library/files', {
+      method: 'POST', body: fd, credentials: 'include'
+    });
+    if (!res.ok) {
+      let d; try { d = await res.json(); } catch { d = { error: res.statusText }; }
+      throw Object.assign(new Error(d.error || d.detail || 'upload failed'), { status: res.status });
+    }
+    return res.json().catch(() => ({}));
+  }
 };
