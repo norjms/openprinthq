@@ -40,7 +40,7 @@
       queue, slice, monitor and manage your whole farm from one place. Every user gets their own isolated instance.
     </p>
     <div class="cta">
-      <a href="/signup" class="btn btn-primary">Launch your HQ →</a>
+      <a href="/app" class="btn btn-primary">Launch your HQ →</a>
       <a href="/#how" class="btn btn-ghost">See how it works</a>
     </div>
     <div class="stat-row">
@@ -116,7 +116,7 @@
       </p>
       <div class="cta">
         <a href="https://internal.example.com/OpenPrintHQ/openprinthq" class="btn btn-primary">Read the source</a>
-        <a href="/signup" class="btn btn-ghost">Launch your HQ</a>
+        <a href="/app" class="btn btn-ghost">Launch your HQ</a>
       </div>
     </div>
   </div>
