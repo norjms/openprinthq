@@ -6,10 +6,19 @@
 const base = '/api';
 
 async function req(path, opts = {}) {
+  const { headers: optHeaders, ...rest } = opts;
+  const headers = { ...(optHeaders || {}) };
+  // Only advertise a JSON body when there actually is one. A bodyless
+  // POST/DELETE that still sends `content-type: application/json` makes the
+  // Fastify gateway reject it with 400 ("body cannot be empty"), which broke
+  // every no-body action (queue start/cancel/stop/delete, printer controls).
+  if (rest.body !== undefined && !('content-type' in headers)) {
+    headers['content-type'] = 'application/json';
+  }
   const res = await fetch(base + path, {
-    headers: { 'content-type': 'application/json', ...(opts.headers || {}) },
+    headers,
     credentials: 'include',
-    ...opts
+    ...rest
   });
   if (!res.ok) {
     let detail;
@@ -38,6 +47,14 @@ export const api = {
   setTemp: (id, kind, target) =>
     req('/engine/api/v1/printers/' + id + '/temperature/' + kind + '?target=' + encodeURIComponent(target), { method: 'POST' }),
   queue: () => req('/engine/api/v1/queue/'),
+  queueUpdate: (id, body) =>
+    req('/engine/api/v1/queue/' + id, { method: 'PATCH', body: JSON.stringify(body) }),
+  queueDelete: (id) => req('/engine/api/v1/queue/' + id, { method: 'DELETE' }),
+  queueStart: (id) => req('/engine/api/v1/queue/' + id + '/start', { method: 'POST' }),
+  queueCancel: (id) => req('/engine/api/v1/queue/' + id + '/cancel', { method: 'POST' }),
+  queueStop: (id) => req('/engine/api/v1/queue/' + id + '/stop', { method: 'POST' }),
+  queueReorder: (items) =>
+    req('/engine/api/v1/queue/reorder', { method: 'POST', body: JSON.stringify({ items }) }),
   files: () => req('/engine/api/v1/library/files'),
   spools: () => req('/engine/api/v1/inventory/spools'),
   printStats: () => req('/engine/api/v1/archives/stats'),
