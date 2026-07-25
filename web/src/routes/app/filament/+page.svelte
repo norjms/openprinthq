@@ -8,14 +8,26 @@
 
   function norm(d) {
     const arr = Array.isArray(d) ? d : (d?.spools || d?.items || d?.results || []);
-    return arr.map((s) => ({
-      id: s.id ?? s.spool_id,
-      name: s.name ?? s.filament_name ?? (`${s.vendor ?? ''} ${s.material ?? s.filament_type ?? ''}`.trim() || 'Spool'),
-      material: s.material ?? s.filament_type ?? s.type ?? '',
-      color: s.color_hex ?? s.color ?? '',
-      remaining: s.remaining_weight ?? s.remaining_grams ?? s.weight_remaining ?? null,
-      total: s.total_weight ?? s.spool_weight ?? null
-    }));
+    return arr.map((s) => {
+      const label = s.label_weight ?? s.total_weight ?? s.spool_weight ?? null;
+      const used = s.weight_used ?? null;
+      const remaining = s.remaining_weight ?? s.remaining_grams ?? s.weight_remaining ??
+        (label != null && used != null ? Math.max(0, label - used) : null);
+      // Bambu AMS colours come as RRGGBBAA hex; browsers accept 8-digit hex but
+      // drop the alpha so the swatch is always opaque.
+      const raw = s.rgba || s.color_hex || s.color || '';
+      const color = raw ? (String(raw).startsWith('#') ? raw : '#' + String(raw).slice(0, 6)) : '';
+      return {
+        id: s.id ?? s.spool_id ?? s.tray_uuid,
+        name: s.slicer_filament_name ?? s.name ?? s.filament_name ??
+          (`${s.brand ?? ''} ${s.material ?? ''} ${s.subtype ?? ''}`.replace(/\s+/g, ' ').trim() || 'Spool'),
+        material: [s.material ?? s.filament_type, s.subtype].filter(Boolean).join(' · '),
+        colorName: s.color_name ?? '',
+        color,
+        remaining: remaining != null ? Math.round(remaining) : null,
+        total: label
+      };
+    });
   }
   async function load() {
     loading = true; error = null;
@@ -52,7 +64,10 @@
       <div class="card card-pad spool">
         <div class="flex center gap">
           <span class="dot" style="background:{s.color || 'var(--ophq-faint)'}"></span>
-          <div><div class="sname">{s.name}</div><div class="muted mono mat">{s.material}</div></div>
+          <div>
+            <div class="sname">{s.name}</div>
+            <div class="muted mono mat">{s.material}{#if s.colorName} · {s.colorName}{/if}</div>
+          </div>
         </div>
         {#if pct(s) != null}
           <div class="bar"><div class="fill" style="width:{pct(s)}%"></div></div>
