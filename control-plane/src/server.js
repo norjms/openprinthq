@@ -2,8 +2,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
+import { readFileSync } from 'node:fs';
 import { migrate, upsertUser, getUserByEmail, getInstanceForUser, getCompatiblePresets } from './db.js';
 import { provisionForUser } from './provisioner.js';
+
+// Bambu HMS error dictionary (short_code "XXXX_YYYY" -> human description),
+// extracted from the engine's HMS table. Loaded once at startup and served to
+// the printer detail UI so it can decode raw hms_errors into readable text.
+let HMS_DESCRIPTIONS = {};
+try {
+  HMS_DESCRIPTIONS = JSON.parse(readFileSync(new URL('./data/hms_descriptions.json', import.meta.url), 'utf8'));
+} catch (e) {
+  console.error('HMS descriptions unavailable:', e.message);
+}
 
 const PORT = Number(process.env.PORT || 8080);
 const SESSION_SECRET = process.env.SESSION_SECRET || 'dev-insecure-secret-change-me-in-prod-000000';
@@ -112,6 +123,16 @@ app.get('/api/slicer/compatible', async (req, reply) => {
     req.log.error(e);
     return { process: [], filament: [] };
   }
+});
+
+// ---- HMS error descriptions --------------------------------------------
+// Static Bambu HMS dictionary; the printer detail page decodes a machine's
+// raw hms_errors (attr+code -> short_code) against this map. Small enough to
+// return whole and cache client-side.
+app.get('/api/hms/descriptions', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  reply.header('cache-control', 'public, max-age=86400');
+  return HMS_DESCRIPTIONS;
 });
 
 // ---- instance -----------------------------------------------------------
