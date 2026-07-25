@@ -30,9 +30,49 @@
   let busy = $state(false);
   let err = $state(null);
 
+  // ---- Bambu network discovery ----
+  let subnet = $state('10.10.10.0/24');
+  let scanning = $state(false);
+  let scanProgress = $state({ scanned: 0, total: 0 });
+  let discovered = $state([]);
+  let scanned = $state(false);
+  let scanErr = $state(null);
+  let pickedIp = $state(null);
+
   function pick(v) {
     selected = v; err = null; values = {};
+    discovered = []; scanned = false; scanErr = null; pickedIp = null;
+    scanProgress = { scanned: 0, total: 0 };
     for (const f of v.fields) if (f.def !== undefined) values[f.key] = f.def;
+  }
+
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  async function scan() {
+    scanning = true; scanErr = null; discovered = []; scanned = false;
+    scanProgress = { scanned: 0, total: 0 };
+    try {
+      await api.discoverScan(subnet, 1.5);
+      for (let i = 0; i < 40; i++) {
+        await sleep(1500);
+        const s = await api.discoverScanStatus();
+        scanProgress = { scanned: s.scanned || 0, total: s.total || 0 };
+        if (!s.running) break;
+      }
+      discovered = await api.discoveredPrinters();
+    } catch (e) {
+      scanErr = e.message || 'scan failed';
+    } finally {
+      scanning = false; scanned = true;
+    }
+  }
+
+  function pickDiscovered(p) {
+    values.name = values.name || p.name || p.model || 'Bambu printer';
+    values.ip_address = p.ip_address;
+    values.serial_number = p.serial;
+    if (p.model) values.model = p.model;
+    pickedIp = p.ip_address;
   }
 
   async function submit(e) {
@@ -78,6 +118,38 @@
       <h3>{selected.name}</h3>
       <button type="button" class="btn btn-ghost btn-sm" onclick={() => (selected = null)}>Change</button>
     </div>
+
+    {#if selected.ct === 'bambu'}
+      <div class="discover">
+        <div class="dtitle"><b>Find printers on your network</b></div>
+        <p class="muted tiny">Scans your subnet for Bambu printers in LAN mode and fills in the IP, serial &amp; model — you just add the access code.</p>
+        <div class="scanrow">
+          <input class="input" bind:value={subnet} placeholder="10.10.10.0/24" aria-label="Subnet to scan" />
+          <button type="button" class="btn btn-primary btn-sm" onclick={scan} disabled={scanning}>
+            {scanning ? 'Scanning…' : 'Scan'}
+          </button>
+        </div>
+        {#if scanning}
+          <div class="bar"><div class="fill" style="width:{scanProgress.total ? Math.round((scanProgress.scanned / scanProgress.total) * 100) : 5}%"></div></div>
+          <p class="muted tiny">Scanned {scanProgress.scanned}{scanProgress.total ? ' / ' + scanProgress.total : ''} hosts…</p>
+        {/if}
+        {#if scanErr}<p class="err">{scanErr}</p>{/if}
+        {#if discovered.length}
+          <div class="found">
+            {#each discovered as p}
+              <button type="button" class="foundrow" class:sel={pickedIp === p.ip_address} onclick={() => pickDiscovered(p)}>
+                <span class="fn">{p.name || p.model || 'Bambu printer'}{#if p.model}<span class="muted mono"> · {p.model}</span>{/if}</span>
+                <span class="muted mono tiny">{p.ip_address} · {p.serial}</span>
+              </button>
+            {/each}
+          </div>
+          <p class="muted tiny">Selected the printer? Enter its <b>access code</b> below (Settings → LAN-only mode on the printer's screen).</p>
+        {:else if scanned && !scanning}
+          <p class="muted tiny">No printers found. Confirm LAN-only mode is on and the subnet is right, or enter the details manually below.</p>
+        {/if}
+      </div>
+    {/if}
+
     {#each selected.fields as f}
       <div class="field">
         <label for={f.key}>{f.label}{f.required ? ' *' : ''}</label>
@@ -106,4 +178,17 @@
   .form { max-width: 460px; }
   .form h3 { margin: 0 0 0.4rem; }
   .err { color: var(--ophq-danger); font-size: 0.9rem; }
+
+  .discover { border: 1px solid var(--ophq-border); border-radius: var(--radius-sm); padding: 1rem; margin: 0.4rem 0 1.2rem; background: var(--ophq-bg-2); }
+  .dtitle { margin-bottom: 0.2rem; }
+  .tiny { font-size: 0.8rem; }
+  .scanrow { display: flex; gap: 0.5rem; margin: 0.7rem 0 0.4rem; }
+  .scanrow .input { flex: 1; }
+  .bar { height: 8px; background: var(--ophq-bg); border: 1px solid var(--ophq-border); border-radius: 999px; overflow: hidden; margin: 0.5rem 0 0.2rem; }
+  .fill { height: 100%; background: linear-gradient(90deg, var(--ophq-primary), var(--ophq-primary-2)); transition: width 0.3s ease; }
+  .found { display: flex; flex-direction: column; gap: 0.4rem; margin: 0.6rem 0; }
+  .foundrow { display: flex; flex-direction: column; gap: 0.15rem; text-align: left; padding: 0.55rem 0.7rem; border: 1px solid var(--ophq-border); border-radius: var(--radius-sm); background: var(--ophq-surface); cursor: pointer; transition: border 0.15s; }
+  .foundrow:hover { border-color: var(--ophq-primary); }
+  .foundrow.sel { border-color: var(--ophq-primary); background: var(--ophq-primary-dim); }
+  .foundrow .fn { font-weight: 600; color: var(--ophq-text); font-size: 0.92rem; }
 </style>
