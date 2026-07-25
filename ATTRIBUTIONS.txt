@@ -1,0 +1,72 @@
+OpenPrintHQ — Attributions & Third-Party Notices
+=================================================
+
+OpenPrintHQ is free software licensed under the GNU Affero General Public
+License v3.0 (see LICENSE.txt). It is built on, bundles, or depends on the
+open-source projects listed below. Each is used under its own license. Where a
+license requires it, that project's copyright and license notices are preserved
+in the corresponding source (the app/ and engine/ trees of the source archive)
+and in the bundled dependency manifests and packages. No endorsement by any of
+these projects is implied.
+
+
+PRINT ENGINE
+------------
+Bambuddy — https://github.com/maziggy/bambuddy
+  Copyright (C) maziggy and the Bambuddy contributors. Licensed AGPL-3.0.
+  OpenPrintHQ's print engine (engine/) is a derivative fork of Bambuddy.
+  The upstream copyright, license, and README are retained; see engine/LICENSE
+  and engine/NOTICE.
+
+
+SLICING
+-------
+OrcaSlicer — https://github.com/SoftFever/OrcaSlicer
+  Copyright (C) SoftFever and the OrcaSlicer contributors. Licensed AGPL-3.0.
+  Used as OpenPrintHQ's built-in slicer — its slicing engine and its bundled
+  printer, filament, and process profiles. OrcaSlicer is itself derived from:
+    • BambuStudio  — Copyright (C) Bambu Lab — AGPL-3.0
+    • PrusaSlicer  — Copyright (C) Prusa Research — AGPL-3.0
+    • Slic3r       — Copyright (C) Alessandro Ranellucci and contributors — AGPL-3.0
+orca-slicer-api — https://github.com/maziggy/orca-slicer-api
+  HTTP wrapper used to run OrcaSlicer as a sidecar service.
+
+
+FONTS  (bundled in the web app; SIL Open Font License 1.1)
+----------------------------------------------------------
+Inter — Copyright (C) Rasmus Andersson — https://github.com/rsms/inter
+JetBrains Mono — Copyright (C) JetBrains s.r.o. — https://github.com/JetBrains/JetBrainsMono
+  Both are distributed via @fontsource under the SIL OFL-1.1; the full license
+  text ships with each font package.
+
+
+CORE FRAMEWORKS & LIBRARIES
+---------------------------
+Web application (app/web)
+  • Svelte, SvelteKit, Vite, @sveltejs/adapter-node — (C) the Svelte
+    contributors — MIT.
+
+Control-plane (app/control-plane)
+  • Fastify, @fastify/cookie — (C) the Fastify contributors — MIT.
+  • node-postgres (pg) — (C) Brian Carlson and contributors — MIT.
+
+Print engine (engine)
+  • Python: FastAPI, Starlette, Uvicorn, Pydantic, SQLAlchemy, paho-mqtt,
+    httpx, aiohttp, cryptography, trimesh, matplotlib, opencv-python-headless,
+    reportlab, lxml, and others — each under its own license (MIT / BSD /
+    Apache-2.0 / EPL, as applicable).
+  • Web UI: React, @tanstack/react-query, TipTap, dnd-kit, Floating UI,
+    three.js, DOMPurify, and others — each under its own license (mostly MIT).
+
+
+COMPLETE DEPENDENCY LIST
+------------------------
+Both the application and the engine bundle additional third-party dependencies
+beyond those named above. The complete and authoritative list — with versions
+and licenses — is contained in the dependency manifests included in the source
+archive:
+  • app/web/package.json
+  • app/control-plane/package.json
+  • engine/requirements.txt  and  engine/frontend/package.json
+Each dependency's own license text is distributed with that dependency
+(node_modules / site-packages) when the software is built.
