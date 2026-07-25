@@ -28,14 +28,33 @@
     finally { loading = false; }
   }
   onMount(load);
+
+  let uploading = $state(false);
+  let upErr = $state(null);
+  let fileInput;
+  async function onUpload(e) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    uploading = true; upErr = null;
+    try { await api.uploadFile(f); await load(); }
+    catch (x) { upErr = x.message || 'upload failed'; }
+    finally { uploading = false; e.target.value = ''; }
+  }
 </script>
 
 <svelte:head><title>Files · OpenPrintHQ</title></svelte:head>
 
 <div class="head">
   <div><h1>Files</h1><p class="muted">Your private 3MF / STL / G-code library.</p></div>
-  <button class="btn btn-ghost btn-sm" onclick={load}>Refresh</button>
+  <div class="flex gap">
+    <button class="btn btn-ghost btn-sm" onclick={load}>Refresh</button>
+    <input type="file" bind:this={fileInput} onchange={onUpload} hidden accept=".3mf,.stl,.gcode,.gco,.obj" />
+    <button class="btn btn-primary btn-sm" onclick={() => fileInput.click()} disabled={uploading}>
+      {uploading ? 'Uploading…' : '+ Upload'}
+    </button>
+  </div>
 </div>
+{#if upErr}<p class="uperr">{upErr}</p>{/if}
 
 {#if loading}
   <div class="card card-pad muted">Loading library…</div>
@@ -64,6 +83,7 @@
 <style>
   .head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 1.4rem; }
   .head h1 { margin: 0; }
+  .uperr { color: var(--ophq-danger); font-size: 0.88rem; margin: -0.8rem 0 1rem; }
   .empty { text-align: center; padding: 2.6rem; }
   .empty .ic { font-size: 1.8rem; margin-bottom: 0.3rem; }
   .empty p { max-width: 48ch; margin: 0.6rem auto 0; }
