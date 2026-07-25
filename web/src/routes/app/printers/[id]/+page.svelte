@@ -1,3 +1,8 @@
+<script module>
+  // Cached once per page load, shared across every printer-detail instance.
+  let hmsCache = null;
+</script>
+
 <script>
   // OpenPrintHQ — per-printer detail & control
   // SPDX-License-Identifier: AGPL-3.0-or-later
@@ -95,12 +100,40 @@
   });
 
   // ---- printer alerts (Bambu HMS errors) ----
+  // The engine hands us raw HMS entries {code:"0x4038", attr:<int>, severity}.
+  // The lookup key for the description table is the short code "MMMM_EEEE":
+  // module from attr bits 16-31, error from the numeric part of code — this
+  // mirrors the engine's own _format_hms_error_summary()/get_error_description.
+  function hmsShortCode(e) {
+    const codeNum = parseInt(String(e?.code ?? '').replace(/^0x/i, ''), 16) || 0;
+    const attr = Number(e?.attr) || 0;
+    const moduleHex = ((attr >>> 16) & 0xffff).toString(16).toUpperCase().padStart(4, '0');
+    const errHex = codeNum.toString(16).toUpperCase().padStart(4, '0');
+    return `${moduleHex}_${errHex}`;
+  }
+
+  // HMS description dictionary (short_code -> text), served by the control-plane
+  // and cached module-wide so it's fetched at most once across printer pages.
+  let hmsMap = $state(hmsCache);
+  async function ensureHms() {
+    if (hmsMap) return;
+    try { hmsMap = hmsCache = await api.hmsDescriptions(); }
+    catch { hmsMap = hmsCache = {}; }
+  }
+  $effect(() => {
+    if ((st?.hms_errors || []).length && !hmsMap) ensureHms();
+  });
+
   const alerts = $derived.by(() =>
     (st?.hms_errors || []).map((e) => {
-      const fc = (e.full_code || e.code || '').toString().replace(/^0x/i, '');
-      const grouped = fc.length >= 8 ? fc.match(/.{1,4}/g).join('_') : fc;
+      const code = hmsShortCode(e);
       const sev = Number(e.severity) || 0;
-      return { code: grouped || 'unknown', severe: sev >= 5 || /fatal|serious/i.test(String(e.severity)) };
+      return {
+        code,
+        desc: hmsMap ? hmsMap[code] : undefined,
+        // Bambu severity: 1 = fatal, 2 = serious → red; everything else amber.
+        severe: sev === 1 || sev === 2
+      };
     })
   );
 
@@ -200,7 +233,10 @@
       {#each alerts as a}
         <div class="alert {a.severe ? 'sev' : ''}">
           <span class="ai">⚠</span>
-          <span>Printer alert — HMS <span class="mono">{a.code}</span>. Check the printer's screen for details.</span>
+          <span>
+            {#if a.desc}{a.desc}{:else}Printer alert — check the printer's screen for details.{/if}
+            <span class="mono acode">HMS {a.code}</span>
+          </span>
         </div>
       {/each}
     </div>
@@ -338,6 +374,7 @@
   .alert { display: flex; align-items: center; gap: 0.6rem; padding: 0.7rem 1rem; border-radius: var(--radius-sm); font-size: 0.9rem; border: 1px solid rgba(245,166,35,0.35); background: rgba(245,166,35,0.08); color: var(--ophq-warn); }
   .alert.sev { border-color: rgba(255,92,108,0.35); background: rgba(255,92,108,0.08); color: var(--ophq-danger); }
   .alert .ai { font-size: 1rem; }
+  .alert .acode { opacity: 0.7; font-size: 0.8rem; margin-left: 0.4rem; white-space: nowrap; }
   .filament { margin-top: 1.2rem; }
   .filament h3 { margin: 0 0 0.9rem; font-size: 1.05rem; }
   .fils { display: flex; flex-wrap: wrap; gap: 0.6rem; }
