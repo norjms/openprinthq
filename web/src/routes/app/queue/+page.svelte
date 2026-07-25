@@ -74,7 +74,7 @@
       if (okMsg) showToast('ok', okMsg);
       await load();
     } catch (e) {
-      showToast('err', e.detail?.detail || e.message || 'action failed');
+      showToast('err', e.message || 'action failed');
     } finally {
       busyId = null; confirmDel = null;
     }
