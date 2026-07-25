@@ -12,6 +12,12 @@
       inst = await api.myInstance().catch(() => null);
     } catch (e) { err = e.message; }
   });
+
+  function fmtDate(s) {
+    if (!s) return '—';
+    const d = new Date(s);
+    return isNaN(d) ? s : d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  }
 </script>
 
 <svelte:head><title>Settings · OpenPrintHQ</title></svelte:head>
@@ -37,7 +43,7 @@
         <div><span>status</span><span class="chip {inst.status === 'running' ? 'ok' : 'accent'}">{inst.status}</span></div>
         <div><span>subdomain</span>{inst.subdomain}</div>
         <div><span>engine</span>{inst.engineVersion}</div>
-        <div><span>created</span>{inst.createdAt}</div>
+        <div><span>created</span>{fmtDate(inst.createdAt)}</div>
       </div>
     {:else}
       <p class="muted">No instance yet — provision one from the <a href="/app">overview</a>.</p>
