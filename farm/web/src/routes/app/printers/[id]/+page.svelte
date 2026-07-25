@@ -143,15 +143,48 @@
     const out = [];
     for (const [i, u] of (st?.ams || []).entries()) {
       for (const [j, t] of (u?.tray || []).entries()) {
-        if (t?.tray_type) out.push({ where: `AMS ${i + 1}·${j + 1}`, color: hexColor(t.tray_color), type: t.tray_type, remain: t.remain });
+        // Bambu tray id encoding for load: ams_id * 4 + slot_id (0-15).
+        if (t?.tray_type) out.push({ where: `AMS ${i + 1}·${j + 1}`, color: hexColor(t.tray_color), type: t.tray_type, remain: t.remain, trayId: i * 4 + j });
       }
     }
     const vtArr = Array.isArray(st?.vt_tray) ? st.vt_tray : (st?.vt_tray ? [st.vt_tray] : []);
     for (const vt of vtArr) {
-      if (vt?.tray_type) out.push({ where: 'External', color: hexColor(vt.tray_color), type: vt.tray_type, remain: vt.remain });
+      // 254 = external spool / Ext-L on dual-nozzle machines.
+      if (vt?.tray_type) out.push({ where: 'External', color: hexColor(vt.tray_color), type: vt.tray_type, remain: vt.remain, trayId: 254 });
     }
     return out;
   });
+
+  // ---- AMS load / unload (Bambu; live hardware action, confirm-gated) ----
+  let amsBusy = $state(false);
+  let confirmLoad = $state(null);   // trayId pending confirm
+  let confirmUnload = $state(false);
+  let amsMsg = $state(null);
+
+  async function amsLoad(trayId) {
+    amsBusy = true; amsMsg = null;
+    try {
+      await api.amsLoad(id, trayId);
+      amsMsg = { kind: 'ok', text: 'Load command sent.' };
+      await loadStatus(false);
+    } catch (e) {
+      amsMsg = { kind: 'err', text: e.message || 'load failed' };
+    } finally {
+      amsBusy = false; confirmLoad = null;
+    }
+  }
+  async function amsUnload() {
+    amsBusy = true; amsMsg = null;
+    try {
+      await api.amsUnload(id);
+      amsMsg = { kind: 'ok', text: 'Unload command sent.' };
+      await loadStatus(false);
+    } catch (e) {
+      amsMsg = { kind: 'err', text: e.message || 'unload failed' };
+    } finally {
+      amsBusy = false; confirmUnload = false;
+    }
+  }
 
   // ---- actions ----
   async function control(action, label) {
@@ -316,16 +349,34 @@
 
   {#if loadedFilament.length}
     <div class="card card-pad filament">
-      <h3>Loaded filament</h3>
+      <div class="flex between center">
+        <h3>Loaded filament</h3>
+        {#if confirmUnload}
+          <span class="flex gap center">
+            <span class="muted tiny">Unload current filament?</span>
+            <button class="btn btn-danger btn-sm" onclick={amsUnload} disabled={amsBusy}>Confirm</button>
+            <button class="btn btn-ghost btn-sm" onclick={() => (confirmUnload = false)}>Cancel</button>
+          </span>
+        {:else}
+          <button class="btn btn-ghost btn-sm" onclick={() => { confirmUnload = true; confirmLoad = null; }} disabled={amsBusy}>Unload</button>
+        {/if}
+      </div>
       <div class="fils">
         {#each loadedFilament as f}
           <div class="fil">
             <span class="sw" style="background:{f.color || 'var(--ophq-faint)'}"></span>
             <span class="ft">{f.type}</span>
             <span class="muted mono fw">{f.where}{#if f.remain > 0} · {f.remain}%{/if}</span>
+            {#if confirmLoad === f.trayId}
+              <button class="btn btn-primary btn-xs" onclick={() => amsLoad(f.trayId)} disabled={amsBusy}>Confirm</button>
+              <button class="btn btn-ghost btn-xs" onclick={() => (confirmLoad = null)}>✕</button>
+            {:else}
+              <button class="btn btn-ghost btn-xs load" onclick={() => { confirmLoad = f.trayId; confirmUnload = false; }} disabled={amsBusy} title="Load this filament into the hotend">Load</button>
+            {/if}
           </div>
         {/each}
       </div>
+      {#if amsMsg}<p class={amsMsg.kind === 'ok' ? 'ok-msg' : 'err'}>{amsMsg.text}</p>{/if}
     </div>
   {/if}
 
@@ -376,12 +427,17 @@
   .alert .ai { font-size: 1rem; }
   .alert .acode { opacity: 0.7; font-size: 0.8rem; margin-left: 0.4rem; white-space: nowrap; }
   .filament { margin-top: 1.2rem; }
-  .filament h3 { margin: 0 0 0.9rem; font-size: 1.05rem; }
-  .fils { display: flex; flex-wrap: wrap; gap: 0.6rem; }
-  .fil { display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.7rem; border: 1px solid var(--ophq-border); border-radius: 999px; background: var(--ophq-surface-2); }
+  .filament h3 { margin: 0; font-size: 1.05rem; }
+  .fils { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 0.9rem; }
+  .fil { display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.5rem 0.4rem 0.7rem; border: 1px solid var(--ophq-border); border-radius: 999px; background: var(--ophq-surface-2); }
   .fil .sw { width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.15); flex-shrink: 0; }
   .fil .ft { font-weight: 600; font-size: 0.88rem; }
   .fil .fw { font-size: 0.78rem; }
+  .btn-xs { padding: 0.15rem 0.5rem; font-size: 0.72rem; border-radius: 999px; line-height: 1.4; }
+  .fil .load { opacity: 0.85; }
+  .fil .load:hover { opacity: 1; }
+  .tiny { font-size: 0.8rem; }
+  .ok-msg { color: var(--ophq-success); font-size: 0.9rem; margin: 0.7rem 0 0; }
   .cover { margin-top: 1.2rem; }
   .cover img { width: 100%; max-width: 640px; border-radius: var(--radius-sm); border: 1px solid var(--ophq-border); display: block; }
   .cover img.cam { background: var(--ophq-bg-2); aspect-ratio: 16 / 9; object-fit: contain; }
