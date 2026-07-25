@@ -16,6 +16,11 @@
   let targets = $state({});       // editable temperature targets, keyed by kind
   let timer = null;
 
+  // ---- live camera (polled snapshot through the engine gateway) ----
+  let camTick = $state(0);
+  let camAvailable = $state(true);
+  const camSrc = $derived(`/api/engine/api/v1/printers/${id}/camera/snapshot?t=${camTick}`);
+
   async function loadStatus(initial = false) {
     if (initial) { loading = true; error = null; }
     try {
@@ -31,11 +36,21 @@
   }
 
   onMount(() => {
-    // static record is best-effort (name/model), status is the source of truth
-    api.printer(id).then((m) => (meta = m)).catch(() => {});
-    loadStatus(true);
-    timer = setInterval(() => { if (!acting) loadStatus(false); }, 3000);
+    timer = setInterval(() => {
+      if (acting) return;
+      loadStatus(false);
+      if (camAvailable) camTick++;
+    }, 3000);
     return () => clearInterval(timer);
+  });
+
+  // (Re)load whenever the printer id changes — the route component is reused
+  // across client-side nav between printers, so onMount alone wouldn't refresh.
+  $effect(() => {
+    const _id = id;
+    camAvailable = true; camTick = 0;
+    api.printer(_id).then((m) => (meta = m)).catch(() => {});
+    loadStatus(true);
   });
 
   // ---- state helpers ----
@@ -226,9 +241,15 @@
     </div>
   </div>
 
-  {#if st?.cover_url}
+  {#if camAvailable}
     <div class="card card-pad cover">
-      <h3>Camera / preview</h3>
+      <h3>Camera</h3>
+      <img class="cam" src={camSrc} alt="{meta?.name || 'printer'} camera live view"
+           onerror={() => (camAvailable = false)} />
+    </div>
+  {:else if st?.cover_url}
+    <div class="card card-pad cover">
+      <h3>Preview</h3>
       <img src={st.cover_url} alt="print preview" />
     </div>
   {/if}
@@ -262,6 +283,7 @@
   .tset { display: flex; gap: 0.5rem; margin-top: 0.55rem; }
   .tset .input { max-width: 130px; }
   .cover { margin-top: 1.2rem; }
-  .cover img { width: 100%; max-width: 520px; border-radius: var(--radius-sm); border: 1px solid var(--ophq-border); }
+  .cover img { width: 100%; max-width: 640px; border-radius: var(--radius-sm); border: 1px solid var(--ophq-border); display: block; }
+  .cover img.cam { background: var(--ophq-bg-2); aspect-ratio: 16 / 9; object-fit: contain; }
   .err { color: var(--ophq-danger); font-size: 0.9rem; }
 </style>
