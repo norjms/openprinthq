@@ -1,0 +1,37 @@
+OpenPrintHQ
+Copyright (C) 2026 OpenPrintHQ contributors
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option) any
+later version. See the LICENSE file for the full text.
+
+================================================================================
+Attribution & provenance
+================================================================================
+
+OpenPrintHQ stands on the shoulders of the open 3D-printing community. This
+NOTICE documents the upstream projects it derives from or incorporates, in
+keeping with AGPL-3.0 section 5 (notices) and section 7 (attribution).
+
+1. Bambuddy  —  https://github.com/maziggy/bambuddy  (AGPL-3.0)
+   The OpenPrintHQ engine (see the `openprinthq-engine` repository) is a fork of
+   Bambuddy. Bambuddy's original copyright and license notices are retained in
+   that repository, and modified files carry modification notices with dates as
+   required by AGPL-3.0 §5(a). OpenPrintHQ is not affiliated with or endorsed by
+   the Bambuddy project.
+
+2. SimplyPrint open-source components  —  https://github.com/SimplyPrint
+   Where OpenPrintHQ incorporates SimplyPrint's openly licensed components
+   (e.g. connectivity/agent libraries, slicer profile database, integration
+   connectors), each is used under its own license and credited in the relevant
+   subdirectory's THIRD_PARTY notices. OpenPrintHQ is not affiliated with or
+   endorsed by SimplyPrint.
+
+3. OrcaSlicer  —  https://github.com/SoftFever/OrcaSlicer  (AGPL-3.0 / GPL-3.0)
+   Used as the built-in slicing engine.
+
+The names "Bambuddy", "SimplyPrint", "Bambu Lab", "Creality", "Prusa",
+"Snapmaker", "Voron" and "OrcaSlicer" are trademarks of their respective owners
+and are used here only for identification and interoperability. OpenPrintHQ
+claims no affiliation with any of them.
