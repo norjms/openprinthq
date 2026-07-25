@@ -13,7 +13,8 @@
     return arr.map((f) => {
       const name = f.name ?? f.filename ?? f.display_name ?? 'file';
       const kind = (name.split('.').pop() || '').toUpperCase();
-      return { id: f.id ?? f.file_id, name, size: f.size ?? f.file_size ?? null, kind };
+      const sliceable = SLICEABLE.has(kind) && !name.toLowerCase().includes('.gcode.');
+      return { id: f.id ?? f.file_id, name, size: f.size ?? f.file_size ?? null, kind, sliceable };
     });
   }
   function human(n) {
@@ -75,7 +76,13 @@
       printerPresets = flatten(cats, 'printer');
       processPresets = flatten(cats, 'process');
       filamentPresets = flatten(cats, 'filament');
-      selPrinter = printerPresets[0] ? key(printerPresets[0]) : '';
+      // Concrete machines (e.g. "… 0.4 nozzle") are the sliceable ones; bare
+      // model presets are inherited bases the slicer rejects. Default to 0.4mm.
+      const dfltPrinter =
+        printerPresets.find((p) => /0\.4\s*nozzle/i.test(p.id)) ||
+        printerPresets.find((p) => /nozzle/i.test(p.id)) ||
+        printerPresets[0];
+      selPrinter = dfltPrinter ? key(dfltPrinter) : '';
       selProcess = processPresets[0] ? key(processPresets[0]) : '';
       selFilament = filamentPresets[0] ? key(filamentPresets[0]) : '';
     } catch (e) { sliceErr = e.message || 'could not load presets'; }
@@ -139,7 +146,7 @@
         <div class="fname">{f.name}</div>
         <div class="foot">
           {#if f.size}<span class="muted mono sz">{human(f.size)}</span>{/if}
-          {#if SLICEABLE.has(f.kind)}
+          {#if f.sliceable}
             <button class="btn btn-ghost btn-sm slicebtn" onclick={() => openSlice(f)}>◈ Slice</button>
           {/if}
         </div>
