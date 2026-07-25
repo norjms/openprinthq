@@ -1,0 +1,149 @@
+/*
+ * OpenPrintHQ design system
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ * (c) 2026 OpenPrintHQ contributors
+ *
+ * Identity: a "control room / HQ" aesthetic — graphite base, electric indigo
+ * primary, amber signal accent, and a subtle blueprint grid. Deliberately
+ * distinct from Bambuddy (teal/green) and SimplyPrint (light blue).
+ */
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+@import '@fontsource/inter/700.css';
+@import '@fontsource/jetbrains-mono/500.css';
+
+:root {
+  /* base surfaces */
+  --ophq-bg: #0d1117;
+  --ophq-bg-2: #0a0e14;
+  --ophq-surface: #151b24;
+  --ophq-surface-2: #1b2330;
+  --ophq-surface-3: #222c3c;
+  --ophq-border: #26303f;
+  --ophq-border-soft: #1e2733;
+
+  /* brand */
+  --ophq-primary: #7c6cff;
+  --ophq-primary-2: #9a8cff;
+  --ophq-primary-dim: rgba(124, 108, 255, 0.14);
+  --ophq-accent: #ffb020;
+  --ophq-success: #35c46b;
+  --ophq-warn: #f5a623;
+  --ophq-danger: #ff5c6c;
+  --ophq-info: #38bdf8;
+
+  /* text */
+  --ophq-text: #e6ebf2;
+  --ophq-text-2: #b4bdcc;
+  --ophq-muted: #7f8ca1;
+  --ophq-faint: #56617a;
+
+  /* type */
+  --font-ui: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* geometry */
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-lg: 18px;
+  --shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.6);
+  --shadow-glow: 0 0 0 1px rgba(124, 108, 255, 0.35), 0 8px 40px -8px rgba(124, 108, 255, 0.35);
+  --maxw: 1200px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--ophq-bg);
+  color: var(--ophq-text);
+  font-family: var(--font-ui);
+  font-size: 16px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* blueprint grid backdrop */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-color: var(--ophq-bg);
+  background-image:
+    radial-gradient(1200px 700px at 80% -10%, rgba(124, 108, 255, 0.10), transparent 60%),
+    radial-gradient(900px 500px at 0% 100%, rgba(255, 176, 32, 0.05), transparent 55%),
+    linear-gradient(var(--ophq-border-soft) 1px, transparent 1px),
+    linear-gradient(90deg, var(--ophq-border-soft) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 40px 40px, 40px 40px;
+  background-position: 0 0, 0 0, -1px -1px, -1px -1px;
+  opacity: 0.6;
+}
+
+a { color: var(--ophq-primary-2); text-decoration: none; }
+a:hover { color: var(--ophq-text); }
+
+h1, h2, h3, h4 { line-height: 1.15; margin: 0 0 0.4em; font-weight: 700; letter-spacing: -0.02em; }
+h1 { font-size: clamp(2.2rem, 5vw, 3.6rem); }
+h2 { font-size: clamp(1.6rem, 3vw, 2.3rem); }
+p { color: var(--ophq-text-2); }
+
+.mono { font-family: var(--font-mono); }
+.muted { color: var(--ophq-muted); }
+.container { width: 100%; max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
+
+/* ---- buttons ---- */
+.btn {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  font-family: var(--font-ui); font-weight: 600; font-size: 0.95rem;
+  padding: 0.7rem 1.2rem; border-radius: var(--radius-sm);
+  border: 1px solid transparent; cursor: pointer; transition: all 0.16s ease;
+  text-decoration: none; white-space: nowrap;
+}
+.btn-primary { background: var(--ophq-primary); color: white; box-shadow: 0 6px 20px -8px var(--ophq-primary); }
+.btn-primary:hover { background: var(--ophq-primary-2); color: white; transform: translateY(-1px); }
+.btn-ghost { background: transparent; color: var(--ophq-text); border-color: var(--ophq-border); }
+.btn-ghost:hover { border-color: var(--ophq-primary); color: var(--ophq-primary-2); }
+.btn-sm { padding: 0.45rem 0.8rem; font-size: 0.85rem; }
+
+/* ---- cards ---- */
+.card {
+  background: linear-gradient(180deg, var(--ophq-surface), var(--ophq-surface-2));
+  border: 1px solid var(--ophq-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.card-pad { padding: 1.4rem; }
+
+/* ---- chips / badges ---- */
+.chip {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  font-size: 0.78rem; font-weight: 600; padding: 0.25rem 0.65rem;
+  border-radius: 999px; border: 1px solid var(--ophq-border);
+  color: var(--ophq-text-2); background: var(--ophq-surface-2);
+}
+.chip.accent { color: var(--ophq-accent); border-color: rgba(255,176,32,0.3); background: rgba(255,176,32,0.08); }
+.chip.primary { color: var(--ophq-primary-2); border-color: rgba(124,108,255,0.35); background: var(--ophq-primary-dim); }
+.chip.ok { color: var(--ophq-success); border-color: rgba(53,196,107,0.3); background: rgba(53,196,107,0.08); }
+
+/* ---- forms ---- */
+.input, .field input, .field select {
+  width: 100%; background: var(--ophq-bg-2); border: 1px solid var(--ophq-border);
+  color: var(--ophq-text); border-radius: var(--radius-sm); padding: 0.7rem 0.9rem;
+  font-family: var(--font-ui); font-size: 0.95rem; transition: border 0.15s;
+}
+.input:focus, .field input:focus { outline: none; border-color: var(--ophq-primary); box-shadow: 0 0 0 3px var(--ophq-primary-dim); }
+.field { margin-bottom: 1rem; }
+.field label { display: block; font-size: 0.85rem; color: var(--ophq-muted); margin-bottom: 0.35rem; font-weight: 500; }
+
+/* ---- utility ---- */
+.grid { display: grid; gap: 1.2rem; }
+.flex { display: flex; }
+.between { justify-content: space-between; align-items: center; }
+.center { align-items: center; }
+.gap { gap: 1rem; }
+.stack > * + * { margin-top: 1rem; }
+.eyebrow { text-transform: uppercase; letter-spacing: 0.18em; font-size: 0.75rem; font-weight: 700; color: var(--ophq-primary-2); font-family: var(--font-mono); }
+.divider { height: 1px; background: var(--ophq-border); border: 0; margin: 2rem 0; }
