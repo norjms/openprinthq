@@ -29,6 +29,14 @@ export const api = {
   // Proxy straight to the logged-in user's engine (frontend-first model).
   engine: (path, opts) => req('/engine' + path, opts),
   printers: () => req('/engine/api/v1/printers/'),
+  printer: (id) => req('/engine/api/v1/printers/' + id),
+  printerStatus: (id) => req('/engine/api/v1/printers/' + id + '/status'),
+  // action: 'print/pause' | 'print/resume' | 'print/stop' | 'connect' | 'disconnect' | 'refresh-status'
+  printerAction: (id, action) =>
+    req('/engine/api/v1/printers/' + id + '/' + action, { method: 'POST' }),
+  // kind: 'nozzle' | 'bed' | 'chamber' — engine takes ?target= as a query param
+  setTemp: (id, kind, target) =>
+    req('/engine/api/v1/printers/' + id + '/temperature/' + kind + '?target=' + encodeURIComponent(target), { method: 'POST' }),
   queue: () => req('/engine/api/v1/queue/'),
   files: () => req('/engine/api/v1/library/files'),
   spools: () => req('/engine/api/v1/inventory/spools'),
