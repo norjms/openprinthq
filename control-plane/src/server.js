@@ -159,12 +159,19 @@ app.get('/api/instance/stats', async (req, reply) => {
       fetch(base + '/api/v1/archives/stats').then(r => r.ok ? r.json() : null).catch(() => null)
     ]);
     const parr = asArray(printers), qarr = asArray(queue);
-    const st = p => String(p.status || p.state || p.connection_status || '').toLowerCase();
+    // The /printers/ list carries only static config — live state (connected,
+    // printing) is only on the per-printer /status endpoint, so fetch those.
+    const statuses = await Promise.all(
+      parr.map(p => fetch(base + `/api/v1/printers/${p.id}/status`)
+        .then(r => r.ok ? r.json() : null).catch(() => null))
+    );
+    const online = statuses.filter(s => s && s.connected).length;
+    const active = statuses.filter(s => s && /print|run/i.test(String(s.state || ''))).length;
     const total = pstats?.total_prints ?? 0;
     return {
       printersTotal: parr.length,
-      printersOnline: parr.filter(p => /online|idle|ready|printing|running|paused/.test(st(p))).length,
-      activeJobs: parr.filter(p => /print|running/.test(st(p))).length,
+      printersOnline: online,
+      activeJobs: active,
       queued: qarr.length,
       totalPrints: total,
       successRate: total > 0 ? Math.round((pstats.successful_prints / total) * 100) : null
