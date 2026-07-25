@@ -5,10 +5,16 @@
   let loading = $state(true);
   let error = $state(null);
   let s = $state(null);
+  let printerNames = $state({});
 
   async function load() {
     loading = true; error = null;
-    try { s = await api.printStats(); }
+    try {
+      s = await api.printStats();
+      const pl = await api.printers().catch(() => []);
+      const arr = Array.isArray(pl) ? pl : (pl?.printers || pl?.items || []);
+      printerNames = Object.fromEntries(arr.map((p) => [String(p.id), p.name || p.model || ('Printer ' + p.id)]));
+    }
     catch (e) { error = e.status === 409 ? 'no-instance' : (e.message || 'engine unreachable'); }
     finally { loading = false; }
   }
@@ -26,7 +32,9 @@
     { label: 'Energy cost', value: '$' + (s.total_energy_cost ?? 0).toFixed(2) }
   ] : []);
   const byType = $derived(s?.prints_by_filament_type ? Object.entries(s.prints_by_filament_type) : []);
-  const byPrinter = $derived(s?.prints_by_printer ? Object.entries(s.prints_by_printer) : []);
+  const byPrinter = $derived(s?.prints_by_printer
+    ? Object.entries(s.prints_by_printer).map(([k, v]) => [printerNames[k] || (k === 'unknown' ? 'Unknown' : `Printer ${k}`), v])
+    : []);
 </script>
 
 <svelte:head><title>Statistics · OpenPrintHQ</title></svelte:head>
