@@ -6,6 +6,11 @@
   let error = $state(null);
   let printers = $state([]);
   let timer = null;
+  // Live camera thumbnails: bump a tick each poll to refresh the snapshot URLs,
+  // and remember which printers have no reachable camera so we stop trying.
+  let camTick = $state(0);
+  let camErr = $state({});
+  const camSrc = (id) => `/api/engine/api/v1/printers/${id}/camera/snapshot?t=${camTick}`;
 
   function base(data) {
     const arr = Array.isArray(data) ? data : (data?.printers || data?.items || data?.results || []);
@@ -24,6 +29,7 @@
       // Live state comes from the per-printer status endpoint, not the list.
       const live = await Promise.all(list.map((p) => api.printerStatus(p.id).catch(() => null)));
       printers = list.map((p, i) => ({ ...p, live: live[i] }));
+      camTick++;
       error = null;
     } catch (e) {
       error = e.status === 409 ? 'no-instance' : (e.message || 'engine unreachable');
@@ -100,6 +106,14 @@
           {#if p.vendor}<span>{p.vendor}</span>{/if}
           {#if p.model}<span>{p.model}</span>{/if}
         </div>
+        {#if p.live?.connected && !camErr[p.id]}
+          <div class="cam">
+            <img src={camSrc(p.id)} alt="" loading="lazy" onerror={() => (camErr = { ...camErr, [p.id]: true })} />
+            {#if /run|print/.test(st) && p.live.progress != null}
+              <span class="cam-prog mono">{Math.round(p.live.progress)}%</span>
+            {/if}
+          </div>
+        {/if}
         {#if p.live?.connected}
           <div class="temps mono">
             {#if t1(p.live.temperatures?.nozzle) != null}<span>◦ {t1(p.live.temperatures.nozzle)}°</span>{/if}
@@ -123,6 +137,9 @@
   .printer:hover { border-color: var(--ophq-primary); transform: translateY(-2px); color: var(--ophq-text); }
   .printer h3 { margin: 0; font-size: 1.05rem; color: var(--ophq-text); }
   .printer .meta { display: flex; gap: 0.6rem; margin-top: 0.5rem; color: var(--ophq-muted); font-size: 0.85rem; }
+  .cam { position: relative; margin-top: 0.7rem; aspect-ratio: 16 / 9; border-radius: var(--radius-sm); overflow: hidden; background: var(--ophq-bg-2); border: 1px solid var(--ophq-border); }
+  .cam img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .cam-prog { position: absolute; bottom: 6px; right: 7px; font-size: 0.75rem; padding: 0.1rem 0.4rem; border-radius: 999px; background: rgba(0,0,0,0.55); color: #fff; backdrop-filter: blur(2px); }
   .temps { display: flex; gap: 0.9rem; margin-top: 0.6rem; color: var(--ophq-text-2); font-size: 0.85rem; }
   .temps .prog { color: var(--ophq-primary-2); margin-left: auto; }
   .bar { height: 6px; background: var(--ophq-bg-2); border: 1px solid var(--ophq-border); border-radius: 999px; overflow: hidden; margin-top: 0.5rem; }
