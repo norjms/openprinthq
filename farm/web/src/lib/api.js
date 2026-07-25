@@ -48,6 +48,11 @@ export const api = {
   // Proxy straight to the logged-in user's engine (frontend-first model).
   engine: (path, opts) => req('/engine' + path, opts),
   printers: () => req('/engine/api/v1/printers/'),
+  // Bambu discovery (Docker path = per-host unicast SSDP subnet scan).
+  discoverScan: (subnet, timeout = 1.5) =>
+    req('/engine/api/v1/discovery/scan', { method: 'POST', body: JSON.stringify({ subnet, timeout }) }),
+  discoverScanStatus: () => req('/engine/api/v1/discovery/scan/status'),
+  discoveredPrinters: () => req('/engine/api/v1/discovery/printers'),
   printer: (id) => req('/engine/api/v1/printers/' + id),
   printerStatus: (id) => req('/engine/api/v1/printers/' + id + '/status'),
   // action: 'print/pause' | 'print/resume' | 'print/stop' | 'connect' | 'disconnect' | 'refresh-status'
