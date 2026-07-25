@@ -42,6 +42,7 @@ services:
       - OPHQ_ALLOW_DEV_LOGIN=${OPHQ_ALLOW_DEV_LOGIN:-}
       - OPHQ_ENGINE_HOST=${OPHQ_ENGINE_HOST:-10.10.10.109}
       - OPHQ_SLICER_URL=${OPHQ_SLICER_URL:-http://10.10.10.109:3003}
+      - OPHQ_DOCKER_NETWORK=${OPHQ_DOCKER_NETWORK:-openprinthq_default}
     volumes:
       # lets the provisioner start per-tenant engine containers
       - /var/run/docker.sock:/var/run/docker.sock

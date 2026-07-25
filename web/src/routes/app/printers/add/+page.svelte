@@ -99,7 +99,8 @@
   .head h1 { margin: 0; }
   .lead { margin: 0.4rem 0 1.4rem; max-width: 58ch; }
   .vend { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); margin-bottom: 1.2rem; }
-  .vendor { text-align: left; cursor: pointer; transition: border 0.15s, transform 0.15s; }
+  .vendor { text-align: left; cursor: pointer; transition: border 0.15s, transform 0.15s; color: var(--ophq-text); }
+  .vendor h3 { color: var(--ophq-text); }
   .vendor:hover { border-color: var(--ophq-primary); transform: translateY(-2px); }
   .vendor h3 { margin: 0 0 0.3rem; font-size: 1.02rem; }
   .small { margin-top: 1rem; font-size: 0.88rem; }
