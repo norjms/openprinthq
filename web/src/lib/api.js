@@ -25,6 +25,9 @@ export const api = {
   me: () => req('/me'),
   myInstance: () => req('/instance'),
   provision: () => req('/instance/provision', { method: 'POST' }),
-  printers: () => req('/instance/printers'),
-  stats: () => req('/instance/stats')
+  stats: () => req('/instance/stats'),
+  // Proxy straight to the logged-in user's engine (frontend-first model).
+  engine: (path, opts) => req('/engine' + path, opts),
+  printers: () => req('/engine/api/v1/printers/'),
+  queue: () => req('/engine/api/v1/queue/')
 };
