@@ -43,13 +43,23 @@
 
   <section id="attribution" class="card card-pad">
     <h2>Attribution &amp; credits</h2>
-    <p>OpenPrintHQ's print engine is a derivative work of
-      <a href="https://github.com/maziggy/bambuddy" rel="noopener">Bambuddy</a> (© maziggy and the Bambuddy
-      contributors), also licensed under AGPL-3.0. That upstream project's copyright, license, and
-      attribution are retained in our source. OpenPrintHQ adds multi-vendor printer support, an
-      OrcaSlicer integration, and a multi-tenant control-plane and web frontend.</p>
+    <p>OpenPrintHQ stands on the work of other open-source projects. The main ones:</p>
+    <ul class="credits">
+      <li><a href="https://github.com/maziggy/bambuddy" rel="noopener">Bambuddy</a>
+        (© maziggy and contributors, AGPL-3.0) — our print engine is a derivative fork of it.</li>
+      <li><a href="https://github.com/SoftFever/OrcaSlicer" rel="noopener">OrcaSlicer</a>
+        (© SoftFever and contributors, AGPL-3.0) — our built-in slicer, itself derived from
+        BambuStudio, PrusaSlicer and Slic3r.</li>
+      <li><a href="https://github.com/rsms/inter" rel="noopener">Inter</a> (© Rasmus Andersson) and
+        <a href="https://github.com/JetBrains/JetBrainsMono" rel="noopener">JetBrains Mono</a>
+        (© JetBrains) — the typefaces, under the SIL Open Font License.</li>
+      <li>Core frameworks: Svelte/SvelteKit, Fastify and node-postgres (the app), and the FastAPI +
+        React stack (the engine), each under its own license.</li>
+    </ul>
+    <p>Every project's copyright and license is retained in our source, and the complete list of
+      dependencies — with versions and licenses — is in the source archive.</p>
     <p class="actions">
-      <a class="btn btn-ghost" href={NOTICE_TXT}>Read the full attribution notice →</a>
+      <a class="btn btn-ghost" href={NOTICE_TXT}>Read the full third-party notices →</a>
     </p>
   </section>
 
@@ -75,6 +85,8 @@
   section { margin-bottom: 1.2rem; }
   section h2 { font-size: 1.25rem; margin: 0 0 0.6rem; }
   section p { color: var(--ophq-text-2); }
+  .credits { color: var(--ophq-text-2); margin: 0.6rem 0 0.9rem; padding-left: 1.1rem; }
+  .credits li { margin: 0.35rem 0; }
   .actions { margin: 1rem 0 0; }
   .fine { font-size: 0.85rem; color: var(--ophq-muted); margin-top: 0.6rem; }
 </style>
