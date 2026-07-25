@@ -1,7 +1,8 @@
 <script>
   import Logo from './Logo.svelte';
-  // AGPL-3.0 §13: the running instance must offer its source to users.
-  const SOURCE_URL = 'https://internal.example.com/OpenPrintHQ/openprinthq';
+  // AGPL-3.0 §13: the running instance must offer its source to EVERY user,
+  // without login. These point at the public /legal page (served ungated),
+  // not the Authentik-gated git host.
 </script>
 
 <footer class="site-footer">
@@ -21,9 +22,9 @@
       </div>
       <div class="col">
         <h4>Open</h4>
-        <a href={SOURCE_URL}>Source code</a>
-        <a href={SOURCE_URL + '/src/branch/main/LICENSE'}>License (AGPL-3.0)</a>
-        <a href={SOURCE_URL + '/src/branch/main/NOTICE'}>Attribution &amp; credits</a>
+        <a href="/legal#source">Source code</a>
+        <a href="/legal#license">License (AGPL-3.0)</a>
+        <a href="/legal#attribution">Attribution &amp; credits</a>
       </div>
     </div>
     <hr class="divider" />
@@ -31,7 +32,7 @@
       <span class="muted mono">© 2026 OpenPrintHQ contributors</span>
       <span class="muted">
         This is free software under the
-        <a href={SOURCE_URL}>GNU AGPL v3</a>. Complete corresponding source is available to every user of this instance.
+        <a href="/legal">GNU AGPL v3</a>. Complete corresponding source is available to every user of this instance.
       </span>
     </div>
   </div>
