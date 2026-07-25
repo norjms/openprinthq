@@ -35,8 +35,15 @@
     { label: 'Printers online', value: stats?.printersOnline ?? '—', accent: 'ok' },
     { label: 'Active jobs', value: stats?.activeJobs ?? '—' },
     { label: 'Queued', value: stats?.queued ?? '—' },
-    { label: 'Success rate', value: stats ? (stats.successRate ?? '—') + '%' : '—' }
+    { label: 'Success rate', value: stats && stats.successRate != null ? stats.successRate + '%' : '—' }
   ]);
+  const noPrinters = $derived(instance?.status === 'running' && (stats?.printersTotal ?? 0) === 0);
+
+  function fmtDate(s) {
+    if (!s) return '—';
+    const d = new Date(s);
+    return isNaN(d) ? s : d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  }
 </script>
 
 <svelte:head><title>Overview · OpenPrintHQ</title></svelte:head>
@@ -67,13 +74,37 @@
     <button class="btn btn-ghost btn-sm" onclick={load}>Retry</button>
   </div>
 {:else}
-  <div class="tiles">
-    {#each tiles as t}
-      <div class="card card-pad tile">
-        <span class="muted">{t.label}</span>
-        <b class:ok={t.accent === 'ok'}>{t.value}</b>
+  {#if noPrinters}
+    <div class="card card-pad getstarted glow">
+      <span class="eyebrow">Get started</span>
+      <h2>Your HQ is live — add your first printer</h2>
+      <div class="steps">
+        <a class="step" href="/app/printers/add">
+          <b>1</b><span>Add a printer</span><small>Bambu, Creality, Prusa, Snapmaker, Voron &amp; more</small>
+        </a>
+        <a class="step" href="/app/files">
+          <b>2</b><span>Upload a model</span><small>STL or 3MF to your private library</small>
+        </a>
+        <a class="step" href="/app/files">
+          <b>3</b><span>Slice &amp; queue</span><small>OrcaSlicer built in, then send to print</small>
+        </a>
       </div>
-    {/each}
+    </div>
+  {:else}
+    <div class="tiles">
+      {#each tiles as t}
+        <div class="card card-pad tile">
+          <span class="muted">{t.label}</span>
+          <b class:ok={t.accent === 'ok'}>{t.value}</b>
+        </div>
+      {/each}
+    </div>
+  {/if}
+
+  <div class="quick">
+    <a class="card card-pad qa" href="/app/printers/add"><span class="qi">＋</span><span><b>Add printer</b><small>Connect a machine</small></span></a>
+    <a class="card card-pad qa" href="/app/files"><span class="qi">◈</span><span><b>Upload &amp; slice</b><small>STL / 3MF → G-code</small></span></a>
+    <a class="card card-pad qa" href="/app/queue"><span class="qi">≣</span><span><b>Print queue</b><small>Manage the fleet queue</small></span></a>
   </div>
 
   <div class="card card-pad">
@@ -84,7 +115,7 @@
     <div class="kv mono">
       <div><span>subdomain</span>{instance?.subdomain ?? '—'}.internal.example.com</div>
       <div><span>engine</span>{instance?.engineVersion ?? 'openprinthq-engine'}</div>
-      <div><span>created</span>{instance?.createdAt ?? '—'}</div>
+      <div><span>created</span>{fmtDate(instance?.createdAt)}</div>
     </div>
   </div>
 {/if}
@@ -101,5 +132,25 @@
   .kv { margin-top: 1rem; display: grid; gap: 0.5rem; font-size: 0.9rem; }
   .kv div { display: flex; gap: 1rem; color: var(--ophq-text-2); }
   .kv span { color: var(--ophq-faint); width: 90px; display: inline-block; }
-  @media (max-width: 820px) { .tiles { grid-template-columns: repeat(2, 1fr); } }
+
+  .getstarted { margin-bottom: 1.2rem; }
+  .getstarted h2 { margin: 0.3rem 0 1.2rem; font-size: 1.5rem; }
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+  .step { display: flex; flex-direction: column; gap: 0.3rem; padding: 1.1rem; border: 1px solid var(--ophq-border); border-radius: var(--radius-sm); background: var(--ophq-bg-2); transition: border 0.15s, transform 0.15s; color: var(--ophq-text); }
+  .step:hover { border-color: var(--ophq-primary); transform: translateY(-2px); color: var(--ophq-text); }
+  .step b { font-family: var(--font-mono); color: var(--ophq-primary-2); font-size: 1.1rem; }
+  .step span { font-weight: 600; }
+  .step small { color: var(--ophq-muted); font-weight: 400; font-size: 0.82rem; }
+
+  .quick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.2rem; }
+  .qa { display: flex; align-items: center; gap: 0.9rem; color: var(--ophq-text); text-decoration: none; transition: border 0.15s, transform 0.15s; }
+  .qa:hover { border-color: var(--ophq-primary); transform: translateY(-2px); color: var(--ophq-text); }
+  .qa .qi { font-size: 1.3rem; color: var(--ophq-primary-2); width: 2.2rem; height: 2.2rem; display: grid; place-items: center; background: var(--ophq-primary-dim); border-radius: var(--radius-sm); flex-shrink: 0; }
+  .qa span:last-child { display: flex; flex-direction: column; }
+  .qa small { color: var(--ophq-muted); font-size: 0.82rem; }
+
+  @media (max-width: 820px) {
+    .tiles { grid-template-columns: repeat(2, 1fr); }
+    .steps, .quick { grid-template-columns: 1fr; }
+  }
 </style>
