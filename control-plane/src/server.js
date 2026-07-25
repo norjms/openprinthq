@@ -10,6 +10,12 @@ const SESSION_SECRET = process.env.SESSION_SECRET || 'dev-insecure-secret-change
 const COOKIE = 'ophq_sess';
 // Host on which per-tenant engine containers publish their ports (CT201 LAN IP).
 const ENGINE_HOST = process.env.OPHQ_ENGINE_HOST || '10.10.10.109';
+// Shared secret injected by npmplus on authenticated requests. When set, the
+// Authentik identity headers are only trusted if this secret is present — so a
+// LAN host reaching the app directly can't forge X-authentik-* identity.
+const GATEWAY_SECRET = process.env.OPHQ_GATEWAY_SECRET || '';
+// Dev sign-in is disabled unless explicitly enabled (production = SSO only).
+const ALLOW_DEV_LOGIN = !!process.env.OPHQ_ALLOW_DEV_LOGIN;
 
 function engineBase(inst) {
   return inst && inst.port ? `http://${ENGINE_HOST}:${inst.port}` : null;
@@ -36,7 +42,8 @@ function currentEmail(req) {
   // (and strips any client-supplied copies). Trust X-authentik-email when set;
   // otherwise fall back to the signed dev-login session cookie.
   const ak = req.headers['x-authentik-email'];
-  if (ak && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(ak)) return String(ak).toLowerCase();
+  const gatewayOk = !GATEWAY_SECRET || req.headers['x-ophq-gateway'] === GATEWAY_SECRET;
+  if (gatewayOk && ak && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(ak)) return String(ak).toLowerCase();
   const raw = req.cookies?.[COOKIE];
   if (!raw) return null;
   const un = app.unsignCookie(raw);
@@ -66,6 +73,9 @@ app.get('/api/auth/login', async (req, reply) => {
 });
 
 app.post('/api/auth/dev-login', async (req, reply) => {
+  if (!ALLOW_DEV_LOGIN) {
+    return reply.code(403).send({ error: 'dev sign-in is disabled — use SSO' });
+  }
   const email = (req.body?.email || '').trim().toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
     return reply.code(400).send({ error: 'valid email required' });
