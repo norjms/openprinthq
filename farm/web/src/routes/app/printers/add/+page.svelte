@@ -21,7 +21,8 @@
     { key: 'octoprint', ct: 'octoprint', name: 'OctoPrint', sub: 'REST API', fields: [F.name, F.ip, F.apikeyReq, F.model] },
     { key: 'duet', ct: 'duet', name: 'Duet / RepRap', sub: 'DWC', fields: [F.name, F.ip, F.model] },
     { key: 'flashforge', ct: 'flashforge', name: 'FlashForge', sub: 'LAN', fields: [F.name, F.ip, F.model] },
-    { key: 'mks', ct: 'mks', name: 'MKS', sub: 'WiFi module', fields: [F.name, F.ip, F.model] }
+    { key: 'mks', ct: 'mks', name: 'MKS', sub: 'WiFi module', fields: [F.name, F.ip, F.model] },
+    { key: 'snapmaker', ct: 'snapmaker', name: 'Snapmaker', sub: 'Artisan · J1 · 2.0', fields: [F.name, F.ip, F.apikey, F.model] }
   ];
 
   let selected = $state(null);
@@ -71,10 +72,7 @@
       </button>
     {/each}
   </div>
-  <div class="card card-pad soon">
-    <b>Snapmaker</b> <span class="chip accent">adapter needed</span>
-    <p class="muted">Not yet supported by the engine — a Snapmaker adapter is net-new work on the roadmap.</p>
-  </div>
+  <p class="muted small">First Snapmaker connection: tap <b>Allow</b> on the printer's touchscreen to authorize OpenPrintHQ.</p>
 {:else}
   <form class="card card-pad form" onsubmit={submit}>
     <div class="flex between center">
@@ -104,8 +102,7 @@
   .vendor { text-align: left; cursor: pointer; transition: border 0.15s, transform 0.15s; }
   .vendor:hover { border-color: var(--ophq-primary); transform: translateY(-2px); }
   .vendor h3 { margin: 0 0 0.3rem; font-size: 1.02rem; }
-  .soon { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
-  .soon p { width: 100%; margin: 0.3rem 0 0; font-size: 0.9rem; }
+  .small { margin-top: 1rem; font-size: 0.88rem; }
   .form { max-width: 460px; }
   .form h3 { margin: 0 0 0.4rem; }
   .err { color: var(--ophq-danger); font-size: 0.9rem; }
