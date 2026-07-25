@@ -38,6 +38,10 @@ services:
       - OPHQ_ENGINE_IMAGE=${OPHQ_ENGINE_IMAGE}
       - OPHQ_BASE_PORT=${OPHQ_BASE_PORT}
       - OIDC_ISSUER=${OIDC_ISSUER}
+      - OPHQ_GATEWAY_SECRET=${OPHQ_GATEWAY_SECRET:-}
+      - OPHQ_ALLOW_DEV_LOGIN=${OPHQ_ALLOW_DEV_LOGIN:-}
+      - OPHQ_ENGINE_HOST=${OPHQ_ENGINE_HOST:-10.10.10.109}
+      - OPHQ_SLICER_URL=${OPHQ_SLICER_URL:-http://10.10.10.109:3003}
     volumes:
       # lets the provisioner start per-tenant engine containers
       - /var/run/docker.sock:/var/run/docker.sock
