@@ -94,6 +94,16 @@
       }));
   });
 
+  // ---- printer alerts (Bambu HMS errors) ----
+  const alerts = $derived.by(() =>
+    (st?.hms_errors || []).map((e) => {
+      const fc = (e.full_code || e.code || '').toString().replace(/^0x/i, '');
+      const grouped = fc.length >= 8 ? fc.match(/.{1,4}/g).join('_') : fc;
+      const sev = Number(e.severity) || 0;
+      return { code: grouped || 'unknown', severe: sev >= 5 || /fatal|serious/i.test(String(e.severity)) };
+    })
+  );
+
   // ---- loaded filament (Bambu AMS units + external spool) ----
   const hexColor = (c) => (c ? '#' + String(c).slice(0, 6) : '');
   const loadedFilament = $derived.by(() => {
@@ -184,6 +194,17 @@
       </button>
     </div>
   </div>
+
+  {#if alerts.length}
+    <div class="alerts">
+      {#each alerts as a}
+        <div class="alert {a.severe ? 'sev' : ''}">
+          <span class="ai">⚠</span>
+          <span>Printer alert — HMS <span class="mono">{a.code}</span>. Check the printer's screen for details.</span>
+        </div>
+      {/each}
+    </div>
+  {/if}
 
   <div class="cols">
     <!-- Current job -->
@@ -313,6 +334,10 @@
   .heat { margin-left: 0.5rem; }
   .tset { display: flex; gap: 0.5rem; margin-top: 0.55rem; }
   .tset .input { max-width: 130px; }
+  .alerts { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1.2rem; }
+  .alert { display: flex; align-items: center; gap: 0.6rem; padding: 0.7rem 1rem; border-radius: var(--radius-sm); font-size: 0.9rem; border: 1px solid rgba(245,166,35,0.35); background: rgba(245,166,35,0.08); color: var(--ophq-warn); }
+  .alert.sev { border-color: rgba(255,92,108,0.35); background: rgba(255,92,108,0.08); color: var(--ophq-danger); }
+  .alert .ai { font-size: 1rem; }
   .filament { margin-top: 1.2rem; }
   .filament h3 { margin: 0 0 0.9rem; font-size: 1.05rem; }
   .fils { display: flex; flex-wrap: wrap; gap: 0.6rem; }
