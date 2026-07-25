@@ -94,6 +94,22 @@
       }));
   });
 
+  // ---- loaded filament (Bambu AMS units + external spool) ----
+  const hexColor = (c) => (c ? '#' + String(c).slice(0, 6) : '');
+  const loadedFilament = $derived.by(() => {
+    const out = [];
+    for (const [i, u] of (st?.ams || []).entries()) {
+      for (const [j, t] of (u?.tray || []).entries()) {
+        if (t?.tray_type) out.push({ where: `AMS ${i + 1}·${j + 1}`, color: hexColor(t.tray_color), type: t.tray_type, remain: t.remain });
+      }
+    }
+    const vtArr = Array.isArray(st?.vt_tray) ? st.vt_tray : (st?.vt_tray ? [st.vt_tray] : []);
+    for (const vt of vtArr) {
+      if (vt?.tray_type) out.push({ where: 'External', color: hexColor(vt.tray_color), type: vt.tray_type, remain: vt.remain });
+    }
+    return out;
+  });
+
   // ---- actions ----
   async function control(action, label) {
     acting = label;
@@ -241,6 +257,21 @@
     </div>
   </div>
 
+  {#if loadedFilament.length}
+    <div class="card card-pad filament">
+      <h3>Loaded filament</h3>
+      <div class="fils">
+        {#each loadedFilament as f}
+          <div class="fil">
+            <span class="sw" style="background:{f.color || 'var(--ophq-faint)'}"></span>
+            <span class="ft">{f.type}</span>
+            <span class="muted mono fw">{f.where}{#if f.remain > 0} · {f.remain}%{/if}</span>
+          </div>
+        {/each}
+      </div>
+    </div>
+  {/if}
+
   {#if camAvailable}
     <div class="card card-pad cover">
       <h3>Camera</h3>
@@ -282,6 +313,13 @@
   .heat { margin-left: 0.5rem; }
   .tset { display: flex; gap: 0.5rem; margin-top: 0.55rem; }
   .tset .input { max-width: 130px; }
+  .filament { margin-top: 1.2rem; }
+  .filament h3 { margin: 0 0 0.9rem; font-size: 1.05rem; }
+  .fils { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+  .fil { display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.7rem; border: 1px solid var(--ophq-border); border-radius: 999px; background: var(--ophq-surface-2); }
+  .fil .sw { width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.15); flex-shrink: 0; }
+  .fil .ft { font-weight: 600; font-size: 0.88rem; }
+  .fil .fw { font-size: 0.78rem; }
   .cover { margin-top: 1.2rem; }
   .cover img { width: 100%; max-width: 640px; border-radius: var(--radius-sm); border: 1px solid var(--ophq-border); display: block; }
   .cover img.cam { background: var(--ophq-bg-2); aspect-ratio: 16 / 9; object-fit: contain; }
