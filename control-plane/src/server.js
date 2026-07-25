@@ -120,18 +120,21 @@ app.get('/api/instance/stats', async (req, reply) => {
   const base = engineBase(inst);
   if (!base) return { printersOnline: 0, activeJobs: 0, queued: 0, successRate: null, printersTotal: 0 };
   try {
-    const [printers, queue] = await Promise.all([
+    const [printers, queue, pstats] = await Promise.all([
       fetch(base + '/api/v1/printers/').then(r => r.ok ? r.json() : []).catch(() => []),
-      fetch(base + '/api/v1/queue/').then(r => r.ok ? r.json() : []).catch(() => [])
+      fetch(base + '/api/v1/queue/').then(r => r.ok ? r.json() : []).catch(() => []),
+      fetch(base + '/api/v1/archives/stats').then(r => r.ok ? r.json() : null).catch(() => null)
     ]);
     const parr = asArray(printers), qarr = asArray(queue);
     const st = p => String(p.status || p.state || p.connection_status || '').toLowerCase();
+    const total = pstats?.total_prints ?? 0;
     return {
       printersTotal: parr.length,
       printersOnline: parr.filter(p => /online|idle|ready|printing|running|paused/.test(st(p))).length,
       activeJobs: parr.filter(p => /print|running/.test(st(p))).length,
       queued: qarr.length,
-      successRate: null
+      totalPrints: total,
+      successRate: total > 0 ? Math.round((pstats.successful_prints / total) * 100) : null
     };
   } catch {
     return { printersOnline: 0, activeJobs: 0, queued: 0, successRate: null, printersTotal: 0 };
