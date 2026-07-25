@@ -74,7 +74,7 @@
 {:else}
   <div class="grid printers">
     {#each printers as p}
-      <div class="card card-pad printer">
+      <a class="card card-pad printer" href="/app/printers/{p.id}">
         <div class="flex between center">
           <h3>{p.name}</h3>
           <span class="chip {tone(p.status)}">{p.status}</span>
@@ -83,7 +83,7 @@
           {#if p.vendor}<span>{p.vendor}</span>{/if}
           {#if p.model}<span>{p.model}</span>{/if}
         </div>
-      </div>
+      </a>
     {/each}
   </div>
 {/if}
@@ -92,7 +92,9 @@
   .head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 1.4rem; gap: 1rem; }
   .head h1 { margin: 0; }
   .printers { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
-  .printer h3 { margin: 0; font-size: 1.05rem; }
+  .printer { display: block; color: var(--ophq-text); text-decoration: none; transition: border 0.15s, transform 0.15s; }
+  .printer:hover { border-color: var(--ophq-primary); transform: translateY(-2px); color: var(--ophq-text); }
+  .printer h3 { margin: 0; font-size: 1.05rem; color: var(--ophq-text); }
   .printer .meta { display: flex; gap: 0.6rem; margin-top: 0.5rem; color: var(--ophq-muted); font-size: 0.85rem; }
   .chip.danger { color: var(--ophq-danger); border-color: rgba(255,92,108,0.3); background: rgba(255,92,108,0.08); }
   .empty { text-align: center; padding: 2.6rem; }
