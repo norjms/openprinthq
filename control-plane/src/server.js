@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
-import { migrate, upsertUser, getUserByEmail, getInstanceForUser } from './db.js';
+import { migrate, upsertUser, getUserByEmail, getInstanceForUser, getCompatiblePresets } from './db.js';
 import { provisionForUser } from './provisioner.js';
 
 const PORT = Number(process.env.PORT || 8080);
@@ -96,6 +96,22 @@ app.post('/api/auth/logout', async (req, reply) => {
 app.get('/api/me', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
   return { id: user.id, email: user.email, displayName: user.display_name };
+});
+
+// ---- slicer preset compatibility ---------------------------------------
+// Returns the process + filament preset names compatible with a printer preset,
+// joined from the seeded slicer_compat table. The slice UI uses this to narrow
+// its (otherwise ~1000-entry) preset pickers to the selected printer.
+app.get('/api/slicer/compatible', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  const printer = (req.query?.printer || '').toString().trim();
+  if (!printer) return { process: [], filament: [] };
+  try {
+    return await getCompatiblePresets(printer);
+  } catch (e) {
+    req.log.error(e);
+    return { process: [], filament: [] };
+  }
 });
 
 // ---- instance -----------------------------------------------------------
