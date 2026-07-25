@@ -74,7 +74,7 @@
 
   <div class="card card-pad how">
     <span class="eyebrow">How to slice</span>
-    <p class="muted">Upload a model in <a href="/app/files">Files</a>, then use its <b>Slice</b> action — OrcaSlicer runs it server-side and the result drops into your <a href="/app/queue">Print queue</a>. Preset selection (printer · process · filament) lands next.</p>
+    <p class="muted">Upload a model in <a href="/app/files">Files</a>, then use its <b>Slice</b> action. Pick a printer, process and filament (searchable, and auto-filtered to what's compatible with the printer) — OrcaSlicer runs it server-side and, with "Slice &amp; queue" on, the result drops straight into your <a href="/app/queue">Print queue</a>.</p>
   </div>
 {/if}
 
