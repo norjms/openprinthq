@@ -22,8 +22,18 @@ async function req(path, opts = {}) {
   });
   if (!res.ok) {
     let detail;
-    try { detail = await res.json(); } catch { detail = { error: res.statusText }; }
-    throw Object.assign(new Error(detail.error || 'request failed'), { status: res.status, detail });
+    try { detail = await res.json(); } catch { detail = null; }
+    // Engine/gateway errors come in several shapes: a plain string, a FastAPI
+    // validation array, or a structured object like {detail:{code,message}}.
+    // Flatten to a human message so callers can just use e.message (and never
+    // render "[object Object]").
+    const d = detail && (detail.detail ?? detail.error ?? detail.message);
+    let msg;
+    if (typeof d === 'string') msg = d;
+    else if (Array.isArray(d)) msg = d.map((x) => x?.msg || (typeof x === 'string' ? x : '')).filter(Boolean).join('; ');
+    else if (d && typeof d === 'object') msg = d.message || d.detail || d.msg;
+    msg = msg || (typeof detail?.error === 'string' ? detail.error : '') || res.statusText || 'request failed';
+    throw Object.assign(new Error(msg), { status: res.status, detail });
   }
   const ct = res.headers.get('content-type') || '';
   return ct.includes('application/json') ? res.json() : res.text();

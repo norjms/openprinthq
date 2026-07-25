@@ -38,7 +38,7 @@
       if (r?.errors?.length) showToast('err', r.errors[0].error || 'could not queue file');
       else showToast('ok', `“${f.name}” added to the print queue.`);
     } catch (e) {
-      showToast('err', e.detail?.detail || e.message || 'could not queue file');
+      showToast('err', e.message || 'could not queue file');
     } finally {
       queuingId = null;
     }
@@ -226,8 +226,7 @@
       load();
       setTimeout(() => { if (sliceFile) closeSlice(); }, 1600);
     } catch (e) {
-      sliceErr = e.detail?.detail || e.message || 'slice failed';
-      if (Array.isArray(sliceErr)) sliceErr = sliceErr.map((x) => x.msg || JSON.stringify(x)).join('; ');
+      sliceErr = e.message || 'slice failed';
       showToast('err', sliceErr);
     } finally { slicing = false; sliceProgress = null; }
   }

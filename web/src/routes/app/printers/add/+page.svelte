@@ -47,8 +47,7 @@
       await api.engine('/api/v1/printers/', { method: 'POST', body: JSON.stringify(body) });
       goto('/app/printers');
     } catch (e2) {
-      err = e2.detail?.detail || e2.detail?.error || e2.message || 'failed to add printer';
-      if (Array.isArray(err)) err = err.map((x) => x.msg || JSON.stringify(x)).join('; ');
+      err = e2.message || 'failed to add printer';
     } finally {
       busy = false;
     }
