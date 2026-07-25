@@ -8,6 +8,12 @@ import { provisionForUser } from './provisioner.js';
 const PORT = Number(process.env.PORT || 8080);
 const SESSION_SECRET = process.env.SESSION_SECRET || 'dev-insecure-secret-change-me-in-prod-000000';
 const COOKIE = 'ophq_sess';
+// Host on which per-tenant engine containers publish their ports (CT201 LAN IP).
+const ENGINE_HOST = process.env.OPHQ_ENGINE_HOST || '10.10.10.109';
+
+function engineBase(inst) {
+  return inst && inst.port ? `http://${ENGINE_HOST}:${inst.port}` : null;
+}
 
 const app = Fastify({ logger: true, trustProxy: true });
 await app.register(cookie, { secret: SESSION_SECRET });
@@ -102,16 +108,61 @@ app.post('/api/instance/provision', async (req, reply) => {
   }
 });
 
-// Placeholder fleet endpoints — return an honest empty shape until the engine
-// adapters are wired. The dashboard renders "—" for null values.
+// Real fleet stats, pulled live from the user's engine.
+function asArray(x) {
+  if (Array.isArray(x)) return x;
+  if (x && typeof x === 'object') return x.printers || x.items || x.queue || x.results || [];
+  return [];
+}
 app.get('/api/instance/stats', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
-  return { printersOnline: 0, activeJobs: 0, queued: 0, successRate: null };
+  const inst = await getInstanceForUser(user.id);
+  const base = engineBase(inst);
+  if (!base) return { printersOnline: 0, activeJobs: 0, queued: 0, successRate: null, printersTotal: 0 };
+  try {
+    const [printers, queue] = await Promise.all([
+      fetch(base + '/api/v1/printers/').then(r => r.ok ? r.json() : []).catch(() => []),
+      fetch(base + '/api/v1/queue/').then(r => r.ok ? r.json() : []).catch(() => [])
+    ]);
+    const parr = asArray(printers), qarr = asArray(queue);
+    const st = p => String(p.status || p.state || p.connection_status || '').toLowerCase();
+    return {
+      printersTotal: parr.length,
+      printersOnline: parr.filter(p => /online|idle|ready|printing|running|paused/.test(st(p))).length,
+      activeJobs: parr.filter(p => /print|running/.test(st(p))).length,
+      queued: qarr.length,
+      successRate: null
+    };
+  } catch {
+    return { printersOnline: 0, activeJobs: 0, queued: 0, successRate: null, printersTotal: 0 };
+  }
 });
 
-app.get('/api/instance/printers', async (req, reply) => {
+// Authenticated gateway: proxy the logged-in user's request to THEIR engine.
+// Frontend calls /api/engine/<engine-path>; we resolve the user's instance and
+// forward. (JSON + GET today; multipart upload proxying is a follow-up.)
+app.all('/api/engine/*', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
-  return { printers: [] };
+  const inst = await getInstanceForUser(user.id);
+  const base = engineBase(inst);
+  if (!base) return reply.code(409).send({ error: 'no running instance for this account' });
+  const enginePath = req.url.replace(/^\/api\/engine/, '') || '/';
+  const method = req.method;
+  const headers = { accept: req.headers['accept'] || 'application/json' };
+  let body;
+  if (!['GET', 'HEAD'].includes(method) && req.body !== undefined) {
+    headers['content-type'] = 'application/json';
+    body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+  }
+  try {
+    const res = await fetch(base + enginePath, { method, headers, body });
+    reply.code(res.status);
+    const ct = res.headers.get('content-type');
+    if (ct) reply.header('content-type', ct);
+    return reply.send(Buffer.from(await res.arrayBuffer()));
+  } catch (e) {
+    return reply.code(502).send({ error: 'engine unreachable: ' + e.message });
+  }
 });
 
 // ---- boot ---------------------------------------------------------------
