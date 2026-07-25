@@ -115,7 +115,7 @@
         projects that made it possible.
       </p>
       <div class="cta">
-        <a href="https://internal.example.com/OpenPrintHQ/openprinthq" class="btn btn-primary">Read the source</a>
+        <a href="/legal" class="btn btn-primary">Read the source</a>
         <a href="/app" class="btn btn-ghost">Launch your HQ</a>
       </div>
     </div>

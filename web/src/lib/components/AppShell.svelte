@@ -32,7 +32,7 @@
     </nav>
     <div class="side-foot">
       <span class="chip ok">AGPL-3.0</span>
-      <a class="muted src" href="https://internal.example.com/OpenPrintHQ/openprinthq">source ↗</a>
+      <a class="muted src" href="/legal">source ↗</a>
     </div>
   </aside>
 
