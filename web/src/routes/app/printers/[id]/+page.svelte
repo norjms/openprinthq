@@ -24,7 +24,7 @@
     } catch (e) {
       if (e.status === 404) error = 'not-found';
       else if (e.status === 409) error = 'no-instance';
-      else error = e.detail?.detail || e.message || 'engine unreachable';
+      else error = e.message ||'engine unreachable';
     } finally {
       loading = false;
     }
@@ -87,7 +87,7 @@
       await api.printerAction(id, 'refresh-status').catch(() => {});
       await loadStatus(false);
     } catch (e) {
-      error = e.detail?.detail || e.message || `${label} failed`;
+      error = e.message ||`${label} failed`;
     } finally {
       acting = null; confirmStop = false;
     }
@@ -102,7 +102,7 @@
       targets[key] = '';
       await loadStatus(false);
     } catch (e) {
-      error = e.detail?.detail || e.message || 'set temperature failed';
+      error = e.message ||'set temperature failed';
     } finally {
       acting = null;
     }
