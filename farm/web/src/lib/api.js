@@ -29,5 +29,6 @@ export const api = {
   // Proxy straight to the logged-in user's engine (frontend-first model).
   engine: (path, opts) => req('/engine' + path, opts),
   printers: () => req('/engine/api/v1/printers/'),
-  queue: () => req('/engine/api/v1/queue/')
+  queue: () => req('/engine/api/v1/queue/'),
+  files: () => req('/engine/api/v1/library/files')
 };
