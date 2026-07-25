@@ -18,7 +18,9 @@ const GATEWAY_SECRET = process.env.OPHQ_GATEWAY_SECRET || '';
 const ALLOW_DEV_LOGIN = !!process.env.OPHQ_ALLOW_DEV_LOGIN;
 
 function engineBase(inst) {
-  return inst && inst.port ? `http://${ENGINE_HOST}:${inst.port}` : null;
+  // Engines are on the internal Docker network, not published to the host —
+  // reach them by container name, never via a LAN-exposed port.
+  return inst && inst.subdomain ? `http://ophq-${inst.subdomain}:8000` : null;
 }
 
 const app = Fastify({ logger: true, trustProxy: true, bodyLimit: 1024 * 1024 * 1024 });
