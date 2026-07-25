@@ -52,18 +52,23 @@
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+  // Discovery is offered for two vendors with different engine endpoints:
+  // Bambu (SSDP/port scan) and Klipper (Moonraker port-7125 probe).
+  const isKlipper = $derived(selected?.ct === 'klipper');
+
   async function scan() {
+    const klip = isKlipper;
     scanning = true; scanErr = null; discovered = []; scanned = false;
     scanProgress = { scanned: 0, total: 0 };
     try {
-      await api.discoverScan(subnet, 1.5);
+      await (klip ? api.discoverKlipperScan(subnet, 1.5) : api.discoverScan(subnet, 1.5));
       for (let i = 0; i < 40; i++) {
         await sleep(1500);
-        const s = await api.discoverScanStatus();
+        const s = await (klip ? api.discoverKlipperScanStatus() : api.discoverScanStatus());
         scanProgress = { scanned: s.scanned || 0, total: s.total || 0 };
         if (!s.running) break;
       }
-      discovered = await api.discoveredPrinters();
+      discovered = await (klip ? api.discoveredKlipperPrinters() : api.discoveredPrinters());
     } catch (e) {
       scanErr = e.message || 'scan failed';
     } finally {
@@ -72,10 +77,15 @@
   }
 
   function pickDiscovered(p) {
-    values.name = values.name || p.name || p.model || 'Bambu printer';
+    values.name = values.name || p.name || p.model || (isKlipper ? 'Klipper printer' : 'Bambu printer');
     values.ip_address = p.ip_address;
-    values.serial_number = p.serial;
-    if (p.model) values.model = p.model;
+    if (isKlipper) {
+      // Moonraker printers are reached by IP + port; no serial/access code.
+      values.moonraker_port = values.moonraker_port || 7125;
+    } else {
+      values.serial_number = p.serial;
+      if (p.model) values.model = p.model;
+    }
     pickedIp = p.ip_address;
   }
 
@@ -123,10 +133,14 @@
       <button type="button" class="btn btn-ghost btn-sm" onclick={() => (selected = null)}>Change</button>
     </div>
 
-    {#if selected.ct === 'bambu'}
+    {#if selected.ct === 'bambu' || selected.ct === 'klipper'}
       <div class="discover">
         <div class="dtitle"><b>Find printers on your network</b></div>
-        <p class="muted tiny">Scans your subnet for Bambu printers in LAN mode and fills in the IP, serial &amp; model — you just add the access code.</p>
+        {#if isKlipper}
+          <p class="muted tiny">Probes your subnet for Klipper printers running Moonraker (port 7125) and fills in the IP — just give it a name.</p>
+        {:else}
+          <p class="muted tiny">Scans your subnet for Bambu printers in LAN mode and fills in the IP, serial &amp; model — you just add the access code.</p>
+        {/if}
         <div class="scanrow">
           <input class="input" bind:value={subnet} placeholder="10.10.10.0/24" aria-label="Subnet to scan" />
           <button type="button" class="btn btn-primary btn-sm" onclick={scan} disabled={scanning}>
@@ -142,14 +156,22 @@
           <div class="found">
             {#each discovered as p}
               <button type="button" class="foundrow" class:sel={pickedIp === p.ip_address} onclick={() => pickDiscovered(p)}>
-                <span class="fn">{p.name || p.model || 'Bambu printer'}{#if p.model}<span class="muted mono"> · {p.model}</span>{/if}</span>
-                <span class="muted mono tiny">{p.ip_address} · {p.serial}</span>
+                <span class="fn">{p.name || p.model || (isKlipper ? 'Klipper printer' : 'Bambu printer')}{#if p.model && !isKlipper}<span class="muted mono"> · {p.model}</span>{/if}</span>
+                <span class="muted mono tiny">{p.ip_address}{#if !isKlipper} · {p.serial}{/if}</span>
               </button>
             {/each}
           </div>
-          <p class="muted tiny">Selected the printer? Enter its <b>access code</b> below (Settings → LAN-only mode on the printer's screen).</p>
+          {#if isKlipper}
+            <p class="muted tiny">Selected the printer? Give it a <b>display name</b> below. Add an API key only if your Moonraker requires one.</p>
+          {:else}
+            <p class="muted tiny">Selected the printer? Enter its <b>access code</b> below (Settings → LAN-only mode on the printer's screen).</p>
+          {/if}
         {:else if scanned && !scanning}
-          <p class="muted tiny">No printers found. Confirm LAN-only mode is on and the subnet is right, or enter the details manually below.</p>
+          {#if isKlipper}
+            <p class="muted tiny">No Klipper printers found. Confirm Moonraker is reachable on port 7125 and the subnet is right, or enter the details manually below.</p>
+          {:else}
+            <p class="muted tiny">No printers found. Confirm LAN-only mode is on and the subnet is right, or enter the details manually below.</p>
+          {/if}
         {/if}
       </div>
     {/if}
