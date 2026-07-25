@@ -53,11 +53,21 @@ export const api = {
     req('/engine/api/v1/discovery/scan', { method: 'POST', body: JSON.stringify({ subnet, timeout }) }),
   discoverScanStatus: () => req('/engine/api/v1/discovery/scan/status'),
   discoveredPrinters: () => req('/engine/api/v1/discovery/printers'),
+  // Klipper/Moonraker discovery (subnet probe of port 7125).
+  discoverKlipperScan: (subnet, timeout = 1.5) =>
+    req('/engine/api/v1/discovery/klipper/scan', { method: 'POST', body: JSON.stringify({ subnet, timeout }) }),
+  discoverKlipperScanStatus: () => req('/engine/api/v1/discovery/klipper/scan/status'),
+  discoveredKlipperPrinters: () => req('/engine/api/v1/discovery/klipper/printers'),
   printer: (id) => req('/engine/api/v1/printers/' + id),
   printerStatus: (id) => req('/engine/api/v1/printers/' + id + '/status'),
   // action: 'print/pause' | 'print/resume' | 'print/stop' | 'connect' | 'disconnect' | 'refresh-status'
   printerAction: (id, action) =>
     req('/engine/api/v1/printers/' + id + '/' + action, { method: 'POST' }),
+  // AMS filament load (tray_id: 0-15 AMS slot = ams*4+slot, 254 external) / unload.
+  amsLoad: (id, trayId) =>
+    req('/engine/api/v1/printers/' + id + '/ams/load?tray_id=' + encodeURIComponent(trayId), { method: 'POST' }),
+  amsUnload: (id) =>
+    req('/engine/api/v1/printers/' + id + '/ams/unload', { method: 'POST' }),
   // kind: 'nozzle' | 'bed' | 'chamber' — engine takes ?target= as a query param
   setTemp: (id, kind, target) =>
     req('/engine/api/v1/printers/' + id + '/temperature/' + kind + '?target=' + encodeURIComponent(target), { method: 'POST' }),
