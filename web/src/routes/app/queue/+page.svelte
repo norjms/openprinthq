@@ -10,6 +10,14 @@
   let confirmDel = $state(null);  // id pending delete confirmation
   let toast = $state(null);
   let toastTimer = null;
+  let filterPrinter = $state('all');   // 'all' | 'unassigned' | printer id
+
+  const filtered = $derived(filterPrinter !== 'all');
+  const shownItems = $derived(
+    filterPrinter === 'all' ? items
+      : filterPrinter === 'unassigned' ? items.filter((q) => q.printerId == null)
+        : items.filter((q) => String(q.printerId) === String(filterPrinter))
+  );
 
   function showToast(kind, text) {
     toast = { kind, text };
@@ -102,7 +110,16 @@
 
 <div class="head">
   <div><h1>Print queue</h1><p class="muted">One queue across your whole fleet.</p></div>
-  <button class="btn btn-ghost btn-sm" onclick={load}>Refresh</button>
+  <div class="flex gap center">
+    {#if !loading && !error && items.length > 0}
+      <select class="input filt" bind:value={filterPrinter} aria-label="Filter by printer">
+        <option value="all">All printers</option>
+        <option value="unassigned">Unassigned</option>
+        {#each printers as p}<option value={String(p.id)}>{p.name}</option>{/each}
+      </select>
+    {/if}
+    <button class="btn btn-ghost btn-sm" onclick={load}>Refresh</button>
+  </div>
 </div>
 
 {#if toast}
@@ -122,10 +139,15 @@
     <p class="muted">Slice a model or add a G-code file to the queue — jobs across your whole fleet show up here.</p>
     <a class="btn btn-primary" href="/app/files">Go to files</a>
   </div>
+{:else if shownItems.length === 0}
+  <div class="card card-pad muted flt-empty">
+    No queued jobs for this filter.
+    <button class="btn btn-ghost btn-sm" onclick={() => (filterPrinter = 'all')}>Show all</button>
+  </div>
 {:else}
   <div class="card list">
     <div class="row head-row muted mono"><span>#</span><span>Job</span><span>Printer</span><span>Status</span><span class="ar">Actions</span></div>
-    {#each items as q, i (q.id)}
+    {#each shownItems as q, i (q.id)}
       <div class="row" class:busy={busyId === q.id}>
         <span class="mono muted pos">{i + 1}</span>
         <span class="name">
@@ -149,8 +171,8 @@
         <span><span class="chip {tone(q.status)}">{q.status}</span></span>
         <span class="acts">
           {#if isPending(q.status)}
-            <button class="ib" title="Move up" onclick={() => move(i, -1)} disabled={busyId === q.id || i === 0}>↑</button>
-            <button class="ib" title="Move down" onclick={() => move(i, 1)} disabled={busyId === q.id || i === items.length - 1}>↓</button>
+            <button class="ib" title={filtered ? 'Clear filter to reorder' : 'Move up'} onclick={() => move(i, -1)} disabled={busyId === q.id || i === 0 || filtered}>↑</button>
+            <button class="ib" title={filtered ? 'Clear filter to reorder' : 'Move down'} onclick={() => move(i, 1)} disabled={busyId === q.id || i === shownItems.length - 1 || filtered}>↓</button>
             <button class="btn btn-ghost btn-sm" onclick={() => act(q.id, () => api.queueStart(q.id), 'Print started.')} disabled={busyId === q.id}>Start</button>
           {/if}
           {#if isActive(q.status)}
@@ -172,8 +194,10 @@
 {/if}
 
 <style>
-  .head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 1.4rem; }
+  .head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 1.4rem; gap: 1rem; }
   .head h1 { margin: 0; }
+  .filt { width: auto; padding: 0.45rem 0.7rem; font-size: 0.85rem; }
+  .flt-empty { display: flex; align-items: center; gap: 0.8rem; }
   .empty { text-align: center; padding: 2.6rem; }
   .empty .ic { font-size: 1.8rem; margin-bottom: 0.3rem; }
   .empty p { max-width: 46ch; margin: 0.6rem auto 1.4rem; }
