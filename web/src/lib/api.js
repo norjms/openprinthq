@@ -73,6 +73,8 @@ export const api = {
   files: () => req('/engine/api/v1/library/files'),
   spools: () => req('/engine/api/v1/inventory/spools'),
   printStats: () => req('/engine/api/v1/archives/stats'),
+  engineSettings: () => req('/engine/api/v1/settings'),
+  updateEngineSettings: (body) => req('/engine/api/v1/settings', { method: 'PATCH', body: JSON.stringify(body) }),
   slicerModels: () => req('/engine/api/v1/slicer/printer-models'),
   slicerPresets: () => req('/engine/api/v1/slicer/presets'),
   // Compatible process/filament preset names for a printer (control-plane join).

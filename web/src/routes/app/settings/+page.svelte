@@ -6,12 +6,39 @@
   let inst = $state(null);
   let err = $state(null);
 
+  // electricity rate (engine setting energy_cost_per_kwh)
+  let rate = $state('');
+  let currency = $state('USD');
+  let rateSaving = $state(false);
+  let rateMsg = $state(null);
+  const currencySymbol = $derived(({ USD: '$', EUR: '€', GBP: '£', CAD: '$', AUD: '$', JPY: '¥' })[currency] || (currency + ' '));
+
   onMount(async () => {
     try {
       me = await api.me();
       inst = await api.myInstance().catch(() => null);
+      const s = await api.engineSettings().catch(() => null);
+      if (s) {
+        rate = (s.energy_cost_per_kwh ?? '').toString();
+        currency = s.currency || 'USD';
+      }
     } catch (e) { err = e.message; }
   });
+
+  async function saveRate() {
+    const v = parseFloat(rate);
+    if (isNaN(v) || v < 0) { rateMsg = { kind: 'err', text: 'Enter a valid rate.' }; return; }
+    rateSaving = true; rateMsg = null;
+    try {
+      await api.updateEngineSettings({ energy_cost_per_kwh: String(v) });
+      rate = String(v);
+      rateMsg = { kind: 'ok', text: 'Saved.' };
+    } catch (e) {
+      rateMsg = { kind: 'err', text: e.message || 'could not save' };
+    } finally {
+      rateSaving = false;
+    }
+  }
 
   function fmtDate(s) {
     if (!s) return '—';
@@ -51,6 +78,18 @@
   </div>
 </div>
 
+<div class="card card-pad rate-card">
+  <span class="eyebrow">Electricity rate</span>
+  <p class="muted">Cost per kWh used to calculate energy cost in <a href="/app/statistics">Statistics</a>.</p>
+  <div class="rate-row">
+    <span class="cur mono">{currencySymbol}</span>
+    <input class="input rate-in" type="number" step="0.01" min="0" bind:value={rate} placeholder="0.15" />
+    <span class="muted per">per kWh</span>
+    <button class="btn btn-primary btn-sm" onclick={saveRate} disabled={rateSaving}>{rateSaving ? 'Saving…' : 'Save'}</button>
+  </div>
+  {#if rateMsg}<p class={rateMsg.kind === 'ok' ? 'ok-msg' : 'err'}>{rateMsg.text}</p>{/if}
+</div>
+
 <div class="card card-pad more">
   <span class="eyebrow">Coming soon</span>
   <p class="muted">Instance controls (restart, backup/restore), notification channels, API keys &amp; webhooks, and SSO session management.</p>
@@ -64,6 +103,13 @@
   .kv { display: grid; gap: 0.5rem; margin: 0.8rem 0 1rem; font-size: 0.9rem; }
   .kv > div { display: flex; gap: 1rem; align-items: center; color: var(--ophq-text-2); }
   .kv span:first-child { color: var(--ophq-faint); width: 90px; display: inline-block; }
+  .rate-card { margin-top: 1.2rem; }
+  .rate-card p { margin: 0.3rem 0 0.9rem; font-size: 0.9rem; }
+  .rate-row { display: flex; align-items: center; gap: 0.6rem; }
+  .rate-row .cur { color: var(--ophq-text-2); font-size: 1rem; }
+  .rate-in { max-width: 130px; }
+  .rate-row .per { font-size: 0.88rem; }
+  .ok-msg { color: var(--ophq-success); font-size: 0.9rem; margin: 0.6rem 0 0; }
   .more { margin-top: 1.2rem; }
   .err { color: var(--ophq-danger); }
   @media (max-width: 820px) { .two { grid-template-columns: 1fr; } }
