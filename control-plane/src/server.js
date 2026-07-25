@@ -20,6 +20,12 @@ function setSession(reply, email) {
 }
 
 function currentEmail(req) {
+  // The app is only reachable through the trusted proxy (npmplus), which runs
+  // Authentik forward-auth and injects the authenticated identity as headers
+  // (and strips any client-supplied copies). Trust X-authentik-email when set;
+  // otherwise fall back to the signed dev-login session cookie.
+  const ak = req.headers['x-authentik-email'];
+  if (ak && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(ak)) return String(ak).toLowerCase();
   const raw = req.cookies?.[COOKIE];
   if (!raw) return null;
   const un = app.unsignCookie(raw);
@@ -29,8 +35,9 @@ function currentEmail(req) {
 async function requireUser(req, reply) {
   const email = currentEmail(req);
   if (!email) { reply.code(401).send({ error: 'not authenticated' }); return null; }
-  const user = await getUserByEmail(email);
-  if (!user) { reply.code(401).send({ error: 'unknown user' }); return null; }
+  let user = await getUserByEmail(email);
+  // First SSO login: auto-create the account from the Authentik identity.
+  if (!user) user = await upsertUser(email, req.headers['x-authentik-name'] || null);
   return user;
 }
 
