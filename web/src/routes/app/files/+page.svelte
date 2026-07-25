@@ -12,10 +12,35 @@
     const arr = Array.isArray(d) ? d : (d?.files || d?.items || d?.results || []);
     return arr.map((f) => {
       const name = f.name ?? f.filename ?? f.display_name ?? 'file';
+      const lower = name.toLowerCase();
       const kind = (name.split('.').pop() || '').toUpperCase();
-      const sliceable = SLICEABLE.has(kind) && !name.toLowerCase().includes('.gcode.');
-      return { id: f.id ?? f.file_id, name, size: f.size ?? f.file_size ?? null, kind, sliceable };
+      // Already-sliced output ends in .gcode or .gcode.3mf — printable, not sliceable.
+      const queueable = /\.gcode(\.3mf)?$/.test(lower);
+      const sliceable = SLICEABLE.has(kind) && !lower.includes('.gcode.') && !queueable;
+      return { id: f.id ?? f.file_id, name, size: f.size ?? f.file_size ?? null, kind, sliceable, queueable };
     });
+  }
+
+  // ---- add to queue (existing sliced files) ----
+  let toast = $state(null);       // { kind: 'ok'|'err', text }
+  let queuingId = $state(null);
+  let toastTimer = null;
+  function showToast(kind, text) {
+    toast = { kind, text };
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => (toast = null), 6000);
+  }
+  async function addToQueue(f) {
+    queuingId = f.id;
+    try {
+      const r = await api.addToQueue([f.id]);
+      if (r?.errors?.length) showToast('err', r.errors[0].error || 'could not queue file');
+      else showToast('ok', `“${f.name}” added to the print queue.`);
+    } catch (e) {
+      showToast('err', e.detail?.detail || e.message || 'could not queue file');
+    } finally {
+      queuingId = null;
+    }
   }
   function human(n) {
     if (!n && n !== 0) return '';
@@ -56,6 +81,8 @@
   let slicing = $state(false);
   let sliceErr = $state(null);
   let sliceMsg = $state(null);
+  let sliceProgress = $state(null);      // 0-100 while a job is running
+  let addQueueWhenDone = $state(true);   // one-click: slice → queue
 
   function flatten(cats, kind) {
     const out = [];
@@ -101,8 +128,10 @@
   }
   function closeSlice() { sliceFile = null; }
 
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
   async function doSlice() {
-    slicing = true; sliceErr = null; sliceMsg = null;
+    slicing = true; sliceErr = null; sliceMsg = null; sliceProgress = null;
     const body = {};
     const pr = fromKey(printerPresets, selPrinter);
     const pc = fromKey(processPresets, selProcess);
@@ -111,15 +140,46 @@
     if (pc) body.process_preset = { source: pc.source, id: pc.id };
     if (fl) body.filament_preset = { source: fl.source, id: fl.id };
     try {
-      await api.slice(sliceFile.id, body);
-      sliceMsg = 'Slicing started — the G-code will appear in your library shortly.';
-      // pick up the sliced output as it lands
-      setTimeout(load, 4000); setTimeout(load, 12000);
-      setTimeout(() => { if (sliceFile) closeSlice(); }, 1500);
+      const started = await api.slice(sliceFile.id, body);
+      const jobId = started?.job_id;
+      if (!addQueueWhenDone || !jobId) {
+        // fire-and-forget: G-code just lands in the library
+        sliceMsg = 'Slicing started — the G-code will appear in your library shortly.';
+        setTimeout(load, 4000); setTimeout(load, 12000);
+        setTimeout(() => { if (sliceFile) closeSlice(); }, 1500);
+        return;
+      }
+      // One-click: poll the slice job to completion, then queue the output.
+      sliceMsg = 'Slicing…';
+      let result = null;
+      for (let i = 0; i < 150; i++) { // ~5 min ceiling at 2s
+        await sleep(2000);
+        let job;
+        try { job = await api.sliceJob(jobId); } catch { continue; }
+        if (typeof job?.progress === 'number') sliceProgress = Math.round(job.progress);
+        if (job?.status === 'completed') { result = job.result; break; }
+        if (job?.status === 'failed') {
+          throw new Error(job.error_detail || job.error_status || 'slicing failed');
+        }
+      }
+      if (!result) throw new Error('slicing timed out — check the library shortly');
+      const newId = result.library_file_id;
+      sliceMsg = 'Sliced — adding to the print queue…';
+      const q = await api.addToQueue([newId]);
+      if (q?.errors?.length) {
+        sliceErr = q.errors[0].error || 'sliced, but could not add to queue';
+        showToast('err', sliceErr);
+      } else {
+        sliceMsg = 'Sliced and added to the print queue.';
+        showToast('ok', 'Sliced and added to the print queue.');
+      }
+      load();
+      setTimeout(() => { if (sliceFile) closeSlice(); }, 1600);
     } catch (e) {
       sliceErr = e.detail?.detail || e.message || 'slice failed';
       if (Array.isArray(sliceErr)) sliceErr = sliceErr.map((x) => x.msg || JSON.stringify(x)).join('; ');
-    } finally { slicing = false; }
+      showToast('err', sliceErr);
+    } finally { slicing = false; sliceProgress = null; }
   }
 </script>
 
@@ -136,6 +196,12 @@
   </div>
 </div>
 {#if upErr}<p class="uperr">{upErr}</p>{/if}
+{#if toast}
+  <div class="toast {toast.kind}">
+    <span>{toast.text}</span>
+    {#if toast.kind === 'ok'}<a href="/app/queue" class="tlink">View queue →</a>{/if}
+  </div>
+{/if}
 
 {#if loading}
   <div class="card card-pad muted">Loading library…</div>
@@ -159,6 +225,10 @@
           {#if f.size}<span class="muted mono sz">{human(f.size)}</span>{/if}
           {#if f.sliceable}
             <button class="btn btn-ghost btn-sm slicebtn" onclick={() => openSlice(f)}>◈ Slice</button>
+          {:else if f.queueable}
+            <button class="btn btn-ghost btn-sm slicebtn" onclick={() => addToQueue(f)} disabled={queuingId === f.id}>
+              {queuingId === f.id ? 'Queuing…' : '↳ Add to queue'}
+            </button>
           {/if}
         </div>
       </div>
@@ -195,11 +265,20 @@
           </select>
         </div>
         <p class="muted hint">Presets must match the printer (model &amp; nozzle). If a combo is incompatible, OrcaSlicer says so — just adjust.</p>
+        <label class="q-opt">
+          <input type="checkbox" bind:checked={addQueueWhenDone} disabled={slicing} />
+          <span>Add to print queue when slicing finishes</span>
+        </label>
+        {#if slicing && sliceProgress != null}
+          <div class="bar"><div class="fill" style="width:{sliceProgress}%"></div></div>
+        {/if}
         {#if sliceErr}<p class="err">{sliceErr}</p>{/if}
-        {#if sliceMsg}<p class="ok-msg">{sliceMsg}</p>{/if}
+        {#if sliceMsg}<p class="ok-msg">{sliceMsg}{#if slicing && sliceProgress != null} {sliceProgress}%{/if}</p>{/if}
         <div class="flex gap dactions">
-          <button class="btn btn-primary" onclick={doSlice} disabled={slicing}>{slicing ? 'Slicing…' : 'Slice'}</button>
-          <button class="btn btn-ghost" onclick={closeSlice}>Cancel</button>
+          <button class="btn btn-primary" onclick={doSlice} disabled={slicing}>
+            {slicing ? 'Slicing…' : (addQueueWhenDone ? 'Slice & queue' : 'Slice')}
+          </button>
+          <button class="btn btn-ghost" onclick={closeSlice} disabled={slicing}>Cancel</button>
         </div>
       {/if}
     </div>
@@ -229,4 +308,14 @@
   .hint { font-size: 0.8rem; margin: 0.2rem 0 0; }
   .err { color: var(--ophq-danger); font-size: 0.9rem; }
   .ok-msg { color: var(--ophq-success); font-size: 0.9rem; }
+
+  .toast { display: flex; align-items: center; gap: 1rem; justify-content: space-between;
+    padding: 0.7rem 1rem; border-radius: var(--radius-sm); margin: -0.6rem 0 1.1rem; font-size: 0.9rem; border: 1px solid; }
+  .toast.ok { color: var(--ophq-success); border-color: rgba(53,196,107,0.3); background: rgba(53,196,107,0.08); }
+  .toast.err { color: var(--ophq-danger); border-color: rgba(255,92,108,0.3); background: rgba(255,92,108,0.08); }
+  .toast .tlink { color: inherit; font-weight: 600; white-space: nowrap; }
+  .q-opt { display: flex; align-items: center; gap: 0.5rem; margin: 0.6rem 0 0.2rem; font-size: 0.9rem; color: var(--ophq-text-2); cursor: pointer; }
+  .q-opt input { width: auto; accent-color: var(--ophq-primary); }
+  .bar { height: 8px; background: var(--ophq-bg-2); border: 1px solid var(--ophq-border); border-radius: 999px; overflow: hidden; margin: 0.6rem 0 0.2rem; }
+  .fill { height: 100%; background: linear-gradient(90deg, var(--ophq-primary), var(--ophq-primary-2)); transition: width 0.4s ease; }
 </style>

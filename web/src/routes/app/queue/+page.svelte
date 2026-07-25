@@ -10,7 +10,7 @@
     const arr = Array.isArray(d) ? d : (d?.items || d?.queue || d?.results || []);
     return arr.map((q) => ({
       id: q.id ?? q.queue_id,
-      name: q.name ?? q.filename ?? q.file_name ?? q.display_name ?? 'Job',
+      name: q.library_file_name ?? q.archive_name ?? q.name ?? q.filename ?? q.file_name ?? q.display_name ?? 'Job',
       status: (q.status ?? q.state ?? 'queued').toString(),
       printer: q.printer_name ?? q.printer ?? q.target_printer ?? '',
       qty: q.quantity ?? q.amount ?? 1

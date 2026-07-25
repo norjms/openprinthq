@@ -45,6 +45,13 @@ export const api = {
   slicerPresets: () => req('/engine/api/v1/slicer/presets'),
   slice: (fileId, body) =>
     req('/engine/api/v1/library/files/' + fileId + '/slice', { method: 'POST', body: JSON.stringify(body) }),
+  sliceJob: (jobId) => req('/engine/api/v1/slice-jobs/' + jobId),
+  // Add sliced library files (.gcode / .gcode.3mf) to the print queue as
+  // unassigned items — the engine scheduler dispatches to a compatible printer.
+  addToQueue: (fileIds) =>
+    req('/engine/api/v1/library/files/add-to-queue', {
+      method: 'POST', body: JSON.stringify({ file_ids: fileIds })
+    }),
   // Multipart upload straight through the gateway to the user's engine library.
   async uploadFile(file) {
     const fd = new FormData();
