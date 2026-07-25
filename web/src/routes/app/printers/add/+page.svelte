@@ -16,13 +16,17 @@
 
   const vendors = [
     { key: 'bambu', ct: 'bambu', name: 'Bambu Lab', sub: 'X1 · P1 · A1 · H2D', fields: [F.name, F.ip, F.serial, F.access, F.model] },
-    { key: 'klipper', ct: 'klipper', name: 'Creality / Voron (Klipper)', sub: 'Moonraker', fields: [F.name, F.ip, F.port, F.apikey, F.model] },
+    { key: 'klipper', ct: 'klipper', name: 'Klipper · Mainsail / Fluidd', sub: 'Voron · RatRig · Creality · Moonraker',
+      note: 'Any Klipper printer exposed through Moonraker (Mainsail or Fluidd) — Voron, RatRig, Creality K1/K2, custom builds. Enter the printer’s IP and Moonraker port (default 7125). An API key is only needed if your Moonraker requires one.',
+      fields: [F.name, F.ip, F.port, F.apikey, F.model] },
     { key: 'prusa', ct: 'prusalink', name: 'Prusa (PrusaLink)', sub: 'MK4 · XL · CORE One', fields: [F.name, F.ip, F.apikeyReq, F.model] },
     { key: 'octoprint', ct: 'octoprint', name: 'OctoPrint', sub: 'REST API', fields: [F.name, F.ip, F.apikeyReq, F.model] },
     { key: 'duet', ct: 'duet', name: 'Duet / RepRap', sub: 'DWC', fields: [F.name, F.ip, F.model] },
     { key: 'flashforge', ct: 'flashforge', name: 'FlashForge', sub: 'LAN', fields: [F.name, F.ip, F.model] },
     { key: 'mks', ct: 'mks', name: 'MKS', sub: 'WiFi module', fields: [F.name, F.ip, F.model] },
-    { key: 'snapmaker', ct: 'snapmaker', name: 'Snapmaker', sub: 'Artisan · J1 · 2.0', fields: [F.name, F.ip, F.apikey, F.model] }
+    { key: 'snapmaker', ct: 'snapmaker', name: 'Snapmaker', sub: 'Artisan · J1 · 2.0',
+      note: 'First connection: tap Allow on the printer’s touchscreen to authorize OpenPrintHQ.',
+      fields: [F.name, F.ip, F.apikey, F.model] }
   ];
 
   let selected = $state(null);
@@ -111,7 +115,7 @@
       </button>
     {/each}
   </div>
-  <p class="muted small">First Snapmaker connection: tap <b>Allow</b> on the printer's touchscreen to authorize OpenPrintHQ.</p>
+  <p class="muted small">Running Klipper on a Voron, RatRig or Creality? Use <b>Klipper · Mainsail / Fluidd</b> — it connects through Moonraker.</p>
 {:else}
   <form class="card card-pad form" onsubmit={submit}>
     <div class="flex between center">
@@ -157,6 +161,7 @@
                required={f.required} bind:value={values[f.key]} />
       </div>
     {/each}
+    {#if selected.note}<p class="muted note">{selected.note}</p>{/if}
     {#if err}<p class="err">{err}</p>{/if}
     <div class="flex gap">
       <button class="btn btn-primary" disabled={busy}>{busy ? 'Connecting…' : 'Add printer'}</button>
@@ -178,6 +183,7 @@
   .form { max-width: 460px; }
   .form h3 { margin: 0 0 0.4rem; }
   .err { color: var(--ophq-danger); font-size: 0.9rem; }
+  .note { font-size: 0.83rem; margin: -0.2rem 0 0.6rem; line-height: 1.5; }
 
   .discover { border: 1px solid var(--ophq-border); border-radius: var(--radius-sm); padding: 1rem; margin: 0.4rem 0 1.2rem; background: var(--ophq-bg-2); }
   .dtitle { margin-bottom: 0.2rem; }
