@@ -33,6 +33,8 @@ export const api = {
   files: () => req('/engine/api/v1/library/files'),
   spools: () => req('/engine/api/v1/inventory/spools'),
   printStats: () => req('/engine/api/v1/archives/stats'),
+  slicerModels: () => req('/engine/api/v1/slicer/printer-models'),
+  slicerPresets: () => req('/engine/api/v1/slicer/presets'),
   // Multipart upload straight through the gateway to the user's engine library.
   async uploadFile(file) {
     const fd = new FormData();
