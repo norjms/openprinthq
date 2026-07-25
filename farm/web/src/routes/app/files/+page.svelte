@@ -83,8 +83,19 @@
         printerPresets.find((p) => /nozzle/i.test(p.id)) ||
         printerPresets[0];
       selPrinter = dfltPrinter ? key(dfltPrinter) : '';
-      selProcess = processPresets[0] ? key(processPresets[0]) : '';
-      selFilament = filamentPresets[0] ? key(filamentPresets[0]) : '';
+      // Prefer a 0.4-nozzle "Standard" process and a "PLA Basic" filament so the
+      // default triplet is a sensible, commonly-compatible starting point.
+      const badNozzle = /0\.[2368]\s*nozzle/i;
+      const dfltProcess =
+        processPresets.find((p) => /0\.20mm.*standard/i.test(p.id) && !badNozzle.test(p.id)) ||
+        processPresets.find((p) => /standard/i.test(p.id) && !badNozzle.test(p.id)) ||
+        processPresets[0];
+      const dfltFilament =
+        filamentPresets.find((p) => /pla\s*basic/i.test(p.id)) ||
+        filamentPresets.find((p) => /\bpla\b/i.test(p.id)) ||
+        filamentPresets[0];
+      selProcess = dfltProcess ? key(dfltProcess) : '';
+      selFilament = dfltFilament ? key(dfltFilament) : '';
     } catch (e) { sliceErr = e.message || 'could not load presets'; }
     finally { presetsLoading = false; }
   }
@@ -183,6 +194,7 @@
             {#each filamentPresets as p}<option value={`${p.source}::${p.id}`}>{p.name}</option>{/each}
           </select>
         </div>
+        <p class="muted hint">Presets must match the printer (model &amp; nozzle). If a combo is incompatible, OrcaSlicer says so — just adjust.</p>
         {#if sliceErr}<p class="err">{sliceErr}</p>{/if}
         {#if sliceMsg}<p class="ok-msg">{sliceMsg}</p>{/if}
         <div class="flex gap dactions">
@@ -214,6 +226,7 @@
   .dhead { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; }
   .dhead h3 { margin: 0.2rem 0 0; font-size: 1.1rem; word-break: break-word; }
   .dactions { margin-top: 1.2rem; }
+  .hint { font-size: 0.8rem; margin: 0.2rem 0 0; }
   .err { color: var(--ophq-danger); font-size: 0.9rem; }
   .ok-msg { color: var(--ophq-success); font-size: 0.9rem; }
 </style>
