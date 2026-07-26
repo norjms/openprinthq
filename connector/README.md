@@ -119,7 +119,13 @@ See `.env.example` for every option (`OPHQ_ALLOW`, `OPHQ_ALLOW_PORTS`, …).
   live Moonraker request round-tripped over a raw TCP stream.
 - **Per-printer routing** — each printer can be set to *Direct* or *via a
   connector* in Settings → Connectors (stored as `printer_automation.connector_id`).
-- **Next:** auto-activation — when a printer is set "via connector", have the
-  control-plane stand up a persistent local relay and point that printer's
-  engine connection at it (opt-in, so existing local printers are never
-  silently rerouted).
+- **Auto-activation** — setting a **Klipper** printer "via connector" now takes
+  effect automatically: the control-plane opens a stable local relay
+  (`RELAY_HOST:39000+printerId`) that tunnels to the printer through the agent,
+  saves the printer's real address, and repoints its engine connection at the
+  relay (the engine disconnects + reconnects through the tunnel). Setting it back
+  to *Direct* restores the saved address and drops the relay; relays are re-opened
+  on control-plane restart. Verified live: a Voron was rerouted through the tunnel
+  and stayed connected, then reverted cleanly.
+- **Next:** Bambu auto-activation (it uses several ports — MQTT/FTP/camera — so
+  needs a relay per endpoint rather than the single Moonraker port Klipper uses).
