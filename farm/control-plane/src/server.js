@@ -6,12 +6,14 @@ import { readFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { migrate, upsertUser, getUserByEmail, getInstanceForUser, getCompatiblePresets,
   getCircuits, setCircuit, getAutomation, setAutomation,
-  createConnector, listConnectors, deleteConnector, getBatchById,
+  createConnector, listConnectors, deleteConnector,
+  getSigningPublic, setSigningKey, deleteSigningKey, getBatchById,
   getIntegrationToken, setIntegrationToken, getUserByIntegrationToken } from './db.js';
 import { registerConnectorRoutes, connectorOnline, isConnectorOnline, proxyViaConnector, openTcpStream } from './connector.js';
 import { provisionForUser } from './provisioner.js';
 import { startBatch, activeBatchForUser, advanceBatch, cancelBatch, startOrchestrator } from './batch.js';
 import { activateRoute, deactivateRoute, reconcileRoutes } from './routing.js';
+import { generateKeyPair, encryptPrivate, invalidateSigningCache } from './signing.js';
 
 // Bambu HMS error dictionary (short_code "XXXX_YYYY" -> human description),
 // extracted from the engine's HMS table. Loaded once at startup and served to
@@ -307,6 +309,26 @@ app.post('/api/connectors/tcp-test', async (req, reply) => {
   });
   const buf = Buffer.concat(chunks);
   return { ...out, bytes: buf.length, preview: buf.subarray(0, 160).toString('utf8').replace(/[^\x20-\x7e]/g, '.') };
+});
+
+// ---- connector command-signing key (RSA-2048) ---------------------------
+app.get('/api/connector/signing-key', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  const k = await getSigningPublic(user.id);
+  return { public_pem: k?.public_pem || null, created_at: k?.created_at || null };
+});
+app.post('/api/connector/signing-key', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  const { publicPem, privatePem } = generateKeyPair();
+  await setSigningKey(user.id, publicPem, encryptPrivate(privatePem));
+  invalidateSigningCache(user.id);
+  return { public_pem: publicPem };
+});
+app.delete('/api/connector/signing-key', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  await deleteSigningKey(user.id);
+  invalidateSigningCache(user.id);
+  return { ok: true };
 });
 
 // ---- temperature-staggered batch printing -------------------------------

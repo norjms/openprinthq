@@ -19,16 +19,27 @@
   let printers = $state([]);
   let routing = $state({});   // printerId -> connector_id|null
 
+  // signing key
+  let signPub = $state(null);
+  let signCreated = $state(null);
+  let signBusy = $state(false);
+  let confirmRegen = $state(false);
+  let confirmRemove = $state(false);
+  let pubCopied = $state(false);
+
   const base = $derived(typeof window !== 'undefined' ? window.location.origin : 'https://your-instance');
 
   async function load() {
     loading = true; error = null;
     try {
-      const [r, pl, auto] = await Promise.all([
+      const [r, pl, auto, sk] = await Promise.all([
         api.connectors(),
         api.printers().catch(() => []),
-        api.printerAutomation().catch(() => ({}))
+        api.printerAutomation().catch(() => ({})),
+        api.signingKey().catch(() => ({}))
       ]);
+      signPub = sk?.public_pem || null;
+      signCreated = sk?.created_at || null;
       list = Array.isArray(r) ? r : (r?.items || []);
       printers = (Array.isArray(pl) ? pl : (pl?.printers || pl?.items || [])).map((p) => ({ id: p.id ?? p.printer_id, name: p.name || ('Printer ' + p.id) }));
       const map = {};
@@ -45,6 +56,18 @@
     try { await api.savePrinterAutomation({ [printerId]: { connector_id: connectorId === '' ? null : Number(connectorId) } }); }
     catch { /* ignore */ }
   }
+
+  async function genKey() {
+    signBusy = true; confirmRegen = false;
+    try { const r = await api.generateSigningKey(); signPub = r.public_pem; signCreated = new Date().toISOString(); }
+    catch { /* ignore */ } finally { signBusy = false; }
+  }
+  async function removeKey() {
+    signBusy = true; confirmRemove = false;
+    try { await api.deleteSigningKey(); signPub = null; signCreated = null; }
+    catch { /* ignore */ } finally { signBusy = false; }
+  }
+  async function copyPub() { try { await navigator.clipboard.writeText(signPub); pubCopied = true; setTimeout(() => (pubCopied = false), 2000); } catch { /* */ } }
 
   async function create() {
     if (!name.trim() || creating) return;
@@ -92,6 +115,28 @@
       <button class="btn btn-ghost btn-xs" onclick={() => (created = null)}>Dismiss</button>
     </div>
   {/if}
+
+  <div class="signing">
+    <span class="gl">Signing key <span class="muted">(command authentication)</span></span>
+    <p class="muted tiny">An RSA-2048 key pair that lets a connector verify every command really came from this instance. This server keeps the private key; copy the <b>public</b> key into your connector as <code>OPHQ_SIGNING_PUBKEY</code>. The connector then rejects any command not signed by this instance.</p>
+    {#if signPub}
+      <div class="snip"><button class="cbtn" onclick={copyPub}>{pubCopied ? 'Copied' : 'Copy'}</button><pre>{signPub}</pre></div>
+      <div class="skacts">
+        <span class="muted mono tiny">created {fmt(signCreated)}</span>
+        {#if confirmRegen}
+          <span class="flex gap"><button class="btn btn-primary btn-xs" onclick={genKey} disabled={signBusy}>Regenerate</button><button class="btn btn-ghost btn-xs" onclick={() => (confirmRegen = false)}>✕</button></span>
+          <span class="muted tiny">— you’ll need to update every connector with the new key.</span>
+        {:else if confirmRemove}
+          <span class="flex gap"><button class="btn btn-danger btn-xs" onclick={removeKey} disabled={signBusy}>Remove key</button><button class="btn btn-ghost btn-xs" onclick={() => (confirmRemove = false)}>✕</button></span>
+        {:else}
+          <button class="btn btn-ghost btn-xs" onclick={() => (confirmRegen = true)}>Regenerate</button>
+          <button class="btn btn-ghost btn-xs" onclick={() => (confirmRemove = true)}>Remove</button>
+        {/if}
+      </div>
+    {:else}
+      <button class="btn btn-ghost btn-sm" onclick={genKey} disabled={signBusy}>{signBusy ? 'Generating…' : 'Generate signing key'}</button>
+    {/if}
+  </div>
 
   {#if loading}
     <p class="muted">Loading…</p>
@@ -162,6 +207,9 @@
   .st { font-size: 0.78rem; font-weight: 400; }
   .cmeta { font-size: 0.72rem; margin-top: 0.15rem; }
   .err { color: var(--ophq-danger); font-size: 0.88rem; }
+  .signing { margin-top: 1.2rem; border-top: 1px solid var(--ophq-border); padding-top: 0.9rem; }
+  .signing .snip pre { max-height: 150px; }
+  .skacts { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.6rem; flex-wrap: wrap; }
   .routing { margin-top: 1.2rem; border-top: 1px solid var(--ophq-border); padding-top: 0.9rem; }
   .gl { display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ophq-muted); margin-bottom: 0.4rem; }
   .rlist { display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.6rem; }

@@ -23,6 +23,16 @@
 // Dependency-free: uses only Node ≥ 20 built-ins (global fetch, streams).
 
 import net from 'node:net';
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+
+function readPubKey() {
+  const inline = process.env.OPHQ_SIGNING_PUBKEY;
+  if (inline && inline.trim()) return inline.trim();
+  const file = process.env.OPHQ_SIGNING_PUBKEY_FILE;
+  if (file) { try { return fs.readFileSync(file, 'utf8'); } catch { return ''; } }
+  return '';
+}
 
 const CONFIG = {
   controlUrl: (process.env.OPHQ_CONTROL_URL || '').replace(/\/+$/, ''),
@@ -32,6 +42,10 @@ const CONFIG = {
   // Allowed destination ports (printer APIs, cameras). "*" allows any.
   allowPorts: (process.env.OPHQ_ALLOW_PORTS || '80,443,7125,8080,8081,8888,3000,1883,8883,990,21').split(',').map((s) => s.trim()),
   name: process.env.OPHQ_CONNECTOR_NAME || 'connector',
+  // Optional RSA public key (PEM). When set, the agent verifies that every
+  // command it receives is signed by the control-plane's matching private key.
+  signPubKeyPem: readPubKey(),
+  maxClockSkewMs: Number(process.env.OPHQ_MAX_CLOCK_SKEW_MS || 120000),
   reconnectMinMs: 2000,
   reconnectMaxMs: 30000,
   requestTimeoutMs: Number(process.env.OPHQ_REQUEST_TIMEOUT_MS || 20000)
@@ -42,6 +56,41 @@ function fail(msg) { console.error('FATAL:', msg); process.exit(1); }
 
 if (!CONFIG.controlUrl) fail('OPHQ_CONTROL_URL is required (e.g. https://openprinthq.example.org)');
 if (!CONFIG.token) fail('OPHQ_CONNECTOR_TOKEN is required (create one in Settings → Connectors)');
+
+// ---- command signature verification (optional but recommended) -----------
+const PSS = { padding: crypto.constants.RSA_PKCS1_PSS_PADDING, saltLength: crypto.constants.RSA_PSS_SALTLEN_DIGEST };
+let signPubKey = null;
+if (CONFIG.signPubKeyPem) {
+  try { signPubKey = crypto.createPublicKey(CONFIG.signPubKeyPem); }
+  catch { fail('OPHQ_SIGNING_PUBKEY is not a valid PEM public key'); }
+}
+const seenIds = new Set();   // replay defence (bounded)
+function rememberId(id) { seenIds.add(id); if (seenIds.size > 5000) seenIds.delete(seenIds.values().next().value); }
+function canonJob(j) {
+  return Buffer.from(JSON.stringify([
+    j.id ?? null, j.ts ?? null, j.kind ?? null,
+    j.host ?? null, j.port ?? null, j.scheme ?? null,
+    j.path ?? null, j.method ?? null, j.headers ?? null, j.body ?? null
+  ]));
+}
+const isCommand = (j) => j.kind === undefined || j.kind === 'tcp-open' || j.kind === 'tcp-probe';
+let warnedUnsigned = false;
+function verifyCommand(job) {
+  if (!signPubKey) {
+    if (!warnedUnsigned) { warnedUnsigned = true; log('WARNING: OPHQ_SIGNING_PUBKEY not set — command signatures are NOT enforced. Set it for best security.'); }
+    return true;
+  }
+  if (!isCommand(job)) return true;   // stream data/close ride an already-authenticated stream id
+  if (!job.sig || !job.ts) { log('rejected unsigned command', job.id); return false; }
+  if (Math.abs(Date.now() - Number(job.ts)) > CONFIG.maxClockSkewMs) { log('rejected stale command', job.id); return false; }
+  if (seenIds.has(job.id)) { log('rejected replayed command', job.id); return false; }
+  let ok = false;
+  try { ok = crypto.verify('sha256', canonJob(job), { key: signPubKey, ...PSS }, Buffer.from(job.sig, 'base64')); }
+  catch { ok = false; }
+  if (!ok) { log('rejected bad-signature command', job.id); return false; }
+  rememberId(job.id);
+  return true;
+}
 
 // ---- allow-list ----------------------------------------------------------
 function ipToInt(ip) {
@@ -138,6 +187,7 @@ function dataTcp(job) { const s = sockets.get(job.id); if (s && job.data) s.writ
 function closeTcp(job) { const s = sockets.get(job.id); if (s) { s.end(); sockets.delete(job.id); } }
 
 async function handleJob(job) {
+  if (!verifyCommand(job)) return;   // drop commands not signed by the control-plane
   if (job.kind === 'tcp-open') return openTcp(job);
   if (job.kind === 'tcp-data') return dataTcp(job);
   if (job.kind === 'tcp-close') return closeTcp(job);
@@ -176,7 +226,7 @@ async function connectOnce() {
 }
 
 async function main() {
-  log(`starting — control=${CONFIG.controlUrl} allow=[${CONFIG.allow.join(',')}] ports=[${CONFIG.allowPorts.join(',')}]`);
+  log(`starting — control=${CONFIG.controlUrl} allow=[${CONFIG.allow.join(',')}] ports=[${CONFIG.allowPorts.join(',')}] signature-verification=${signPubKey ? 'ENFORCED' : 'off'}`);
   let backoff = CONFIG.reconnectMinMs;
   for (;;) {
     try {

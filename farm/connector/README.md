@@ -37,6 +37,14 @@ and no public IP are required.
 
 - The agent authenticates with a **connector token** you create in the web UI
   (Settings → Connectors). Revoke it there at any time.
+- **Command signing (recommended).** Generate an RSA-2048 key pair under
+  Settings → Connectors → *Signing key*, copy the **public** key, and set it as
+  `OPHQ_SIGNING_PUBKEY`. The control-plane holds the private key and signs every
+  command (RSA-PSS / SHA-256, with a timestamp); the connector then verifies each
+  command and **rejects anything not signed by your control-plane** — so even a
+  spoofed or hijacked endpoint can't drive your agent. Signed payloads carry a
+  timestamp and are replay-protected. Without a public key set, the agent still
+  runs (it logs a warning) but does not enforce signatures.
 - The agent will only talk to hosts/ports on its **allow-list** — by default the
   private RFC1918 ranges plus common printer/camera ports. A compromised
   control-plane therefore can't use your connector to reach arbitrary hosts
