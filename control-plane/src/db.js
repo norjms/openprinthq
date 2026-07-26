@@ -115,6 +115,7 @@ export async function migrate() {
       PRIMARY KEY (user_id, printer_id)
     );
   `);
+  await pool.query(`ALTER TABLE printer_automation ADD COLUMN IF NOT EXISTS connector_id INTEGER;`);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS connectors (
@@ -173,16 +174,24 @@ export async function setCircuit(userId, printerId, circuit) {
 // ---- printer automation (bed ejection / continuous printing, #20) -------
 export async function getAutomation(userId) {
   const { rows } = await pool.query(
-    'SELECT printer_id, auto_eject, eject_gcode FROM printer_automation WHERE user_id = $1', [userId]);
+    'SELECT printer_id, auto_eject, eject_gcode, connector_id FROM printer_automation WHERE user_id = $1', [userId]);
   const out = {};
-  for (const r of rows) out[r.printer_id] = { auto_eject: r.auto_eject, eject_gcode: r.eject_gcode || '' };
+  for (const r of rows) out[r.printer_id] = { auto_eject: r.auto_eject, eject_gcode: r.eject_gcode || '', connector_id: r.connector_id ?? null };
   return out;
 }
-export async function setAutomation(userId, printerId, { auto_eject, eject_gcode }) {
+export async function setAutomation(userId, printerId, patch) {
+  const cur = (await pool.query(
+    'SELECT auto_eject, eject_gcode, connector_id FROM printer_automation WHERE user_id = $1 AND printer_id = $2',
+    [userId, printerId])).rows[0] || {};
+  const auto_eject = patch.auto_eject !== undefined ? !!patch.auto_eject : (cur.auto_eject ?? false);
+  const eject_gcode = patch.eject_gcode !== undefined ? (patch.eject_gcode || '').toString() : (cur.eject_gcode ?? '');
+  const connector_id = patch.connector_id !== undefined
+    ? (patch.connector_id === null || patch.connector_id === '' ? null : Number(patch.connector_id))
+    : (cur.connector_id ?? null);
   await pool.query(
-    `INSERT INTO printer_automation (user_id, printer_id, auto_eject, eject_gcode) VALUES ($1, $2, $3, $4)
-     ON CONFLICT (user_id, printer_id) DO UPDATE SET auto_eject = EXCLUDED.auto_eject, eject_gcode = EXCLUDED.eject_gcode`,
-    [userId, printerId, !!auto_eject, (eject_gcode || '').toString()]);
+    `INSERT INTO printer_automation (user_id, printer_id, auto_eject, eject_gcode, connector_id) VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (user_id, printer_id) DO UPDATE SET auto_eject = EXCLUDED.auto_eject, eject_gcode = EXCLUDED.eject_gcode, connector_id = EXCLUDED.connector_id`,
+    [userId, printerId, auto_eject, eject_gcode, connector_id]);
 }
 
 // ---- local connectors (outbound tunnel, #28/#29) ------------------------
