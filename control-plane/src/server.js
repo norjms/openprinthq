@@ -8,7 +8,7 @@ import { migrate, upsertUser, getUserByEmail, getInstanceForUser, getCompatibleP
   getCircuits, setCircuit, getAutomation, setAutomation,
   createConnector, listConnectors, deleteConnector, getBatchById,
   getIntegrationToken, setIntegrationToken, getUserByIntegrationToken } from './db.js';
-import { registerConnectorRoutes, connectorOnline, isConnectorOnline, proxyViaConnector } from './connector.js';
+import { registerConnectorRoutes, connectorOnline, isConnectorOnline, proxyViaConnector, openTcpStream } from './connector.js';
 import { provisionForUser } from './provisioner.js';
 import { startBatch, activeBatchForUser, advanceBatch, cancelBatch, startOrchestrator } from './batch.js';
 
@@ -238,7 +238,11 @@ app.put('/api/printer-automation', async (req, reply) => {
   for (const [pid, cfg] of Object.entries(map)) {
     const id = Number(pid);
     if (!Number.isInteger(id) || !cfg || typeof cfg !== 'object') continue;
-    await setAutomation(user.id, id, { auto_eject: !!cfg.auto_eject, eject_gcode: cfg.eject_gcode });
+    const patch = {};
+    if ('auto_eject' in cfg) patch.auto_eject = !!cfg.auto_eject;
+    if ('eject_gcode' in cfg) patch.eject_gcode = cfg.eject_gcode;
+    if ('connector_id' in cfg) patch.connector_id = cfg.connector_id;
+    await setAutomation(user.id, id, patch);
   }
   return await getAutomation(user.id);
 });
@@ -274,6 +278,27 @@ app.post('/api/connectors/test', async (req, reply) => {
   });
   const bytes = r.body ? Buffer.from(r.body, 'base64').length : 0;
   return { status: r.status ?? null, error: r.error || null, bytes };
+});
+
+app.post('/api/connectors/tcp-test', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  const b = req.body || {};
+  const host = (b.host || '').toString();
+  const port = Number(b.port) || 0;
+  if (!host || !port) return reply.code(400).send({ error: 'host and port required' });
+  const payload = b.payload_b64 ? Buffer.from(b.payload_b64, 'base64') : null;
+  const chunks = [];
+  const out = await new Promise((resolve) => {
+    let opened = false;
+    const t = openTcpStream(user.id, host, port);
+    const finish = (extra) => resolve({ opened, ...extra });
+    const timer = setTimeout(() => { try { t.close(); } catch {} finish({ note: 'read window elapsed' }); }, Number(b.window_ms) || 3000);
+    t.on('open', () => { opened = true; if (payload) t.write(payload); });
+    t.on('data', (d) => chunks.push(d));
+    t.on('close', (err) => { clearTimeout(timer); finish({ error: err || null }); });
+  });
+  const buf = Buffer.concat(chunks);
+  return { ...out, bytes: buf.length, preview: buf.subarray(0, 160).toString('utf8').replace(/[^\x20-\x7e]/g, '.') };
 });
 
 // ---- temperature-staggered batch printing -------------------------------
