@@ -67,6 +67,8 @@ export const api = {
   connectors: () => req('/connectors'),
   createConnector: (name) => req('/connectors', { method: 'POST', body: JSON.stringify({ name }) }),
   deleteConnector: (id) => req('/connectors/' + id, { method: 'DELETE' }),
+  // register (or clear) a connector's own public key for mutual auth
+  setConnectorClientKey: (id, client_public_key) => req('/connectors/' + id, { method: 'PATCH', body: JSON.stringify({ client_public_key }) }),
   testConnector: (body) => req('/connectors/test', { method: 'POST', body: JSON.stringify(body) }),
   // command-signing key pair (RSA-2048): control-plane holds the private key,
   // connector holds the public key and verifies every command.

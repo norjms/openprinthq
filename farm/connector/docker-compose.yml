@@ -13,3 +13,6 @@ services:
     restart: unless-stopped
     env_file: .env
     network_mode: host
+    # Persist the connector's own key (mutual auth) across restarts.
+    volumes:
+      - ./data:/data

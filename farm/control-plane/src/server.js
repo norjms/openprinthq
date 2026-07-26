@@ -3,10 +3,10 @@
 import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
 import { readFileSync } from 'node:fs';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, createPublicKey } from 'node:crypto';
 import { migrate, upsertUser, getUserByEmail, getInstanceForUser, getCompatiblePresets,
   getCircuits, setCircuit, getAutomation, setAutomation,
-  createConnector, listConnectors, deleteConnector,
+  createConnector, listConnectors, deleteConnector, setConnectorClientKey,
   getSigningPublic, setSigningKey, deleteSigningKey, getBatchById,
   getIntegrationToken, setIntegrationToken, getUserByIntegrationToken } from './db.js';
 import { registerConnectorRoutes, connectorOnline, isConnectorOnline, proxyViaConnector, openTcpStream } from './connector.js';
@@ -274,6 +274,20 @@ app.delete('/api/connectors/:id', async (req, reply) => {
   const id = Number(req.params.id);
   if (Number.isInteger(id)) await deleteConnector(user.id, id);
   return { ok: true };
+});
+
+// Register (or clear) a connector's own public key for mutual auth (SSH-style).
+app.patch('/api/connectors/:id', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return reply.code(400).send({ error: 'bad id' });
+  const pem = (req.body?.client_public_key ?? '').toString();
+  if (pem.trim()) {
+    try { createPublicKey(pem.trim()); }
+    catch { return reply.code(400).send({ error: 'not a valid PEM public key' }); }
+  }
+  await setConnectorClientKey(user.id, id, pem);
+  return { ok: true, has_client_key: !!pem.trim() };
 });
 
 app.post('/api/connectors/test', async (req, reply) => {

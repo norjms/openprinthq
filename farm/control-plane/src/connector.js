@@ -28,6 +28,23 @@ const relays = new Map();
 export const RELAY_HOST = process.env.OPHQ_RELAY_HOST || 'openprinthq-control-plane-1';
 export function relayPortForPrinter(printerId) { return 39000 + Number(printerId); }
 
+// Mutual auth: if a connector has registered its own public key, it must prove
+// possession of the matching private key on every stream-connect by signing
+// `${token}.${ts}`. A leaked bearer token alone is then not enough to
+// impersonate the connector. No key registered -> token-only (backward compat).
+const CLIENT_PSS = { padding: crypto.constants.RSA_PKCS1_PSS_PADDING, saltLength: crypto.constants.RSA_PSS_SALTLEN_DIGEST };
+function verifyClientAuth(conn, req) {
+  if (!conn.client_public_pem) return true;
+  const ts = req.headers['x-ophq-client-ts'];
+  const sig = req.headers['x-ophq-client-sig'];
+  if (!ts || !sig) return false;
+  if (Math.abs(Date.now() - Number(ts)) > 120000) return false;
+  try {
+    const key = crypto.createPublicKey(conn.client_public_pem);
+    return crypto.verify('sha256', Buffer.from(`${conn.token}.${ts}`), { key, ...CLIENT_PSS }, Buffer.from(sig, 'base64'));
+  } catch { return false; }
+}
+
 function connectorFor(userId) {
   for (const s of streams.values()) if (s.userId === userId) return s;
   return null;
@@ -127,8 +144,14 @@ export function registerConnectorRoutes(app) {
   app.get('/api/connector/stream', async (req, reply) => {
     const conn = await getConnectorByToken(bearer(req));
     if (!conn) return reply.code(401).send({ error: 'invalid connector token' });
+    if (!verifyClientAuth(conn, req)) return reply.code(401).send({ error: 'client key authentication failed' });
     const raw = reply.raw;
     reply.hijack();
+    // Keep the tunnel socket alive and never idle it out server-side; the agent
+    // reconnects on drop-outs, and we replace any stale stream on reconnect.
+    try { raw.socket.setKeepAlive(true, 15000); raw.socket.setTimeout(0); } catch { /* */ }
+    const prev = streams.get(conn.id);
+    if (prev) { try { clearInterval(prev.heartbeat); prev.raw.end(); } catch { /* */ } }
     raw.writeHead(200, {
       'content-type': 'text/event-stream',
       'cache-control': 'no-cache, no-transform',

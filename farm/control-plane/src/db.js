@@ -129,6 +129,7 @@ export async function migrate() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
   `);
+  await pool.query(`ALTER TABLE connectors ADD COLUMN IF NOT EXISTS client_public_pem TEXT;`);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS signing_keys (
@@ -216,7 +217,7 @@ export async function createConnector(userId, name) {
 }
 export async function listConnectors(userId) {
   const { rows } = await pool.query(
-    'SELECT id, name, last_seen, created_at FROM connectors WHERE user_id = $1 ORDER BY id', [userId]);
+    'SELECT id, name, last_seen, created_at, (client_public_pem IS NOT NULL) AS has_client_key FROM connectors WHERE user_id = $1 ORDER BY id', [userId]);
   return rows;
 }
 export async function deleteConnector(userId, id) {
@@ -227,6 +228,11 @@ export async function getConnectorByToken(token) {
   const { rows } = await pool.query('SELECT * FROM connectors WHERE token = $1', [token]);
   return rows[0] || null;
 }
+export async function setConnectorClientKey(userId, id, pem) {
+  await pool.query('UPDATE connectors SET client_public_pem = $3 WHERE user_id = $1 AND id = $2',
+    [userId, id, pem && pem.trim() ? pem.trim() : null]);
+}
+
 export async function touchConnector(id) {
   await pool.query('UPDATE connectors SET last_seen = now() WHERE id = $1', [id]);
 }

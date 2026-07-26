@@ -37,6 +37,20 @@ and no public IP are required.
 
 - The agent authenticates with a **connector token** you create in the web UI
   (Settings → Connectors). Revoke it there at any time.
+- **Mutual key auth (recommended).** Give the connector its own key with
+  `OPHQ_CLIENT_KEY_FILE=/data/connector-key.pem` (created on first run). Print
+  its public key — `node src/agent.js --pubkey` — and paste it into that
+  connector's **Key** field in the UI. The connector then signs a fresh
+  timestamped proof on every connect, so a **leaked bearer token alone can't
+  impersonate it** — the attacker would also need the private key. Enforced only
+  once a key is registered (backward compatible).
+- **Keep-alive & auto-recovery.** The tunnel self-heals: the control-plane sends
+  a heartbeat every ~20s and the agent reconnects (with backoff) if none arrives
+  within `OPHQ_STREAM_TIMEOUT_MS` (60s default) — catching silent drop-outs,
+  Wi-Fi blips, and NAT timeouts that never send a proper close. Reboots of either
+  end recover automatically: the service manager restarts the agent (which
+  reconnects and reuses its persisted key), and on control-plane restart the
+  agent reconnects and any "via connector" relays are re-established.
 - **Command signing (recommended).** Generate an RSA-2048 key pair under
   Settings → Connectors → *Signing key*, copy the **public** key, and set it as
   `OPHQ_SIGNING_PUBKEY`. The control-plane holds the private key and signs every
