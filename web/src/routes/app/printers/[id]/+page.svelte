@@ -13,6 +13,8 @@
   import ControlPanel from '$lib/components/ControlPanel.svelte';
   import AmsPanel from '$lib/components/AmsPanel.svelte';
   import MaintenancePanel from '$lib/components/MaintenancePanel.svelte';
+  import KlipperTuning from '$lib/components/KlipperTuning.svelte';
+  import GcodeConsole from '$lib/components/GcodeConsole.svelte';
 
   const id = $derived($page.params.id);
 
@@ -216,6 +218,7 @@
 
   // ---- AMS filament backup (Bambu; auto-switch to backup spool on runout) ----
   const hasAms = $derived((st?.ams || []).length > 0);
+  const isKlipper = $derived((meta?.connection_type || '').toLowerCase() === 'klipper');
   let amsBackupBusy = $state(false);
   async function toggleAmsBackup() {
     amsBackupBusy = true;
@@ -460,6 +463,14 @@
   <PowerPanel printerId={id} />
 
   <MaintenancePanel printerId={id} />
+
+  {#if isKlipper}
+    <KlipperTuning printerId={id} connected={st?.connected} printing={isPrinting} />
+  {/if}
+
+  {#if st?.connected}
+    <GcodeConsole printerId={id} kind={meta?.connection_type} printing={isPrinting} />
+  {/if}
 
   {#if camAvailable}
     <div class="card card-pad cover">
