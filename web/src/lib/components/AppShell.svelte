@@ -7,6 +7,7 @@
   const nav = [
     { href: '/app', label: 'Overview', icon: '▚' },
     { href: '/app/printers', label: 'Printers', icon: '🖨' },
+    { href: '/app/cameras', label: 'Cameras', icon: '📷' },
     { href: '/app/queue', label: 'Print queue', icon: '≣' },
     { href: '/app/files', label: 'Files', icon: '🗀' },
     { href: '/app/slicer', label: 'Slicer', icon: '◈' },
