@@ -166,6 +166,12 @@ export const api = {
   spools: () => req('/engine/api/v1/inventory/spools'),
   printStats: () => req('/engine/api/v1/archives/stats'),
   printLog: (limit = 25) => req('/engine/api/v1/print-log/?limit=' + limit),
+  // Filtered print-log for reports (#25): {date_from,date_to,printer_id,status,limit,offset}
+  printLogQuery: (params = {}) => {
+    const q = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== null && v !== '') q.set(k, v);
+    return req('/engine/api/v1/print-log/?' + q.toString());
+  },
   engineSettings: () => req('/engine/api/v1/settings'),
   updateEngineSettings: (body) => req('/engine/api/v1/settings', { method: 'PATCH', body: JSON.stringify(body) }),
   slicerModels: () => req('/engine/api/v1/slicer/printer-models'),
