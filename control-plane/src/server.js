@@ -11,6 +11,7 @@ import { migrate, upsertUser, getUserByEmail, getInstanceForUser, getCompatibleP
 import { registerConnectorRoutes, connectorOnline, isConnectorOnline, proxyViaConnector, openTcpStream } from './connector.js';
 import { provisionForUser } from './provisioner.js';
 import { startBatch, activeBatchForUser, advanceBatch, cancelBatch, startOrchestrator } from './batch.js';
+import { activateRoute, deactivateRoute, reconcileRoutes } from './routing.js';
 
 // Bambu HMS error dictionary (short_code "XXXX_YYYY" -> human description),
 // extracted from the engine's HMS table. Loaded once at startup and served to
@@ -235,6 +236,7 @@ app.put('/api/printer-automation', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
   const map = req.body || {};
   if (typeof map !== 'object' || Array.isArray(map)) return reply.code(400).send({ error: 'expected an object' });
+  const routeResults = {};
   for (const [pid, cfg] of Object.entries(map)) {
     const id = Number(pid);
     if (!Number.isInteger(id) || !cfg || typeof cfg !== 'object') continue;
@@ -243,8 +245,14 @@ app.put('/api/printer-automation', async (req, reply) => {
     if ('eject_gcode' in cfg) patch.eject_gcode = cfg.eject_gcode;
     if ('connector_id' in cfg) patch.connector_id = cfg.connector_id;
     await setAutomation(user.id, id, patch);
+    if ('connector_id' in cfg) {
+      try { routeResults[id] = cfg.connector_id ? await activateRoute(user.id, id) : await deactivateRoute(user.id, id); }
+      catch (e) { routeResults[id] = { ok: false, reason: e.message || 'activation failed' }; }
+    }
   }
-  return await getAutomation(user.id);
+  const out = await getAutomation(user.id);
+  if (Object.keys(routeResults).length) out._routes = routeResults;
+  return out;
 });
 
 // ---- local connectors: outbound tunnel for LAN printers (#28/#29) --------
@@ -474,6 +482,7 @@ app.all('/api/engine/*', async (req, reply) => {
 // ---- boot ---------------------------------------------------------------
 try {
   await migrate();
+  reconcileRoutes().catch((e) => console.error('reconcileRoutes', e.message));
   // Resume + drive any running temperature-staggered batches.
   startOrchestrator(8000);
   await app.listen({ host: '0.0.0.0', port: PORT });

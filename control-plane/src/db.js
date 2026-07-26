@@ -116,6 +116,8 @@ export async function migrate() {
     );
   `);
   await pool.query(`ALTER TABLE printer_automation ADD COLUMN IF NOT EXISTS connector_id INTEGER;`);
+  await pool.query(`ALTER TABLE printer_automation ADD COLUMN IF NOT EXISTS direct_host TEXT;`);
+  await pool.query(`ALTER TABLE printer_automation ADD COLUMN IF NOT EXISTS direct_port INTEGER;`);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS connectors (
@@ -174,9 +176,9 @@ export async function setCircuit(userId, printerId, circuit) {
 // ---- printer automation (bed ejection / continuous printing, #20) -------
 export async function getAutomation(userId) {
   const { rows } = await pool.query(
-    'SELECT printer_id, auto_eject, eject_gcode, connector_id FROM printer_automation WHERE user_id = $1', [userId]);
+    'SELECT printer_id, auto_eject, eject_gcode, connector_id, direct_host, direct_port FROM printer_automation WHERE user_id = $1', [userId]);
   const out = {};
-  for (const r of rows) out[r.printer_id] = { auto_eject: r.auto_eject, eject_gcode: r.eject_gcode || '', connector_id: r.connector_id ?? null };
+  for (const r of rows) out[r.printer_id] = { auto_eject: r.auto_eject, eject_gcode: r.eject_gcode || '', connector_id: r.connector_id ?? null, direct_host: r.direct_host ?? null, direct_port: r.direct_port ?? null };
   return out;
 }
 export async function setAutomation(userId, printerId, patch) {
@@ -218,6 +220,18 @@ export async function getConnectorByToken(token) {
 }
 export async function touchConnector(id) {
   await pool.query('UPDATE connectors SET last_seen = now() WHERE id = $1', [id]);
+}
+
+export async function setRouteDirect(userId, printerId, host, port) {
+  await pool.query(
+    `INSERT INTO printer_automation (user_id, printer_id, direct_host, direct_port) VALUES ($1, $2, $3, $4)
+     ON CONFLICT (user_id, printer_id) DO UPDATE SET direct_host = EXCLUDED.direct_host, direct_port = EXCLUDED.direct_port`,
+    [userId, printerId, host, port]);
+}
+export async function listActiveRoutes() {
+  const { rows } = await pool.query(
+    'SELECT user_id, printer_id, connector_id, direct_host, direct_port FROM printer_automation WHERE connector_id IS NOT NULL');
+  return rows;
 }
 
 // ---- batch runs ---------------------------------------------------------
