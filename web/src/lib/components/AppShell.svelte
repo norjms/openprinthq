@@ -38,13 +38,6 @@
   </aside>
 
   <div class="main">
-    <header class="topbar">
-      <div class="crumb mono">openprinthq / {current.replace('/app', '').replace('/', '') || 'overview'}</div>
-      <div class="tb-actions">
-        <span class="chip primary">your instance</span>
-        <a href="/logout" class="btn btn-ghost btn-sm">Sign out</a>
-      </div>
-    </header>
     <div class="content">
       {@render children()}
     </div>
@@ -64,9 +57,6 @@
   .src { font-size: 0.8rem; }
 
   .main { display: flex; flex-direction: column; }
-  .topbar { height: 60px; border-bottom: 1px solid var(--ophq-border); display: flex; align-items: center; justify-content: space-between; padding: 0 1.6rem; position: sticky; top: 0; background: rgba(13,17,23,0.8); backdrop-filter: blur(10px); z-index: 10; }
-  .crumb { color: var(--ophq-muted); font-size: 0.85rem; }
-  .tb-actions { display: flex; align-items: center; gap: 0.7rem; }
   .content { padding: 1.8rem; max-width: 1200px; width: 100%; }
 
   @media (max-width: 820px) { .shell { grid-template-columns: 1fr; } .side { position: static; height: auto; flex-direction: row; flex-wrap: wrap; } nav { flex-direction: row; flex-wrap: wrap; } }
