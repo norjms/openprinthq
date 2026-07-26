@@ -15,6 +15,7 @@
     { href: '/app/filament', label: 'Filament', icon: '🧵' },
     { href: '/app/projects', label: 'Projects', icon: '📁' },
     { href: '/app/statistics', label: 'Statistics', icon: '📈' },
+    { href: '/app/reports', label: 'Reports', icon: '🧾' },
     { href: '/app/settings', label: 'Settings', icon: '⚙' }
   ];
 
