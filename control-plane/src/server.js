@@ -3,8 +3,10 @@
 import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
 import { readFileSync } from 'node:fs';
-import { migrate, upsertUser, getUserByEmail, getInstanceForUser, getCompatiblePresets } from './db.js';
+import { migrate, upsertUser, getUserByEmail, getInstanceForUser, getCompatiblePresets,
+  getCircuits, setCircuit, getBatchById } from './db.js';
 import { provisionForUser } from './provisioner.js';
+import { startBatch, activeBatchForUser, advanceBatch, cancelBatch, startOrchestrator } from './batch.js';
 
 // Bambu HMS error dictionary (short_code "XXXX_YYYY" -> human description),
 // extracted from the engine's HMS table. Loaded once at startup and served to
@@ -202,6 +204,67 @@ app.get('/api/instance/stats', async (req, reply) => {
   }
 });
 
+// ---- power circuits -----------------------------------------------------
+// Which breaker circuit each printer sits on, used by staggered batch printing.
+app.get('/api/printer-circuits', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  return await getCircuits(user.id);
+});
+app.put('/api/printer-circuits', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  const map = req.body || {};
+  if (typeof map !== 'object' || Array.isArray(map)) return reply.code(400).send({ error: 'expected an object' });
+  for (const [pid, circuit] of Object.entries(map)) {
+    const id = Number(pid);
+    if (!Number.isInteger(id)) continue;
+    await setCircuit(user.id, id, circuit == null ? '' : String(circuit));
+  }
+  return await getCircuits(user.id);
+});
+
+// ---- temperature-staggered batch printing -------------------------------
+app.post('/api/batch', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  const b = req.body || {};
+  const fileId = Number(b.file_id);
+  const printers = Array.isArray(b.printers) ? b.printers
+    .map((p) => ({ id: Number(p.id), name: p.name })).filter((p) => Number.isInteger(p.id)) : [];
+  if (!Number.isInteger(fileId)) return reply.code(400).send({ error: 'file_id required' });
+  if (printers.length === 0) return reply.code(400).send({ error: 'select at least one printer' });
+  try {
+    const batch = await startBatch(user, {
+      fileId, fileName: b.file_name || null, printers,
+      staggered: b.staggered !== false,
+      maxPreheat: Number(b.max_preheat) || 1,
+      tolerance: b.tolerance != null ? Number(b.tolerance) : 3.0,
+      maxWaitSecs: b.max_wait_secs != null ? Number(b.max_wait_secs) : 900
+    });
+    return batch;
+  } catch (e) {
+    return reply.code(e.status || 500).send({ error: e.message || 'could not start batch' });
+  }
+});
+
+app.get('/api/batch/active', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  return (await activeBatchForUser(user)) || { status: 'none' };
+});
+
+async function ownBatch(req, reply) {
+  const user = await requireUser(req, reply); if (!user) return null;
+  const batch = await getBatchById(Number(req.params.id));
+  if (!batch || batch.user_id !== user.id) { reply.code(404).send({ error: 'batch not found' }); return null; }
+  return batch;
+}
+app.post('/api/batch/:id/advance', async (req, reply) => {
+  const batch = await ownBatch(req, reply); if (!batch) return;
+  return await advanceBatch(batch);
+});
+app.post('/api/batch/:id/cancel', async (req, reply) => {
+  const batch = await ownBatch(req, reply); if (!batch) return;
+  return await cancelBatch(batch);
+});
+
 // Authenticated gateway: proxy the logged-in user's request to THEIR engine.
 // Frontend calls /api/engine/<engine-path>; we resolve the user's instance and
 // forward. (JSON + GET today; multipart upload proxying is a follow-up.)
@@ -238,6 +301,8 @@ app.all('/api/engine/*', async (req, reply) => {
 // ---- boot ---------------------------------------------------------------
 try {
   await migrate();
+  // Resume + drive any running temperature-staggered batches.
+  startOrchestrator(8000);
   await app.listen({ host: '0.0.0.0', port: PORT });
   app.log.info(`control-plane listening on ${PORT}`);
 } catch (err) {

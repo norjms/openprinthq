@@ -12,6 +12,38 @@
   let toastTimer = null;
   let filterPrinter = $state('all');   // 'all' | 'unassigned' | printer id
 
+  // ---- active temperature-staggered batch ----
+  let batch = $state(null);
+  let batchActing = $state(false);
+  let batchTimer = null;
+  async function loadBatch() {
+    try {
+      const b = await api.batchActive();
+      batch = b && b.status === 'running' ? b : null;
+    } catch { batch = null; }
+  }
+  async function advanceBatch() {
+    if (!batch) return;
+    batchActing = true;
+    try { await api.batchAdvance(batch.id); await loadBatch(); showToast('ok', 'Started the next printer.'); }
+    catch (e) { showToast('err', e.message || 'could not advance'); }
+    finally { batchActing = false; }
+  }
+  async function cancelBatch() {
+    if (!batch) return;
+    batchActing = true;
+    try { await api.batchCancel(batch.id); await loadBatch(); await load(); showToast('ok', 'Batch cancelled — held jobs removed.'); }
+    catch (e) { showToast('err', e.message || 'could not cancel'); }
+    finally { batchActing = false; }
+  }
+  function stepState(s) {
+    if (!s.released) return { key: 'waiting', label: 'waiting' };
+    if (s.timedOut) return { key: 'timeout', label: 'released (timed out)' };
+    if (s.reachedTemp) return { key: 'ready', label: 'at temp · printing' };
+    return { key: 'preheating', label: 'preheating' };
+  }
+  const batchNextIdx = $derived(batch ? (batch.steps || []).findIndex((s) => !s.released) : -1);
+
   const filtered = $derived(filterPrinter !== 'all');
   const shownItems = $derived(
     filterPrinter === 'all' ? items
@@ -56,7 +88,12 @@
       loading = false;
     }
   }
-  onMount(load);
+  onMount(() => {
+    load();
+    loadBatch();
+    batchTimer = setInterval(loadBatch, 5000);
+    return () => clearInterval(batchTimer);
+  });
 
   const isActive = (s) => /print|run|start/i.test(s) && !/pending|queued|wait/i.test(s);
   const isPending = (s) => /pending|queued|wait/i.test(s);
@@ -124,6 +161,42 @@
 
 {#if toast}
   <div class="toast {toast.kind}">{toast.text}</div>
+{/if}
+
+{#if batch}
+  {@const steps = batch.steps || []}
+  <div class="card batch">
+    <div class="bhead">
+      <div>
+        <span class="eyebrow">Staggered batch</span>
+        <h3>{batch.file_name || 'Batch print'}</h3>
+        <p class="muted tiny">Heat-up staggered per circuit · max {batch.max_preheat} preheating at once. Printers on different circuits run in parallel.</p>
+      </div>
+      <div class="flex gap center">
+        <button class="btn btn-primary btn-sm" onclick={advanceBatch} disabled={batchActing || batchNextIdx < 0}>Start next now</button>
+        <button class="btn btn-ghost btn-sm danger-text" onclick={cancelBatch} disabled={batchActing}>Cancel batch</button>
+      </div>
+    </div>
+    <div class="steps">
+      {#each steps as s, i (s.printerId)}
+        {@const ss = stepState(s)}
+        {@const tm = batch.temps?.[s.printerId]}
+        <div class="bstep {ss.key}">
+          <span class="si mono">{i + 1}</span>
+          <span class="sp">
+            {s.printerName}
+            {#if s.circuit}<span class="cchip mono">{s.circuit}</span>{/if}
+          </span>
+          <span class="sinfo">
+            {#if ss.key === 'preheating' && tm}
+              <span class="mono ttemp">bed {Math.round(tm.bed)}/{Math.round(tm.bedTarget) || '—'}°{#if tm.chamberTarget > 0} · chamber {Math.round(tm.chamber)}/{Math.round(tm.chamberTarget)}°{/if}</span>
+            {/if}
+          </span>
+          <span class="schip {ss.key}">{ss.label}</span>
+        </div>
+      {/each}
+    </div>
+  </div>
 {/if}
 
 {#if loading}
@@ -219,6 +292,22 @@
   .chip.danger { color: var(--ophq-danger); border-color: rgba(255,92,108,0.3); background: rgba(255,92,108,0.08); }
   .chip.primary { color: var(--ophq-primary-2); border-color: rgba(124,108,255,0.35); background: var(--ophq-primary-dim); }
   .hint { margin-top: 1rem; font-size: 0.88rem; }
+  .batch { padding: 1.1rem 1.2rem; margin-bottom: 1.2rem; border-color: rgba(124,108,255,0.35); }
+  .bhead { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 0.9rem; }
+  .bhead h3 { margin: 0.2rem 0 0.2rem; font-size: 1.05rem; }
+  .bhead .tiny { font-size: 0.78rem; margin: 0; max-width: 60ch; }
+  .steps { display: flex; flex-direction: column; gap: 0.4rem; }
+  .bstep { display: grid; grid-template-columns: 26px 1fr auto auto; gap: 0.8rem; align-items: center; padding: 0.5rem 0.7rem; border: 1px solid var(--ophq-border); border-radius: var(--radius-sm); background: var(--ophq-surface); }
+  .bstep .si { color: var(--ophq-muted); font-size: 0.82rem; }
+  .bstep .sp { font-size: 0.9rem; display: flex; align-items: center; gap: 0.5rem; }
+  .cchip { font-size: 0.7rem; padding: 0.08rem 0.4rem; border-radius: 999px; border: 1px solid var(--ophq-border); color: var(--ophq-text-2); background: var(--ophq-bg-2); }
+  .ttemp { font-size: 0.76rem; color: var(--ophq-text-2); }
+  .schip { font-size: 0.72rem; padding: 0.12rem 0.5rem; border-radius: 999px; border: 1px solid var(--ophq-border); color: var(--ophq-text-2); white-space: nowrap; }
+  .schip.preheating { color: var(--ophq-accent); border-color: rgba(255,176,32,0.35); background: rgba(255,176,32,0.08); }
+  .schip.ready { color: var(--ophq-success); border-color: rgba(53,196,107,0.3); background: rgba(53,196,107,0.08); }
+  .schip.waiting { color: var(--ophq-muted); }
+  .schip.timeout { color: var(--ophq-danger); border-color: rgba(255,92,108,0.3); background: rgba(255,92,108,0.08); }
+  .bstep.preheating { border-color: rgba(255,176,32,0.28); }
   .toast { padding: 0.7rem 1rem; border-radius: var(--radius-sm); margin-bottom: 1.1rem; font-size: 0.9rem; border: 1px solid; }
   .toast.ok { color: var(--ophq-success); border-color: rgba(53,196,107,0.3); background: rgba(53,196,107,0.08); }
   .toast.err { color: var(--ophq-danger); border-color: rgba(255,92,108,0.3); background: rgba(255,92,108,0.08); }
