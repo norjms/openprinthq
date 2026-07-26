@@ -32,10 +32,10 @@
   onMount(load);
 
   const tiles = $derived([
-    { label: 'Printers online', value: stats?.printersOnline ?? '—', accent: 'ok' },
-    { label: 'Active jobs', value: stats?.activeJobs ?? '—' },
-    { label: 'Queued', value: stats?.queued ?? '—' },
-    { label: 'Success rate', value: stats && stats.successRate != null ? stats.successRate + '%' : '—' }
+    { label: 'Printers online', value: stats?.printersOnline ?? '—', accent: 'ok', href: '/app/printers' },
+    { label: 'Active jobs', value: stats?.activeJobs ?? '—', href: '/app/queue' },
+    { label: 'Queued', value: stats?.queued ?? '—', href: '/app/queue' },
+    { label: 'Success rate', value: stats && stats.successRate != null ? stats.successRate + '%' : '—', href: '/app/statistics' }
   ]);
   const noPrinters = $derived(instance?.status === 'running' && (stats?.printersTotal ?? 0) === 0);
 
@@ -93,10 +93,10 @@
   {:else}
     <div class="tiles">
       {#each tiles as t}
-        <div class="card card-pad tile">
+        <a class="card card-pad tile" href={t.href}>
           <span class="muted">{t.label}</span>
           <b class:ok={t.accent === 'ok'}>{t.value}</b>
-        </div>
+        </a>
       {/each}
     </div>
   {/if}
@@ -127,7 +127,8 @@
   .provision { text-align: center; padding: 2.5rem; }
   .provision p { max-width: 52ch; margin: 0.8rem auto 1.4rem; }
   .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.2rem; }
-  .tile { display: flex; flex-direction: column; gap: 0.3rem; }
+  .tile { display: flex; flex-direction: column; gap: 0.3rem; color: var(--ophq-text); text-decoration: none; transition: border 0.15s, transform 0.15s; }
+  .tile:hover { border-color: var(--ophq-primary); transform: translateY(-2px); color: var(--ophq-text); }
   .tile b { font-size: 1.9rem; font-family: var(--font-mono); }
   .tile b.ok { color: var(--ophq-success); }
   .kv { margin-top: 1rem; display: grid; gap: 0.5rem; font-size: 0.9rem; }
