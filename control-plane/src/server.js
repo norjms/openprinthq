@@ -3,8 +3,10 @@
 import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
 import { readFileSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
 import { migrate, upsertUser, getUserByEmail, getInstanceForUser, getCompatiblePresets,
-  getCircuits, setCircuit, getBatchById } from './db.js';
+  getCircuits, setCircuit, getBatchById,
+  getIntegrationToken, setIntegrationToken, getUserByIntegrationToken } from './db.js';
 import { provisionForUser } from './provisioner.js';
 import { startBatch, activeBatchForUser, advanceBatch, cancelBatch, startOrchestrator } from './batch.js';
 
@@ -263,6 +265,100 @@ app.post('/api/batch/:id/advance', async (req, reply) => {
 app.post('/api/batch/:id/cancel', async (req, reply) => {
   const batch = await ownBatch(req, reply); if (!batch) return;
   return await cancelBatch(batch);
+});
+
+// ---- integrations: token + public read-only endpoints -------------------
+// A per-user bearer token lets external systems (Home Assistant, Homepage,
+// Prometheus) read fleet status without Authentik SSO. These /api/pub/* routes
+// are exposed publicly by npmplus (no forward-auth) and authenticate by token.
+
+async function buildSummary(inst) {
+  const base = engineBase(inst);
+  const out = { instance: inst?.subdomain || null, status: inst?.status || 'unknown',
+    printers_total: 0, printers_online: 0, active_jobs: 0, queued: 0, success_rate: null, printers: [] };
+  if (!base) return out;
+  const [printers, queue, pstats] = await Promise.all([
+    fetch(base + '/api/v1/printers/').then(r => r.ok ? r.json() : []).catch(() => []),
+    fetch(base + '/api/v1/queue/').then(r => r.ok ? r.json() : []).catch(() => []),
+    fetch(base + '/api/v1/archives/stats').then(r => r.ok ? r.json() : null).catch(() => null)
+  ]);
+  const parr = asArray(printers), qarr = asArray(queue);
+  const statuses = await Promise.all(parr.map(p =>
+    fetch(base + `/api/v1/printers/${p.id}/status`).then(r => r.ok ? r.json() : null).catch(() => null)));
+  out.printers = parr.map((p, i) => {
+    const s = statuses[i] || {};
+    const t = s.temperatures || {};
+    return {
+      id: p.id, name: p.name || p.model || ('Printer ' + p.id),
+      connected: !!s.connected, state: (s.state || (s.connected ? 'idle' : 'offline')).toString().toLowerCase(),
+      progress: s.progress ?? null,
+      nozzle: t.nozzle ?? null, bed: t.bed ?? null,
+      job: s.subtask_name || s.gcode_file || null
+    };
+  });
+  out.printers_total = parr.length;
+  out.printers_online = out.printers.filter(p => p.connected).length;
+  out.active_jobs = out.printers.filter(p => /print|run/.test(p.state)).length;
+  out.queued = qarr.length;
+  const total = pstats?.total_prints ?? 0;
+  out.success_rate = total > 0 ? Math.round((pstats.successful_prints / total) * 100) : null;
+  return out;
+}
+
+// Resolve the token → user → instance for public requests.
+async function pubInstance(req, reply) {
+  const token = (req.query?.token || (req.headers['authorization'] || '').replace(/^Bearer\s+/i, '') || '').toString();
+  const user = await getUserByIntegrationToken(token);
+  if (!user) { reply.code(401).send({ error: 'invalid or missing token' }); return null; }
+  return await getInstanceForUser(user.id);
+}
+
+app.get('/api/pub/summary', async (req, reply) => {
+  const inst = await pubInstance(req, reply); if (inst === null) return;
+  reply.header('access-control-allow-origin', '*');
+  return await buildSummary(inst);
+});
+
+app.get('/api/pub/metrics', async (req, reply) => {
+  const inst = await pubInstance(req, reply); if (inst === null) return;
+  const s = await buildSummary(inst);
+  const esc = (v) => String(v).replace(/[\\"\n]/g, '_');
+  const lines = [
+    '# HELP ophq_printers_total Printers configured', '# TYPE ophq_printers_total gauge',
+    `ophq_printers_total ${s.printers_total}`,
+    '# HELP ophq_printers_online Printers currently connected', '# TYPE ophq_printers_online gauge',
+    `ophq_printers_online ${s.printers_online}`,
+    '# HELP ophq_active_jobs Printers currently printing', '# TYPE ophq_active_jobs gauge',
+    `ophq_active_jobs ${s.active_jobs}`,
+    '# HELP ophq_queued Jobs waiting in the queue', '# TYPE ophq_queued gauge',
+    `ophq_queued ${s.queued}`
+  ];
+  if (s.success_rate != null) {
+    lines.push('# HELP ophq_success_rate Print success rate percent', '# TYPE ophq_success_rate gauge', `ophq_success_rate ${s.success_rate}`);
+  }
+  lines.push('# HELP ophq_printer_online Per-printer connected (1/0)', '# TYPE ophq_printer_online gauge');
+  for (const p of s.printers) lines.push(`ophq_printer_online{printer="${esc(p.name)}",id="${p.id}"} ${p.connected ? 1 : 0}`);
+  lines.push('# HELP ophq_printer_progress Per-printer job progress percent', '# TYPE ophq_printer_progress gauge');
+  for (const p of s.printers) if (p.progress != null) lines.push(`ophq_printer_progress{printer="${esc(p.name)}",id="${p.id}"} ${Math.round(p.progress)}`);
+  lines.push('# HELP ophq_printer_nozzle_temp Per-printer nozzle temperature C', '# TYPE ophq_printer_nozzle_temp gauge');
+  for (const p of s.printers) if (p.nozzle != null) lines.push(`ophq_printer_nozzle_temp{printer="${esc(p.name)}",id="${p.id}"} ${p.nozzle}`);
+  lines.push('# HELP ophq_printer_bed_temp Per-printer bed temperature C', '# TYPE ophq_printer_bed_temp gauge');
+  for (const p of s.printers) if (p.bed != null) lines.push(`ophq_printer_bed_temp{printer="${esc(p.name)}",id="${p.id}"} ${p.bed}`);
+  reply.header('content-type', 'text/plain; version=0.0.4');
+  return lines.join('\n') + '\n';
+});
+
+// Token management (authenticated). Returns the token + ready-to-use URLs.
+app.get('/api/integration-token', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  let token = await getIntegrationToken(user.id);
+  if (!token) token = await setIntegrationToken(user.id, 'ophq_' + randomBytes(24).toString('hex'));
+  return { token };
+});
+app.post('/api/integration-token/regenerate', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  const token = await setIntegrationToken(user.id, 'ophq_' + randomBytes(24).toString('hex'));
+  return { token };
 });
 
 // Authenticated gateway: proxy the logged-in user's request to THEIR engine.
