@@ -28,8 +28,11 @@
         currency = s.currency || 'USD';
       }
       await loadCircuits();
+      cloud = await api.cloudStatus().catch(() => null);
     } catch (e) { err = e.message; }
   });
+
+  let cloud = $state(null);
 
   async function loadCircuits() {
     try {
@@ -144,6 +147,21 @@
   {/if}
 </div>
 
+{#if cloud}
+  <div class="card card-pad cloud-card">
+    <span class="eyebrow">Cloud slicing presets</span>
+    <p class="muted">Connect a Bambu / MakerWorld cloud account to pull your cloud filament &amp; process presets into the slicer.</p>
+    <div class="kv mono">
+      <div><span>status</span><span class="chip {cloud.is_authenticated ? 'ok' : 'accent'}">{cloud.is_authenticated ? 'connected' : 'not connected'}</span></div>
+      {#if cloud.is_authenticated}
+        <div><span>account</span>{cloud.email ?? '—'}</div>
+        <div><span>region</span>{cloud.region ?? '—'}</div>
+      {/if}
+    </div>
+    {#if !cloud.is_authenticated}<p class="muted tiny">Sign in from the slicer's preset picker to enable cloud presets.</p>{/if}
+  </div>
+{/if}
+
 <div class="card card-pad more">
   <span class="eyebrow">Coming soon</span>
   <p class="muted">Instance controls (restart, backup/restore), notification channels, API keys &amp; webhooks, and SSO session management.</p>
@@ -171,6 +189,9 @@
   .circ-row .cn { flex: 1; font-size: 0.92rem; }
   .circ-in { max-width: 200px; }
   .circ-actions { margin-top: 1rem; }
+  .cloud-card { margin-top: 1.2rem; }
+  .cloud-card p { margin: 0.3rem 0 0.9rem; font-size: 0.9rem; }
+  .cloud-card .tiny { font-size: 0.82rem; margin-top: 0.6rem; }
   .more { margin-top: 1.2rem; }
   .err { color: var(--ophq-danger); font-size: 0.9rem; }
   @media (max-width: 820px) { .two { grid-template-columns: 1fr; } }
