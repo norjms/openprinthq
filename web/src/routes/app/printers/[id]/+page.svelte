@@ -221,26 +221,59 @@
     finally { amsBackupBusy = false; }
   }
 
-  // ---- AMS filament drying (Bambu) ----
-  const supportsDrying = $derived(!!st?.supports_drying);
-  const isDrying = $derived(/dry/i.test(String(st?.ams_status_main || '')) || !!st?.drying);
-  let dry = $state({ temp: 45, duration: 4 });
-  let dryBusy = $state(false);
+  // ---- AMS units + per-unit filament drying (Bambu) ----
+  // Represent the actual hardware: AMS 2 Pro (n3f, 4-slot, dries), AMS HT (n3s,
+  // single-spool dryer), original AMS (no heater), AMS Lite. Drying is per-unit
+  // (each has its own humidity + heater) and only offered on drying-capable units.
+  const AMS_TYPES = { n3f: 'AMS 2 Pro', n3s: 'AMS HT', ams: 'AMS', f1: 'AMS Lite', ams_lite: 'AMS Lite' };
+  function amsTypeName(u) {
+    if (u?.is_ams_ht) return 'AMS HT';
+    return AMS_TYPES[String(u?.module_type || '').toLowerCase()] || 'AMS';
+  }
+  const amsUnits = $derived.by(() =>
+    (st?.ams || []).map((u, i) => {
+      const loaded = (u.tray || []).find((t) => t?.tray_type);
+      const mt = String(u.module_type || '').toLowerCase();
+      return {
+        id: u.id, num: i + 1, type: amsTypeName(u),
+        humidity: (u.humidity != null && u.humidity !== '') ? Number(u.humidity) : null,
+        canDry: !!st?.supports_drying && (u.is_ams_ht || ['n3f', 'n3s'].includes(mt)),
+        drying: (Number(u.dry_status) || 0) !== 0,
+        dryFilament: u.dry_filament || '',
+        dryTarget: u.dry_target_temp || null,
+        suggestFilament: u.dry_filament || loaded?.tray_type || ''
+      };
+    })
+  );
+
+  // Per-unit drying form inputs (keyed by ams id); updated via handlers so we
+  // never mutate state during render.
+  let dryInputs = $state({});
+  function dryVal(u, key, dflt) { return dryInputs[u.id]?.[key] ?? dflt; }
+  function setDry(amsId, key, val) {
+    dryInputs = { ...dryInputs, [amsId]: { ...(dryInputs[amsId] || {}), [key]: val } };
+  }
+  let dryBusyId = $state(null);
   let dryMsg = $state(null);
-  async function startDrying() {
-    dryBusy = true; dryMsg = null;
+  async function startDrying(u) {
+    dryBusyId = u.id; dryMsg = null;
     try {
-      await api.dryingStart(id, { temp: Number(dry.temp) || 45, duration: Number(dry.duration) || 4 });
-      dryMsg = { kind: 'ok', text: 'Drying started.' };
+      await api.dryingStart(id, {
+        ams_id: u.id,
+        temp: Number(dryVal(u, 'temp', u.dryTarget || 45)) || 45,
+        duration: Number(dryVal(u, 'duration', 4)) || 4,
+        filament: dryVal(u, 'filament', u.suggestFilament) || ''
+      });
+      dryMsg = { kind: 'ok', text: `Drying started on ${u.type} #${u.num}.` };
       await loadStatus(false);
     } catch (e) { dryMsg = { kind: 'err', text: e.message || 'could not start drying' }; }
-    finally { dryBusy = false; }
+    finally { dryBusyId = null; }
   }
-  async function stopDrying() {
-    dryBusy = true; dryMsg = null;
-    try { await api.dryingStop(id); dryMsg = { kind: 'ok', text: 'Drying stopped.' }; await loadStatus(false); }
+  async function stopDrying(u) {
+    dryBusyId = u.id; dryMsg = null;
+    try { await api.dryingStop(id, u.id); dryMsg = { kind: 'ok', text: 'Drying stopped.' }; await loadStatus(false); }
     catch (e) { dryMsg = { kind: 'err', text: e.message || 'could not stop drying' }; }
-    finally { dryBusy = false; }
+    finally { dryBusyId = null; }
   }
 
   // ---- actions ----
@@ -448,24 +481,40 @@
 
   <PowerPanel printerId={id} />
 
-  {#if supportsDrying}
-    <div class="card card-pad drying">
-      <div class="flex between center">
-        <h3>Filament drying</h3>
-        {#if isDrying}<span class="chip accent">drying</span>{/if}
+  {#if hasAms && amsUnits.length}
+    <div class="card card-pad amscard">
+      <h3>AMS units</h3>
+      <div class="amslist">
+        {#each amsUnits as u (u.id)}
+          <div class="amsu">
+            <div class="amsu-hd">
+              <span class="amst">{u.type} <span class="muted">#{u.num}</span></span>
+              <span class="amsmeta">
+                {#if u.humidity != null}<span class="hum mono" title="Relative humidity">◐ {u.humidity}%</span>{/if}
+                {#if u.drying}<span class="chip accent">drying</span>{/if}
+              </span>
+            </div>
+            {#if u.canDry}
+              {#if u.drying}
+                <div class="dryactive">
+                  <span class="muted">Drying{#if u.dryFilament} {u.dryFilament}{/if}{#if u.dryTarget} @ {u.dryTarget}°C{/if}.</span>
+                  <button class="btn btn-ghost btn-sm danger-text" onclick={() => stopDrying(u)} disabled={dryBusyId === u.id}>Stop</button>
+                </div>
+              {:else}
+                <div class="dryrow">
+                  <label>Filament <input class="input xs" type="text" value={dryVal(u, 'filament', u.suggestFilament)} oninput={(e) => setDry(u.id, 'filament', e.target.value)} placeholder="PLA" /></label>
+                  <label>Temp <input class="input xs" type="number" min="45" max="85" value={dryVal(u, 'temp', u.dryTarget || 45)} oninput={(e) => setDry(u.id, 'temp', e.target.value)} /> °C</label>
+                  <label>Time <input class="input xs" type="number" min="1" max="24" value={dryVal(u, 'duration', 4)} oninput={(e) => setDry(u.id, 'duration', e.target.value)} /> h</label>
+                  <button class="btn btn-primary btn-sm" onclick={() => startDrying(u)} disabled={dryBusyId === u.id}>{dryBusyId === u.id ? 'Starting…' : 'Dry'}</button>
+                </div>
+              {/if}
+            {:else}
+              <p class="muted tiny nodry">This unit has no dryer.</p>
+            {/if}
+          </div>
+        {/each}
       </div>
-      {#if isDrying}
-        <p class="muted">The AMS is running a drying cycle.</p>
-        <button class="btn btn-ghost btn-sm danger-text" onclick={stopDrying} disabled={dryBusy}>Stop drying</button>
-      {:else}
-        <p class="muted">Dry hygroscopic filament in the AMS before printing.</p>
-        <div class="dryrow">
-          <label>Temp <input class="input sm" type="number" min="45" max="85" bind:value={dry.temp} /> °C</label>
-          <label>Time <input class="input sm" type="number" min="1" max="24" bind:value={dry.duration} /> h</label>
-          <button class="btn btn-primary btn-sm" onclick={startDrying} disabled={dryBusy}>{dryBusy ? 'Starting…' : 'Start drying'}</button>
-        </div>
-        <p class="muted tiny">Typical: PLA/PETG 45–55 °C, PA/PC 70–80 °C. Uses the loaded filament type.</p>
-      {/if}
+      <p class="muted tiny">Drying runs inside the AMS. Typical: PLA/PETG 45–55 °C, PA/PC 70–80 °C.</p>
       {#if dryMsg}<p class={dryMsg.kind === 'ok' ? 'ok-msg' : 'err'}>{dryMsg.text}</p>{/if}
     </div>
   {/if}
@@ -543,12 +592,20 @@
   .opt { display: flex; align-items: center; gap: 0.5rem; font-size: 0.86rem; color: var(--ophq-text-2); cursor: pointer; }
   .opt input { width: auto; accent-color: var(--ophq-primary); }
   .opt.bkp { margin-top: 0.9rem; padding-top: 0.8rem; border-top: 1px solid var(--ophq-border-soft); }
-  .drying { margin-top: 1.2rem; }
-  .drying h3 { margin: 0; font-size: 1.05rem; }
-  .drying p { margin: 0.5rem 0; font-size: 0.9rem; }
-  .dryrow { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin: 0.6rem 0; }
-  .dryrow label { display: flex; align-items: center; gap: 0.4rem; font-size: 0.88rem; color: var(--ophq-text-2); }
+  .amscard { margin-top: 1.2rem; }
+  .amscard h3 { margin: 0 0 0.8rem; font-size: 1.05rem; }
+  .amslist { display: flex; flex-direction: column; gap: 0.6rem; }
+  .amsu { border: 1px solid var(--ophq-border); border-radius: var(--radius-sm); padding: 0.7rem 0.9rem; background: var(--ophq-surface); }
+  .amsu-hd { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.55rem; }
+  .amst { font-weight: 600; font-size: 0.95rem; }
+  .amsmeta { display: flex; align-items: center; gap: 0.6rem; }
+  .hum { font-size: 0.82rem; color: var(--ophq-text-2); }
+  .dryactive { display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; font-size: 0.88rem; }
+  .dryrow { display: flex; align-items: center; gap: 0.9rem; flex-wrap: wrap; }
+  .dryrow label { display: flex; align-items: center; gap: 0.35rem; font-size: 0.84rem; color: var(--ophq-text-2); }
   .input.sm { max-width: 80px; }
+  .input.xs { max-width: 72px; padding: 0.35rem 0.5rem; font-size: 0.85rem; }
+  .nodry { margin: 0; }
   .chip.accent { color: var(--ophq-accent); border-color: rgba(255,176,32,0.35); background: rgba(255,176,32,0.08); }
   .cover { margin-top: 1.2rem; }
   .cover img { width: 100%; max-width: 640px; border-radius: var(--radius-sm); border: 1px solid var(--ophq-border); display: block; }
