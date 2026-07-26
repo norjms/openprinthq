@@ -9,6 +9,7 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { api } from '$lib/api';
+  import PowerPanel from '$lib/components/PowerPanel.svelte';
 
   const id = $derived($page.params.id);
 
@@ -184,6 +185,38 @@
     } finally {
       amsBusy = false; confirmUnload = false;
     }
+  }
+
+  // ---- AMS filament backup (Bambu; auto-switch to backup spool on runout) ----
+  const hasAms = $derived((st?.ams || []).length > 0);
+  let amsBackupBusy = $state(false);
+  async function toggleAmsBackup() {
+    amsBackupBusy = true;
+    try { await api.amsBackup(id, !st?.ams_filament_backup); await loadStatus(false); }
+    catch (e) { error = e.message || 'could not toggle backup'; }
+    finally { amsBackupBusy = false; }
+  }
+
+  // ---- AMS filament drying (Bambu) ----
+  const supportsDrying = $derived(!!st?.supports_drying);
+  const isDrying = $derived(/dry/i.test(String(st?.ams_status_main || '')) || !!st?.drying);
+  let dry = $state({ temp: 45, duration: 4 });
+  let dryBusy = $state(false);
+  let dryMsg = $state(null);
+  async function startDrying() {
+    dryBusy = true; dryMsg = null;
+    try {
+      await api.dryingStart(id, { temp: Number(dry.temp) || 45, duration: Number(dry.duration) || 4 });
+      dryMsg = { kind: 'ok', text: 'Drying started.' };
+      await loadStatus(false);
+    } catch (e) { dryMsg = { kind: 'err', text: e.message || 'could not start drying' }; }
+    finally { dryBusy = false; }
+  }
+  async function stopDrying() {
+    dryBusy = true; dryMsg = null;
+    try { await api.dryingStop(id); dryMsg = { kind: 'ok', text: 'Drying stopped.' }; await loadStatus(false); }
+    catch (e) { dryMsg = { kind: 'err', text: e.message || 'could not stop drying' }; }
+    finally { dryBusy = false; }
   }
 
   // ---- actions ----
@@ -377,6 +410,36 @@
         {/each}
       </div>
       {#if amsMsg}<p class={amsMsg.kind === 'ok' ? 'ok-msg' : 'err'}>{amsMsg.text}</p>{/if}
+      {#if hasAms}
+        <label class="opt bkp">
+          <input type="checkbox" checked={st?.ams_filament_backup} onchange={toggleAmsBackup} disabled={amsBackupBusy} />
+          <span>Filament backup — auto-switch to another spool of the same type when one runs out</span>
+        </label>
+      {/if}
+    </div>
+  {/if}
+
+  <PowerPanel printerId={id} />
+
+  {#if supportsDrying}
+    <div class="card card-pad drying">
+      <div class="flex between center">
+        <h3>Filament drying</h3>
+        {#if isDrying}<span class="chip accent">drying</span>{/if}
+      </div>
+      {#if isDrying}
+        <p class="muted">The AMS is running a drying cycle.</p>
+        <button class="btn btn-ghost btn-sm danger-text" onclick={stopDrying} disabled={dryBusy}>Stop drying</button>
+      {:else}
+        <p class="muted">Dry hygroscopic filament in the AMS before printing.</p>
+        <div class="dryrow">
+          <label>Temp <input class="input sm" type="number" min="45" max="85" bind:value={dry.temp} /> °C</label>
+          <label>Time <input class="input sm" type="number" min="1" max="24" bind:value={dry.duration} /> h</label>
+          <button class="btn btn-primary btn-sm" onclick={startDrying} disabled={dryBusy}>{dryBusy ? 'Starting…' : 'Start drying'}</button>
+        </div>
+        <p class="muted tiny">Typical: PLA/PETG 45–55 °C, PA/PC 70–80 °C. Uses the loaded filament type.</p>
+      {/if}
+      {#if dryMsg}<p class={dryMsg.kind === 'ok' ? 'ok-msg' : 'err'}>{dryMsg.text}</p>{/if}
     </div>
   {/if}
 
@@ -438,6 +501,16 @@
   .fil .load:hover { opacity: 1; }
   .tiny { font-size: 0.8rem; }
   .ok-msg { color: var(--ophq-success); font-size: 0.9rem; margin: 0.7rem 0 0; }
+  .opt { display: flex; align-items: center; gap: 0.5rem; font-size: 0.86rem; color: var(--ophq-text-2); cursor: pointer; }
+  .opt input { width: auto; accent-color: var(--ophq-primary); }
+  .opt.bkp { margin-top: 0.9rem; padding-top: 0.8rem; border-top: 1px solid var(--ophq-border-soft); }
+  .drying { margin-top: 1.2rem; }
+  .drying h3 { margin: 0; font-size: 1.05rem; }
+  .drying p { margin: 0.5rem 0; font-size: 0.9rem; }
+  .dryrow { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin: 0.6rem 0; }
+  .dryrow label { display: flex; align-items: center; gap: 0.4rem; font-size: 0.88rem; color: var(--ophq-text-2); }
+  .input.sm { max-width: 80px; }
+  .chip.accent { color: var(--ophq-accent); border-color: rgba(255,176,32,0.35); background: rgba(255,176,32,0.08); }
   .cover { margin-top: 1.2rem; }
   .cover img { width: 100%; max-width: 640px; border-radius: var(--radius-sm); border: 1px solid var(--ophq-border); display: block; }
   .cover img.cam { background: var(--ophq-bg-2); aspect-ratio: 16 / 9; object-fit: contain; }
