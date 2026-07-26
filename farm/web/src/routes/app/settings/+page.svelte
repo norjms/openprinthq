@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
   import NotificationSettings from '$lib/components/NotificationSettings.svelte';
+  import ObicoSettings from '$lib/components/ObicoSettings.svelte';
 
   let me = $state(null);
   let inst = $state(null);
@@ -242,6 +243,8 @@ scrape_configs:
 {/if}
 
 <NotificationSettings />
+
+<ObicoSettings />
 
 <div class="card card-pad int-card">
   <span class="eyebrow">Integrations — Home Assistant · Homepage · Prometheus</span>
