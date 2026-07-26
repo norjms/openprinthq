@@ -15,7 +15,7 @@ import { provisionForUser } from './provisioner.js';
 import { startBatch, activeBatchForUser, advanceBatch, cancelBatch, startOrchestrator } from './batch.js';
 import { activateRoute, deactivateRoute, reconcileRoutes } from './routing.js';
 import { generateKeyPair, encryptPrivate, invalidateSigningCache } from './signing.js';
-import { ensureStream, GO2RTC_URL } from './go2rtc.js';
+import { ensureStream, iceServers, GO2RTC_URL } from './go2rtc.js';
 
 // Bambu HMS error dictionary (short_code "XXXX_YYYY" -> human description),
 // extracted from the engine's HMS table. Loaded once at startup and served to
@@ -516,6 +516,11 @@ app.put('/api/appearance', async (req, reply) => {
 // printers) through this tiny SDP passthrough. ONLY the offer/answer handshake
 // flows here; the video then streams peer-to-peer browser<->go2rtc, so the
 // control-plane never carries camera traffic.
+// Fresh ICE servers (STUN + short-lived Cloudflare TURN) for the browser.
+app.get('/api/camera/ice', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  return { iceServers: await iceServers() };
+});
 app.post('/api/camera/webrtc/:printerId', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
   const pid = String(req.params.printerId).replace(/[^0-9]/g, '');
