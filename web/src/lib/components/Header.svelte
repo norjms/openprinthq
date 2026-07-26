@@ -22,7 +22,7 @@
   .site-header {
     position: sticky; top: 0; z-index: 50;
     backdrop-filter: blur(12px);
-    background: rgba(13, 17, 23, 0.72);
+    background: var(--ophq-glass);
     border-bottom: 1px solid var(--ophq-border-soft);
   }
   .inner { display: flex; align-items: center; justify-content: space-between; height: 66px; }

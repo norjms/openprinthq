@@ -140,10 +140,10 @@
       <div class="skacts">
         <span class="muted mono tiny">created {fmt(signCreated)}</span>
         {#if confirmRegen}
-          <span class="flex gap"><button class="btn btn-primary btn-xs" onclick={genKey} disabled={signBusy}>Regenerate</button><button class="btn btn-ghost btn-xs" onclick={() => (confirmRegen = false)}>✕</button></span>
+          <span class="flex gap"><button class="btn btn-primary btn-xs" onclick={genKey} disabled={signBusy}>Regenerate</button><button class="btn btn-ghost btn-xs" onclick={() => (confirmRegen = false)} aria-label="Cancel">✕</button></span>
           <span class="muted tiny">— you’ll need to update every connector with the new key.</span>
         {:else if confirmRemove}
-          <span class="flex gap"><button class="btn btn-danger btn-xs" onclick={removeKey} disabled={signBusy}>Remove key</button><button class="btn btn-ghost btn-xs" onclick={() => (confirmRemove = false)}>✕</button></span>
+          <span class="flex gap"><button class="btn btn-danger btn-xs" onclick={removeKey} disabled={signBusy}>Remove key</button><button class="btn btn-ghost btn-xs" onclick={() => (confirmRemove = false)} aria-label="Cancel">✕</button></span>
         {:else}
           <button class="btn btn-ghost btn-xs" onclick={() => (confirmRegen = true)}>Regenerate</button>
           <button class="btn btn-ghost btn-xs" onclick={() => (confirmRemove = true)}>Remove</button>
@@ -171,7 +171,7 @@
           <div class="flex gap">
             <button class="btn btn-ghost btn-xs" onclick={() => openKeyForm(c)} title="Register this connector's public key">{c.has_client_key ? 'Key ✓' : 'Key'}</button>
             {#if confirmDel === c.id}
-              <button class="btn btn-danger btn-xs" onclick={() => del(c)}>Revoke</button><button class="btn btn-ghost btn-xs" onclick={() => (confirmDel = null)}>✕</button>
+              <button class="btn btn-danger btn-xs" onclick={() => del(c)}>Revoke</button><button class="btn btn-ghost btn-xs" onclick={() => (confirmDel = null)} aria-label="Cancel">✕</button>
             {:else}
               <button class="btn btn-ghost btn-xs" onclick={() => (confirmDel = c.id)}>Revoke</button>
             {/if}

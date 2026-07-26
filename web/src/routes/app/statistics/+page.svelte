@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
+  import PageTitle from '$lib/components/PageTitle.svelte';
 
   let loading = $state(true);
   let error = $state(null);
@@ -91,7 +92,7 @@
     : []);
 </script>
 
-<svelte:head><title>Statistics · OpenPrintHQ</title></svelte:head>
+<PageTitle page="Statistics" />
 
 <div class="head">
   <div><h1>Statistics</h1><p class="muted">Production analytics for your fleet.</p></div>

@@ -1,6 +1,8 @@
 <script>
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
+  import PageTitle from '$lib/components/PageTitle.svelte';
+  import { branding } from '$lib/stores/appearance';
 
   let loading = $state(true);
   let error = $state(null);
@@ -139,7 +141,7 @@
 </script>
 <svelte:window onafterprint={() => (labelSpool = null)} />
 
-<svelte:head><title>Filament · OpenPrintHQ</title></svelte:head>
+<PageTitle page="Filament" />
 
 <div class="head">
   <div><h1>Filament</h1><p class="muted">Spool inventory, usage and cost.</p></div>
@@ -190,7 +192,7 @@
             <button class="btn btn-ghost btn-xs" onclick={() => openAdjust(s)} disabled={busyId === s.id} title="Adjust remaining weight / log waste">Adjust</button>
             <button class="btn btn-ghost btn-xs" onclick={() => printLabel(s)} title="Print a spool label">Label</button>
             {#if confirmArch === s.id}
-              <button class="btn btn-danger btn-xs" onclick={() => archive(s)} disabled={busyId === s.id}>Confirm</button><button class="btn btn-ghost btn-xs" onclick={() => (confirmArch = null)}>✕</button>
+              <button class="btn btn-danger btn-xs" onclick={() => archive(s)} disabled={busyId === s.id}>Confirm</button><button class="btn btn-ghost btn-xs" onclick={() => (confirmArch = null)} aria-label="Cancel archive">✕</button>
             {:else}
               <button class="btn btn-ghost btn-xs" onclick={() => (confirmArch = s.id)} disabled={busyId === s.id} title="Archive (used up / removed)">Archive</button>
             {/if}
@@ -204,7 +206,7 @@
 {#if showAdd}
   <div class="overlay no-print" role="presentation" onclick={() => (showAdd = false)}>
     <div class="dialog card" role="dialog" onclick={(e) => e.stopPropagation()}>
-      <div class="dhead"><div><span class="eyebrow">Inventory</span><h3>Add spool</h3></div><button class="btn btn-ghost btn-sm" onclick={() => (showAdd = false)}>✕</button></div>
+      <div class="dhead"><div><span class="eyebrow">Inventory</span><h3>Add spool</h3></div><button class="btn btn-ghost btn-sm" onclick={() => (showAdd = false)} aria-label="Close">✕</button></div>
       <div class="grid2">
         <div class="fld">
           <label for="mat">Material *</label>
@@ -239,7 +241,7 @@
 {#if adjust}
   <div class="overlay no-print" role="presentation" onclick={() => (adjust = null)}>
     <div class="dialog card sm" role="dialog" onclick={(e) => e.stopPropagation()}>
-      <div class="dhead"><div><span class="eyebrow">Adjust / log waste</span><h3>{adjust.name}</h3></div><button class="btn btn-ghost btn-sm" onclick={() => (adjust = null)}>✕</button></div>
+      <div class="dhead"><div><span class="eyebrow">Adjust / log waste</span><h3>{adjust.name}</h3></div><button class="btn btn-ghost btn-sm" onclick={() => (adjust = null)} aria-label="Close">✕</button></div>
       <div class="fld"><label for="rem">Remaining weight (g){#if adjust.total} of {adjust.total}{/if}</label><input id="rem" class="input" type="number" min="0" max={adjust.total || undefined} bind:value={adjust.remaining} /></div>
       <p class="muted hint">Set the true remaining weight — e.g. after weighing the spool, or to write off wasted filament. Used weight is recalculated so cost stays accurate.</p>
       <div class="flex gap dactions">
@@ -257,7 +259,7 @@
       <div class="lc-mat">{labelSpool.material}{#if labelSpool.colorName} · {labelSpool.colorName}{/if}</div>
       <div class="lc-row"><span>{labelSpool.brand || '—'}</span><span>{labelSpool.total ? labelSpool.total + ' g' : ''}</span></div>
       {#if labelSpool.location}<div class="lc-loc">📍 {labelSpool.location}</div>{/if}
-      <div class="lc-foot">OpenPrintHQ</div>
+      <div class="lc-foot">{$branding.siteName}</div>
     </div>
   </div>
 {/if}
