@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
   import PresetSelect from '$lib/components/PresetSelect.svelte';
+  import GcodeViewer from '$lib/components/GcodeViewer.svelte';
 
   let loading = $state(true);
   let error = $state(null);
@@ -18,7 +19,42 @@
       // Already-sliced output ends in .gcode or .gcode.3mf — printable, not sliceable.
       const queueable = /\.gcode(\.3mf)?$/.test(lower);
       const sliceable = SLICEABLE.has(kind) && !lower.includes('.gcode.') && !queueable;
-      return { id: f.id ?? f.file_id, name, size: f.size ?? f.file_size ?? null, kind, sliceable, queueable };
+      const is3mf = lower.endsWith('.3mf');
+      return { id: f.id ?? f.file_id, name, size: f.size ?? f.file_size ?? null, kind, sliceable, queueable, is3mf };
+    });
+  }
+
+  // ---- preview (#17): thumbnail + 3MF plates + g-code toolpath ----
+  let preview = $state(null);        // the file being previewed
+  let previewTab = $state('image');  // 'image' | 'toolpath'
+  let plates = $state(null);         // [{ index, name, has_thumbnail, filament_requirements? }]
+  let platesLoading = $state(false);
+  let curPlate = $state(0);
+  let thumbBroken = $state(false);
+
+  async function openPreview(f) {
+    preview = f; plates = null; curPlate = 0; thumbBroken = false;
+    previewTab = f.queueable ? 'toolpath' : 'image';
+    if (f.is3mf) {
+      platesLoading = true;
+      try {
+        const r = await api.filePlates(f.id);
+        const list = Array.isArray(r?.plates) ? r.plates : [];
+        plates = list.length ? list : null;
+      } catch { plates = null; }
+      finally { platesLoading = false; }
+    }
+  }
+  function closePreview() { preview = null; plates = null; }
+  const curPlateInfo = $derived(plates && plates[curPlate] ? plates[curPlate] : null);
+  function fmtFilament(p) {
+    const reqs = p?.filament_requirements || p?.filaments || [];
+    if (!Array.isArray(reqs) || !reqs.length) return null;
+    return reqs.map((r) => {
+      const t = r.type || r.filament_type || '';
+      const g = r.weight ?? r.grams ?? r.used_g ?? null;
+      const col = r.color || r.colour || null;
+      return { t, g, col };
     });
   }
 
@@ -318,7 +354,11 @@
   <div class="grid files">
     {#each files as f}
       <div class="card card-pad file">
-        <div class="kind mono">{f.kind}</div>
+        <button class="thumb" onclick={() => openPreview(f)} title="Preview">
+          <img src={api.fileThumbUrl(f.id)} alt="" loading="lazy" onerror={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling.style.display = 'grid'; }} />
+          <span class="thumb-fallback"><span class="tk mono">{f.kind}</span></span>
+          <span class="peek mono">preview</span>
+        </button>
         <div class="fname">{f.name}</div>
         <div class="foot">
           {#if f.size}<span class="muted mono sz">{human(f.size)}</span>{/if}
@@ -335,6 +375,72 @@
         </div>
       </div>
     {/each}
+  </div>
+{/if}
+
+{#if preview}
+  <div class="overlay" role="presentation" onclick={closePreview}>
+    <div class="dialog card preview-dialog" role="dialog" onclick={(e) => e.stopPropagation()}>
+      <div class="dhead">
+        <div><span class="eyebrow">Preview</span><h3>{preview.name}</h3></div>
+        <button class="btn btn-ghost btn-sm" onclick={closePreview}>✕</button>
+      </div>
+
+      {#if preview.queueable}
+        <div class="tabs">
+          <button class="tab" class:on={previewTab === 'toolpath'} onclick={() => (previewTab = 'toolpath')}>Toolpath</button>
+          <button class="tab" class:on={previewTab === 'image'} onclick={() => (previewTab = 'image')}>Image</button>
+        </div>
+      {/if}
+
+      {#if previewTab === 'toolpath' && preview.queueable}
+        {#key preview.id}<GcodeViewer fileId={preview.id} name={preview.name} />{/key}
+      {:else}
+        <div class="pv-stage">
+          {#if !thumbBroken}
+            <img class="pv-img" src={curPlateInfo && curPlateInfo.has_thumbnail ? api.filePlateThumbUrl(preview.id, curPlateInfo.index) : api.fileThumbUrl(preview.id)}
+                 alt={preview.name} onerror={() => (thumbBroken = true)} />
+          {:else}
+            <div class="pv-none"><span class="tk mono">{preview.kind}</span><p class="muted">No preview image available.</p></div>
+          {/if}
+        </div>
+
+        {#if platesLoading}
+          <p class="muted hint">Reading plates…</p>
+        {:else if plates && plates.length > 1}
+          <div class="plates">
+            {#each plates as pl, i (pl.index)}
+              <button class="plate" class:on={i === curPlate} onclick={() => { curPlate = i; thumbBroken = false; }}>
+                {#if pl.has_thumbnail}<img src={api.filePlateThumbUrl(preview.id, pl.index)} alt="" loading="lazy" />{:else}<span class="mono">{pl.index}</span>{/if}
+                <span class="pl-n mono">Plate {pl.index}</span>
+              </button>
+            {/each}
+          </div>
+        {/if}
+
+        {#if curPlateInfo && fmtFilament(curPlateInfo)}
+          <div class="fil-req">
+            <span class="evh">Filament</span>
+            <div class="fil-list">
+              {#each fmtFilament(curPlateInfo) as fr}
+                <span class="fchip">{#if fr.col}<span class="sw" style="background:{fr.col}"></span>{/if}{fr.t || 'filament'}{#if fr.g} · {Math.round(fr.g)} g{/if}</span>
+              {/each}
+            </div>
+          </div>
+        {/if}
+      {/if}
+
+      <div class="flex gap dactions">
+        {#if preview.sliceable}
+          <button class="btn btn-primary" onclick={() => { const f = preview; closePreview(); openSlice(f); }}>◈ Slice</button>
+        {:else if preview.queueable}
+          <button class="btn btn-primary" onclick={() => { const f = preview; addToQueue(f); }} disabled={queuingId === preview.id}>{queuingId === preview.id ? 'Queuing…' : '↳ Add to queue'}</button>
+          <button class="btn btn-ghost" onclick={() => { const f = preview; closePreview(); openBatch(f); }}>⧉ Batch</button>
+        {/if}
+        <a class="btn btn-ghost" href={api.fileDownloadUrl(preview.id)} download>Download</a>
+        <button class="btn btn-ghost" onclick={closePreview}>Close</button>
+      </div>
+    </div>
   </div>
 {/if}
 
@@ -447,9 +553,37 @@
   .empty .ic { font-size: 1.8rem; margin-bottom: 0.3rem; }
   .empty p { max-width: 48ch; margin: 0.6rem auto 0; }
   .files { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
-  .file { display: flex; flex-direction: column; gap: 0.4rem; }
+  .file { display: flex; flex-direction: column; gap: 0.4rem; padding: 0.7rem; }
   .kind { font-size: 0.72rem; color: var(--ophq-primary-2); }
   .fname { font-weight: 500; word-break: break-word; font-size: 0.92rem; }
+
+  /* preview thumbnail on each card */
+  .thumb { position: relative; width: 100%; aspect-ratio: 1/1; border: 1px solid var(--ophq-border); border-radius: var(--radius-sm); background: var(--ophq-bg-2); padding: 0; overflow: hidden; cursor: pointer; display: block; }
+  .thumb img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .thumb-fallback { position: absolute; inset: 0; display: none; place-items: center; }
+  .tk { font-size: 0.85rem; color: var(--ophq-primary-2); letter-spacing: 0.04em; }
+  .peek { position: absolute; bottom: 0.3rem; right: 0.4rem; font-size: 0.66rem; color: var(--ophq-text-2); background: rgba(6,10,16,0.7); padding: 0.1rem 0.35rem; border-radius: 999px; opacity: 0; transition: opacity 0.15s; }
+  .thumb:hover .peek { opacity: 1; }
+
+  /* preview modal */
+  .preview-dialog { max-width: 560px; }
+  .tabs { display: flex; gap: 0.3rem; margin-bottom: 0.8rem; }
+  .tab { padding: 0.35rem 0.8rem; font-size: 0.82rem; border: 1px solid var(--ophq-border); background: var(--ophq-surface); color: var(--ophq-text-2); border-radius: 999px; cursor: pointer; }
+  .tab.on { background: var(--ophq-primary-dim); color: var(--ophq-primary-2); border-color: transparent; }
+  .pv-stage { width: 100%; aspect-ratio: 4/3; background: radial-gradient(circle at 50% 40%, #0f1622, #070b11); border: 1px solid var(--ophq-border); border-radius: var(--radius-sm); display: grid; place-items: center; overflow: hidden; }
+  .pv-img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .pv-none { display: grid; place-items: center; gap: 0.5rem; text-align: center; }
+  .pv-none .tk { font-size: 1.4rem; }
+  .plates { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.7rem; }
+  .plate { display: flex; flex-direction: column; align-items: center; gap: 0.2rem; padding: 0.25rem; border: 1px solid var(--ophq-border); border-radius: var(--radius-sm); background: var(--ophq-surface); cursor: pointer; width: 64px; }
+  .plate.on { border-color: var(--ophq-primary); box-shadow: 0 0 0 1px var(--ophq-primary); }
+  .plate img { width: 48px; height: 48px; object-fit: contain; }
+  .pl-n { font-size: 0.64rem; color: var(--ophq-text-2); }
+  .fil-req { margin-top: 0.8rem; }
+  .evh { display: block; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ophq-muted); margin-bottom: 0.35rem; }
+  .fil-list { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+  .fchip { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.78rem; padding: 0.2rem 0.5rem; border: 1px solid var(--ophq-border); border-radius: 999px; color: var(--ophq-text-2); }
+  .sw { width: 0.7rem; height: 0.7rem; border-radius: 50%; border: 1px solid rgba(255,255,255,0.25); display: inline-block; }
   .foot { display: flex; align-items: center; justify-content: space-between; margin-top: auto; padding-top: 0.5rem; }
   .sz { font-size: 0.8rem; }
   .slicebtn { padding: 0.3rem 0.6rem; font-size: 0.8rem; }

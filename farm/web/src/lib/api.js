@@ -152,6 +152,12 @@ export const api = {
   queueReorder: (items) =>
     req('/engine/api/v1/queue/reorder', { method: 'POST', body: JSON.stringify({ items }) }),
   files: () => req('/engine/api/v1/library/files'),
+  // ---- library file preview (#17): thumbnails, 3MF plates, raw g-code ----
+  fileThumbUrl: (id) => base + '/engine/api/v1/library/files/' + id + '/thumbnail',
+  filePlates: (id) => req('/engine/api/v1/library/files/' + id + '/plates'),
+  filePlateThumbUrl: (id, idx) => base + '/engine/api/v1/library/files/' + id + '/plate-thumbnail/' + idx,
+  fileGcode: (id) => req('/engine/api/v1/library/files/' + id + '/gcode'),
+  fileDownloadUrl: (id) => base + '/engine/api/v1/library/files/' + id + '/download',
   spools: () => req('/engine/api/v1/inventory/spools'),
   printStats: () => req('/engine/api/v1/archives/stats'),
   printLog: (limit = 25) => req('/engine/api/v1/print-log/?limit=' + limit),
