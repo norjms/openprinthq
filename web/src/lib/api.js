@@ -63,6 +63,8 @@ export const api = {
   // action: 'print/pause' | 'print/resume' | 'print/stop' | 'connect' | 'disconnect' | 'refresh-status'
   printerAction: (id, action) =>
     req('/engine/api/v1/printers/' + id + '/' + action, { method: 'POST' }),
+  // ---- fleet firmware (transport-aware: Bambu wiki / Klipper Moonraker) ----
+  firmwareUpdates: () => req('/engine/api/v1/firmware/updates'),
   // ---- smart plugs / power control + energy metering ----
   plugByPrinter: (pid) => req('/engine/api/v1/smart-plugs/by-printer/' + pid),
   plugStatus: (id) => req('/engine/api/v1/smart-plugs/' + id + '/status'),

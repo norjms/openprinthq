@@ -58,6 +58,17 @@
     return '';
   }
   const t1 = (v) => (v == null ? null : Math.round(Number(v)));
+
+  // ---- fleet firmware ----
+  let fw = $state(null);          // { updates:[...], updates_available }
+  let fwLoading = $state(false);
+  let fwErr = $state(null);
+  async function checkFirmware() {
+    fwLoading = true; fwErr = null;
+    try { fw = await api.firmwareUpdates(); }
+    catch (e) { fwErr = e.message || 'firmware check failed'; }
+    finally { fwLoading = false; }
+  }
 </script>
 
 <svelte:head><title>Printers · OpenPrintHQ</title></svelte:head>
@@ -127,6 +138,39 @@
       </a>
     {/each}
   </div>
+
+  <div class="card card-pad fw">
+    <div class="flex between center">
+      <div>
+        <span class="eyebrow">Firmware</span>
+        {#if fw}<span class="muted fwsum">{fw.updates_available > 0 ? `${fw.updates_available} update${fw.updates_available > 1 ? 's' : ''} available` : 'All up to date'}</span>{/if}
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick={checkFirmware} disabled={fwLoading}>{fwLoading ? 'Checking…' : (fw ? 'Re-check' : 'Check firmware')}</button>
+    </div>
+    {#if fwErr}<p class="err">{fwErr}</p>{/if}
+    {#if fw?.updates?.length}
+      <div class="fwlist">
+        {#each fw.updates as u (u.printer_id)}
+          <div class="fwrow">
+            <span class="fwn">{u.printer_name}{#if u.model}<span class="muted mono"> · {u.model}</span>{/if}</span>
+            <span class="mono muted fwcur">{u.current_version || 'unknown'}</span>
+            {#if u.update_available}
+              <span class="chip accent" title={u.latest_version || ''}>update{#if u.latest_version} → {u.latest_version}{/if}</span>
+            {:else if u.current_version}
+              <span class="chip ok">up to date</span>
+            {:else}
+              <span class="chip">—</span>
+            {/if}
+          </div>
+        {/each}
+      </div>
+      <p class="muted tiny">Bambu checks Bambu's firmware feed; Klipper checks Moonraker's update manager. Apply updates from the printer's own screen / Mainsail.</p>
+    {:else if fw}
+      <p class="muted">No printers to check.</p>
+    {:else}
+      <p class="muted">Check current firmware and available updates across every printer (Bambu + Klipper).</p>
+    {/if}
+  </div>
 {/if}
 
 <style>
@@ -147,6 +191,16 @@
   .chip.danger { color: var(--ophq-danger); border-color: rgba(255,92,108,0.3); background: rgba(255,92,108,0.08); }
   .chip.accent { color: var(--ophq-accent); border-color: rgba(255,176,32,0.3); background: rgba(255,176,32,0.08); }
   .chip.primary { color: var(--ophq-primary-2); border-color: rgba(124,108,255,0.35); background: var(--ophq-primary-dim); }
+  .fw { margin-top: 1.4rem; }
+  .fwsum { margin-left: 0.6rem; font-size: 0.85rem; }
+  .fwlist { display: flex; flex-direction: column; gap: 0.4rem; margin: 0.9rem 0 0.6rem; }
+  .fwrow { display: grid; grid-template-columns: 1fr auto auto; gap: 1rem; align-items: center; padding: 0.5rem 0.7rem; border: 1px solid var(--ophq-border); border-radius: var(--radius-sm); background: var(--ophq-surface); }
+  .fwn { font-size: 0.9rem; }
+  .fwcur { font-size: 0.8rem; }
+  .fw .chip.accent { color: var(--ophq-accent); border-color: rgba(255,176,32,0.35); background: rgba(255,176,32,0.08); }
+  .fw .chip.ok { color: var(--ophq-success); border-color: rgba(53,196,107,0.3); background: rgba(53,196,107,0.08); }
+  .fw .tiny { font-size: 0.78rem; }
+  .fw .err { color: var(--ophq-danger); font-size: 0.88rem; }
   .empty { text-align: center; padding: 2.6rem; }
   .empty .ic { font-size: 2rem; margin-bottom: 0.4rem; }
   .empty p { max-width: 48ch; margin: 0.6rem auto 1.4rem; }
