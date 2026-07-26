@@ -34,18 +34,51 @@ async function eng(base, path, opts = {}) {
 // apply(ports): the engine PATCH that points the printer at the relays
 //   (ports maps role -> allocated relay port).
 // restore(direct): the engine PATCH that puts it back on its real address.
+// Each profile touches ONLY the fields ITS printer uses. Combined with the
+// per-printer relay ports (relayPort = 39000 + printerId*10 + i) and per-printer
+// engine PATCH, this guarantees routing one printer — or adding a brand — never
+// affects any other printer of any brand.
+//
+// Single-endpoint transports (Moonraker/Klipper, OctoPrint, PrusaLink, Duet,
+// FlashForge, MKS, Snapmaker) all connect on one port the engine reads from
+// `moonraker_port`, so they need only a profile — no engine change.
+function singleEndpoint(defaultPort) {
+  return (p) => ({
+    endpoints: [{ role: 'api', port: Number(p.moonraker_port) || defaultPort }],
+    apply: (ports) => ({ ip_address: RELAY_HOST, moonraker_port: ports.api }),
+    restore: (d) => ({ ip_address: d.host, moonraker_port: Number(d.port) || defaultPort })
+  });
+}
 const PROFILES = {
-  klipper: (p) => ({
-    endpoints: [{ role: 'moonraker', port: Number(p.moonraker_port) || 7125 }],
-    apply: (ports) => ({ ip_address: RELAY_HOST, moonraker_port: ports.moonraker, endpoint_overrides: { moonraker: `${RELAY_HOST}:${ports.moonraker}` } }),
-    restore: (d) => ({ ip_address: d.host, moonraker_port: Number(d.port) || 7125, endpoint_overrides: null })
-  }),
+  klipper: singleEndpoint(7125),
+  octoprint: singleEndpoint(80),
+  prusalink: singleEndpoint(80),
+  duet: singleEndpoint(80),
+  flashforge: singleEndpoint(8899),
+  mks: singleEndpoint(8080),
+  snapmaker: singleEndpoint(8080),
+  // Bambu is multi-endpoint. MQTT (status/control) is wired end-to-end. FTP
+  // (upload) and camera are left on the direct address for now — they degrade to
+  // "unavailable while remote" rather than break, because relaying them means
+  // threading a per-endpoint port through the live file-transfer / camera code
+  // paths, which must be done carefully and tested (see docs). A remote Bambu is
+  // therefore fully monitorable + controllable today; LAN upload/camera relay is
+  // the scoped follow-up.
   bambu: () => ({
-    // MQTT (status/control) + FTP (file upload). Camera is a follow-on endpoint.
-    endpoints: [{ role: 'mqtt', port: 8883 }, { role: 'ftp', port: 990 }],
-    apply: (ports) => ({ ip_address: RELAY_HOST, endpoint_overrides: { mqtt: `${RELAY_HOST}:${ports.mqtt}`, ftp: `${RELAY_HOST}:${ports.ftp}` } }),
+    endpoints: [{ role: 'mqtt', port: 8883 }],
+    apply: (ports) => ({ ip_address: RELAY_HOST, endpoint_overrides: { mqtt: `${RELAY_HOST}:${ports.mqtt}` } }),
     restore: (d) => ({ ip_address: d.host, endpoint_overrides: null })
   })
+  // obico is a cloud relay (not a LAN device) — no connector routing needed.
+};
+
+// Per-vendor endpoint-relay status, surfaced so the UI/docs can be honest about
+// what's tunnelled. Single-endpoint vendors are fully relayed; Bambu relays
+// control today.
+export const VENDOR_ROUTING = {
+  klipper: 'full', octoprint: 'full', prusalink: 'full', duet: 'full',
+  flashforge: 'full', mks: 'full', snapmaker: 'full',
+  bambu: 'control-only'
 };
 function profileFor(printer) {
   const key = (printer.connection_type || '').toLowerCase();
