@@ -43,6 +43,9 @@ services:
       - OPHQ_ENGINE_HOST=${OPHQ_ENGINE_HOST:-10.10.10.109}
       - OPHQ_SLICER_URL=${OPHQ_SLICER_URL:-http://10.10.10.109:3003}
       - OPHQ_DOCKER_NETWORK=${OPHQ_DOCKER_NETWORK:-openprinthq_default}
+      # Cloudflare TURN (remote/CGNAT camera relay); STUN-only if unset.
+      - OPHQ_CF_TURN_KEY_ID=${OPHQ_CF_TURN_KEY_ID:-}
+      - OPHQ_CF_TURN_API_TOKEN=${OPHQ_CF_TURN_API_TOKEN:-}
     volumes:
       # lets the provisioner start per-tenant engine containers
       - /var/run/docker.sock:/var/run/docker.sock
