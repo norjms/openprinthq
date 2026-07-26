@@ -130,6 +130,15 @@ export async function migrate() {
     );
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS signing_keys (
+      user_id     INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      public_pem  TEXT NOT NULL,
+      private_enc TEXT NOT NULL,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+
   await seedSlicerCompat();
 }
 
@@ -232,6 +241,25 @@ export async function listActiveRoutes() {
   const { rows } = await pool.query(
     'SELECT user_id, printer_id, connector_id, direct_host, direct_port FROM printer_automation WHERE connector_id IS NOT NULL');
   return rows;
+}
+
+// ---- connector command-signing keys (RSA-2048) --------------------------
+export async function getSigningPublic(userId) {
+  const { rows } = await pool.query('SELECT public_pem, created_at FROM signing_keys WHERE user_id = $1', [userId]);
+  return rows[0] || null;
+}
+export async function getSigningPrivateEnc(userId) {
+  const { rows } = await pool.query('SELECT private_enc FROM signing_keys WHERE user_id = $1', [userId]);
+  return rows[0]?.private_enc || null;
+}
+export async function setSigningKey(userId, publicPem, privateEnc) {
+  await pool.query(
+    `INSERT INTO signing_keys (user_id, public_pem, private_enc, created_at) VALUES ($1, $2, $3, now())
+     ON CONFLICT (user_id) DO UPDATE SET public_pem = EXCLUDED.public_pem, private_enc = EXCLUDED.private_enc, created_at = now()`,
+    [userId, publicPem, privateEnc]);
+}
+export async function deleteSigningKey(userId) {
+  await pool.query('DELETE FROM signing_keys WHERE user_id = $1', [userId]);
 }
 
 // ---- batch runs ---------------------------------------------------------
