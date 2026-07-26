@@ -57,16 +57,23 @@ const PROFILES = {
   flashforge: singleEndpoint(8899),
   mks: singleEndpoint(8080),
   snapmaker: singleEndpoint(8080),
-  // Bambu is multi-endpoint. MQTT (status/control) is wired end-to-end. FTP
-  // (upload) and camera are left on the direct address for now — they degrade to
-  // "unavailable while remote" rather than break, because relaying them means
-  // threading a per-endpoint port through the live file-transfer / camera code
-  // paths, which must be done carefully and tested (see docs). A remote Bambu is
-  // therefore fully monitorable + controllable today; LAN upload/camera relay is
-  // the scoped follow-up.
+  // Bambu is multi-endpoint. MQTT (status/control, 8883) and FTP (file
+  // browse/upload/download, 990) are both wired end-to-end: the engine reads a
+  // per-role port from `endpoint_overrides` (mqtt via BambuMQTTClient, ftp via
+  // BambuFTPClient's ftp_port, threaded through every FTP call site). Camera is
+  // still LAN-only — live video over the control tunnel is impractical (see the
+  // camera note below); it degrades to "unavailable while remote" rather than
+  // break. A non-routed Bambu always resolves to native ports (overrides null),
+  // so adding/removing a route never affects an unrouted printer of any brand.
   bambu: () => ({
-    endpoints: [{ role: 'mqtt', port: 8883 }],
-    apply: (ports) => ({ ip_address: RELAY_HOST, endpoint_overrides: { mqtt: `${RELAY_HOST}:${ports.mqtt}` } }),
+    endpoints: [
+      { role: 'mqtt', port: 8883 },
+      { role: 'ftp', port: 990 }
+    ],
+    apply: (ports) => ({
+      ip_address: RELAY_HOST,
+      endpoint_overrides: { mqtt: `${RELAY_HOST}:${ports.mqtt}`, ftp: `${RELAY_HOST}:${ports.ftp}` }
+    }),
     restore: (d) => ({ ip_address: d.host, endpoint_overrides: null })
   })
   // obico is a cloud relay (not a LAN device) — no connector routing needed.
@@ -74,11 +81,11 @@ const PROFILES = {
 
 // Per-vendor endpoint-relay status, surfaced so the UI/docs can be honest about
 // what's tunnelled. Single-endpoint vendors are fully relayed; Bambu relays
-// control today.
+// control (MQTT) + files (FTP), with camera still LAN-only.
 export const VENDOR_ROUTING = {
   klipper: 'full', octoprint: 'full', prusalink: 'full', duet: 'full',
   flashforge: 'full', mks: 'full', snapmaker: 'full',
-  bambu: 'control-only'
+  bambu: 'control+files'
 };
 function profileFor(printer) {
   const key = (printer.connection_type || '').toLowerCase();
