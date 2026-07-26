@@ -8,6 +8,7 @@
 // server.js via registerConnectorRoutes(app). It has no extra dependencies —
 // SSE is written straight to the raw Node response after reply.hijack().
 import crypto from 'node:crypto';
+import net from 'node:net';
 import { EventEmitter } from 'node:events';
 import { getConnectorByToken, touchConnector } from './db.js';
 
@@ -17,6 +18,14 @@ const streams = new Map();
 const pending = new Map();
 // streamId -> { userId, connectorId, emitter }   (long-lived raw TCP tunnels)
 const tcpStreams = new Map();
+// listenPort -> net.Server   (auto-activation relays; see openTcpRelay)
+const relays = new Map();
+
+// The control-plane's own hostname on the docker network — engines connect here
+// when a printer is routed "via connector". A stable, per-printer relay port
+// keeps the engine's stored address valid across control-plane restarts.
+export const RELAY_HOST = process.env.OPHQ_RELAY_HOST || 'openprinthq-control-plane-1';
+export function relayPortForPrinter(printerId) { return 39000 + Number(printerId); }
 
 function connectorFor(userId) {
   for (const s of streams.values()) if (s.userId === userId) return s;
@@ -70,6 +79,34 @@ export function openTcpStream(userId, host, port) {
   try { writeToConnector(target, { id, kind: 'tcp-open', host, port }); }
   catch { tcpStreams.delete(id); queueMicrotask(() => em.emit('close', 'connector write failed')); }
   return em;
+}
+
+// Auto-activation: stand up a local TCP listener on `listenPort` that tunnels
+// every accepted connection to `targetHost:targetPort` through the user's
+// connector. An engine pointed at RELAY_HOST:listenPort then reaches a printer
+// on a remote LAN transparently. Idempotent per listenPort.
+export function openTcpRelay(userId, targetHost, targetPort, listenPort) {
+  const existing = relays.get(listenPort);
+  if (existing) { if (existing._ophqTarget === `${targetHost}:${targetPort}`) return listenPort; try { existing.close(); } catch { /* */ } relays.delete(listenPort); }
+  const server = net.createServer((socket) => {
+    const t = openTcpStream(userId, targetHost, targetPort);
+    let open = false; const preOpen = [];
+    socket.on('data', (d) => { if (open) t.write(d); else preOpen.push(d); });
+    t.on('open', () => { open = true; for (const d of preOpen.splice(0)) t.write(d); });
+    t.on('data', (d) => { try { socket.write(d); } catch { /* */ } });
+    t.on('close', () => { try { socket.end(); } catch { /* */ } });
+    socket.on('close', () => { try { t.close(); } catch { /* */ } });
+    socket.on('error', () => { try { t.close(); } catch { /* */ } });
+  });
+  server._ophqTarget = `${targetHost}:${targetPort}`;
+  server.on('error', (e) => console.error('relay', listenPort, e.message));
+  server.listen(listenPort, '0.0.0.0');
+  relays.set(listenPort, server);
+  return listenPort;
+}
+export function closeRelay(listenPort) {
+  const s = relays.get(listenPort);
+  if (s) { try { s.close(); } catch { /* */ } relays.delete(listenPort); }
 }
 
 export function connectorOnline(userId) {
