@@ -105,9 +105,11 @@ export const api = {
     req('/engine/api/v1/printers/' + id + '/ams/load?tray_id=' + encodeURIComponent(trayId), { method: 'POST' }),
   amsUnload: (id) =>
     req('/engine/api/v1/printers/' + id + '/ams/unload', { method: 'POST' }),
-  // kind: 'nozzle' | 'bed' | 'chamber' — engine takes ?target= as a query param
-  setTemp: (id, kind, target) =>
-    req('/engine/api/v1/printers/' + id + '/temperature/' + kind + '?target=' + encodeURIComponent(target), { method: 'POST' }),
+  // kind: 'nozzle' | 'bed' | 'chamber' — engine takes ?target= as a query param.
+  // For dual-nozzle machines, nozzle index 0 = right/default, 1 = left.
+  setTemp: (id, kind, target, nozzle) =>
+    req('/engine/api/v1/printers/' + id + '/temperature/' + kind + '?target=' + encodeURIComponent(target) +
+        (kind === 'nozzle' && nozzle ? '&nozzle=' + nozzle : ''), { method: 'POST' }),
   queue: () => req('/engine/api/v1/queue/'),
   queueUpdate: (id, body) =>
     req('/engine/api/v1/queue/' + id, { method: 'PATCH', body: JSON.stringify(body) }),
