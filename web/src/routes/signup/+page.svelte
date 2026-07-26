@@ -2,10 +2,11 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import Logo from '$lib/components/Logo.svelte';
+  import PageTitle from '$lib/components/PageTitle.svelte';
   onMount(() => { const t = setTimeout(() => goto('/app'), 1200); return () => clearTimeout(t); });
 </script>
 
-<svelte:head><title>Launch your HQ · OpenPrintHQ</title></svelte:head>
+<PageTitle page="Launch your HQ" />
 
 <div class="auth">
   <div class="card card-pad box">

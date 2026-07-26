@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
+  import PageTitle from '$lib/components/PageTitle.svelte';
 
   let loading = $state(true);
   let error = $state(null);
@@ -42,7 +43,7 @@
   function fmtWhen(v) { if (!v) return ''; const d = new Date(v); return isNaN(d) ? '' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); }
 </script>
 
-<svelte:head><title>Timelapses · OpenPrintHQ</title></svelte:head>
+<PageTitle page="Timelapses" />
 <svelte:window onkeydown={(e) => { if (e.key === 'Escape') play = null; }} />
 
 <div class="head">

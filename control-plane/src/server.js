@@ -8,7 +8,8 @@ import { migrate, upsertUser, getUserByEmail, getInstanceForUser, getCompatibleP
   getCircuits, setCircuit, getAutomation, setAutomation,
   createConnector, listConnectors, deleteConnector, setConnectorClientKey,
   getSigningPublic, setSigningKey, deleteSigningKey, getBatchById,
-  getIntegrationToken, setIntegrationToken, getUserByIntegrationToken } from './db.js';
+  getIntegrationToken, setIntegrationToken, getUserByIntegrationToken,
+  getAppearance, setAppearance } from './db.js';
 import { registerConnectorRoutes, connectorOnline, isConnectorOnline, proxyViaConnector, openTcpStream } from './connector.js';
 import { provisionForUser } from './provisioner.js';
 import { startBatch, activeBatchForUser, advanceBatch, cancelBatch, startOrchestrator } from './batch.js';
@@ -480,6 +481,33 @@ app.post('/api/integration-token/regenerate', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
   const token = await setIntegrationToken(user.id, 'ophq_' + randomBytes(24).toString('hex'));
   return { token };
+});
+
+// ---- appearance (Look & Feel) ------------------------------------------
+// Per-user theme + branding. Stored as one JSON blob; never shared between
+// users, so one account's theme can't affect another's.
+const MAX_IMG = 512 * 1024;            // per image (logo / favicon) data-URI cap
+const MAX_APPEARANCE = 1.5 * 1024 * 1024; // whole-config cap
+function validImageDataUri(s) {
+  return typeof s === 'string' && (s === '' || (/^data:image\/(png|jpeg|jpg|svg\+xml|webp|gif|x-icon|vnd\.microsoft\.icon);base64,/.test(s) && s.length <= MAX_IMG));
+}
+app.get('/api/appearance', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  const config = await getAppearance(user.id);
+  return { config: config || null };
+});
+app.put('/api/appearance', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  const config = req.body;
+  if (!config || typeof config !== 'object' || Array.isArray(config)) {
+    return reply.code(400).send({ error: 'config object required' });
+  }
+  const b = config.branding || {};
+  if (!validImageDataUri(b.logo || '')) return reply.code(400).send({ error: 'logo must be an image data-URI under 512 KB' });
+  if (!validImageDataUri(b.favicon || '')) return reply.code(400).send({ error: 'favicon must be an image data-URI under 512 KB' });
+  if (JSON.stringify(config).length > MAX_APPEARANCE) return reply.code(413).send({ error: 'appearance config too large' });
+  await setAppearance(user.id, config);
+  return { ok: true };
 });
 
 // Authenticated gateway: proxy the logged-in user's request to THEIR engine.

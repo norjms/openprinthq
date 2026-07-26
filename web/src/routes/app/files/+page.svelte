@@ -3,6 +3,7 @@
   import { api } from '$lib/api';
   import PresetSelect from '$lib/components/PresetSelect.svelte';
   import GcodeViewer from '$lib/components/GcodeViewer.svelte';
+  import PageTitle from '$lib/components/PageTitle.svelte';
 
   let loading = $state(true);
   let error = $state(null);
@@ -318,7 +319,7 @@
   }
 </script>
 
-<svelte:head><title>Files · OpenPrintHQ</title></svelte:head>
+<PageTitle page="Files" />
 
 <div class="head">
   <div><h1>Files</h1><p class="muted">Your private 3MF / STL / G-code library.</p></div>
@@ -383,7 +384,7 @@
     <div class="dialog card preview-dialog" role="dialog" onclick={(e) => e.stopPropagation()}>
       <div class="dhead">
         <div><span class="eyebrow">Preview</span><h3>{preview.name}</h3></div>
-        <button class="btn btn-ghost btn-sm" onclick={closePreview}>✕</button>
+        <button class="btn btn-ghost btn-sm" onclick={closePreview} aria-label="Close">✕</button>
       </div>
 
       {#if preview.queueable}
@@ -449,7 +450,7 @@
     <div class="dialog card" role="dialog" onclick={(e) => e.stopPropagation()}>
       <div class="dhead">
         <div><span class="eyebrow">Batch print</span><h3>Print “{batchFile.name}” on multiple printers</h3></div>
-        <button class="btn btn-ghost btn-sm" onclick={closeBatch}>✕</button>
+        <button class="btn btn-ghost btn-sm" onclick={closeBatch} aria-label="Close">✕</button>
       </div>
       {#if batchLoading}
         <p class="muted">Loading printers…</p>
@@ -499,7 +500,7 @@
     <div class="dialog card" role="dialog" onclick={(e) => e.stopPropagation()}>
       <div class="dhead">
         <div><span class="eyebrow">OrcaSlicer</span><h3>Slice “{sliceFile.name}”</h3></div>
-        <button class="btn btn-ghost btn-sm" onclick={closeSlice}>✕</button>
+        <button class="btn btn-ghost btn-sm" onclick={closeSlice} aria-label="Close">✕</button>
       </div>
       {#if presetsLoading}
         <p class="muted">Loading presets…</p>

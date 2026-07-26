@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
+  import PageTitle from '$lib/components/PageTitle.svelte';
 
   let loading = $state(true);
   let error = $state(null);
@@ -121,7 +122,7 @@
   }
 </script>
 
-<svelte:head><title>Projects · OpenPrintHQ</title></svelte:head>
+<PageTitle page="Projects" />
 
 <div class="head">
   <div><h1>Projects</h1><p class="muted">Group prints into jobs — track parts, progress and cost per project.</p></div>
@@ -195,7 +196,7 @@
                 <div class="bomlist">
                   {#each bom as b (b.id)}
                     <div class="bomrow" class:done={b.complete || b.acquired >= b.needed}>
-                      <span class="bn">{b.name}{#if b.url} <a href={b.url} target="_blank" rel="noopener" class="src">↗</a>{/if}</span>
+                      <span class="bn">{b.name}{#if b.url} <a href={b.url} target="_blank" rel="noopener" class="src" aria-label="Open source link">↗</a>{/if}</span>
                       <span class="qty">
                         <button class="stp" onclick={() => setAcquired(b, -1)} disabled={b.acquired <= 0} aria-label="decrease">−</button>
                         <span class="qn mono">{b.acquired}/{b.needed}</span>

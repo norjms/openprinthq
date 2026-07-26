@@ -8,6 +8,8 @@
   // SPDX-License-Identifier: AGPL-3.0-or-later
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
+  import PageTitle from '$lib/components/PageTitle.svelte';
+  import { branding } from '$lib/stores/appearance';
 
   const CUR_SYM = { USD: '$', EUR: '€', GBP: '£', CAD: 'C$', AUD: 'A$', JPY: '¥', CNY: '¥', INR: '₹', BRL: 'R$', MXN: 'MX$', CHF: 'CHF ', SEK: 'kr ', NOK: 'kr ', DKK: 'kr ', PLN: 'zł ', NZD: 'NZ$', ZAR: 'R ' };
 
@@ -122,7 +124,7 @@
   const anyEstimated = $derived(rows.some((r) => r._c.estimated));
 </script>
 
-<svelte:head><title>Reports · OpenPrintHQ</title></svelte:head>
+<PageTitle page="Reports" />
 
 <div class="controls no-print">
   <div class="head">
@@ -163,7 +165,7 @@
 {:else}
   <div class="report" id="report">
     <div class="rhead">
-      <div class="brand"><span class="logo">OpenPrintHQ</span><span class="doc">Print-cost report</span></div>
+      <div class="brand"><span class="logo">{$branding.siteName}</span><span class="doc">Print-cost report</span></div>
       <div class="meta">
         <div class="pl">{periodLabel}</div>
         <div class="muted sm">{printerFilter ? (printers.find((p) => String(p.id) === String(printerFilter))?.name || 'Printer') : 'All printers'}{#if generatedAt} · generated {generatedAt}{/if}</div>
