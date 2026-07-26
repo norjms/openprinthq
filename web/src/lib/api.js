@@ -80,6 +80,9 @@ export const api = {
   archiveSpool: (id) => req('/engine/api/v1/inventory/spools/' + id + '/archive', { method: 'POST' }),
   // ---- cloud (Bambu / OrcaSlicer cloud presets) ----
   cloudStatus: () => req('/engine/api/v1/cloud/status'),
+  // ---- integrations (Home Assistant / Homepage / Prometheus) ----
+  integrationToken: () => req('/integration-token'),
+  regenIntegrationToken: () => req('/integration-token/regenerate', { method: 'POST' }),
   // ---- smart plugs / power control + energy metering ----
   plugByPrinter: (pid) => req('/engine/api/v1/smart-plugs/by-printer/' + pid),
   plugStatus: (id) => req('/engine/api/v1/smart-plugs/' + id + '/status'),
