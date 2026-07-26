@@ -9,7 +9,10 @@ import { migrate, upsertUser, getUserByEmail, getInstanceForUser, getCompatibleP
   createConnector, listConnectors, deleteConnector, setConnectorClientKey,
   getSigningPublic, setSigningKey, deleteSigningKey, getBatchById,
   getIntegrationToken, setIntegrationToken, getUserByIntegrationToken,
-  getAppearance, setAppearance } from './db.js';
+  getAppearance, setAppearance,
+  createInvite, getValidInvite, consumeInvite, listInvites, revokeInvite,
+  listUsers, listAllInstances, countUsers } from './db.js';
+import { createAuthentikUser, authentikUserExists, authentikConfigured, OWNER_GROUP } from './authentik.js';
 import { registerConnectorRoutes, connectorOnline, isConnectorOnline, proxyViaConnector, openTcpStream } from './connector.js';
 import { provisionForUser } from './provisioner.js';
 import { startBatch, activeBatchForUser, advanceBatch, cancelBatch, startOrchestrator } from './batch.js';
@@ -83,6 +86,28 @@ async function requireUser(req, reply) {
   return user;
 }
 
+// Roles come from Authentik groups, forwarded by npmplus as X-authentik-groups
+// (a "|"- or ","-separated list). Owner = member of OPHQ_OWNER_GROUP; the header
+// is trusted only when the gateway secret is present (same guard as identity).
+function groupsOf(req) {
+  const gatewayOk = !GATEWAY_SECRET || req.headers['x-ophq-gateway'] === GATEWAY_SECRET;
+  if (!gatewayOk) return [];
+  const raw = req.headers['x-authentik-groups'];
+  return raw ? String(raw).split(/[|,]/).map((s) => s.trim()).filter(Boolean) : [];
+}
+// Owner = the bootstrapped first account (users.is_owner) OR a current member of
+// the Authentik owner group.
+function isOwner(req, user) {
+  if (user?.is_owner) return true;
+  return groupsOf(req).includes(OWNER_GROUP);
+}
+async function requireOwner(req, reply) {
+  const user = await requireUser(req, reply);
+  if (!user) return null;
+  if (!isOwner(req, user)) { reply.code(403).send({ error: 'owner access required' }); return null; }
+  return user;
+}
+
 // ---- health -------------------------------------------------------------
 app.get('/api/health', async () => ({ ok: true, service: 'control-plane', ts: Date.now() }));
 
@@ -117,7 +142,8 @@ app.post('/api/auth/logout', async (req, reply) => {
 // ---- account ------------------------------------------------------------
 app.get('/api/me', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
-  return { id: user.id, email: user.email, displayName: user.display_name };
+  const owner = isOwner(req, user);
+  return { id: user.id, email: user.email, displayName: user.display_name, role: owner ? 'owner' : 'user', isOwner: owner };
 });
 
 // ---- slicer preset compatibility ---------------------------------------
@@ -211,6 +237,114 @@ app.get('/api/instance/stats', async (req, reply) => {
   } catch {
     return { printersOnline: 0, activeJobs: 0, queued: 0, successRate: null, printersTotal: 0 };
   }
+});
+
+// ---- owner: admin (invites, users, instances, usage) --------------------
+// Every route is requireOwner-gated, so non-owners can't even enumerate the tab.
+app.get('/api/admin/summary', async (req, reply) => {
+  const owner = await requireOwner(req, reply); if (!owner) return;
+  return { isOwner: true, ownerGroup: OWNER_GROUP, authentik: authentikConfigured() };
+});
+app.get('/api/admin/invites', async (req, reply) => {
+  const owner = await requireOwner(req, reply); if (!owner) return;
+  return { invites: await listInvites() };
+});
+app.post('/api/admin/invites', async (req, reply) => {
+  const owner = await requireOwner(req, reply); if (!owner) return;
+  const b = req.body || {};
+  return await createInvite(owner.id, { email: b.email, note: b.note, ttlDays: 2 });
+});
+app.delete('/api/admin/invites/:code', async (req, reply) => {
+  const owner = await requireOwner(req, reply); if (!owner) return;
+  await revokeInvite(req.params.code);
+  return { ok: true };
+});
+app.get('/api/admin/users', async (req, reply) => {
+  const owner = await requireOwner(req, reply); if (!owner) return;
+  return { users: await listUsers() };
+});
+// All instances with live per-instance usage (best-effort; a down engine -> zeros).
+app.get('/api/admin/instances', async (req, reply) => {
+  const owner = await requireOwner(req, reply); if (!owner) return;
+  const rows = await listAllInstances();
+  const withStats = await Promise.all(rows.map(async (i) => {
+    const base = engineBase(i);
+    let stats = { printersTotal: 0, printersOnline: 0, activeJobs: 0 };
+    if (base) {
+      try {
+        const parr = asArray(await fetch(base + '/api/v1/printers/').then(r => r.ok ? r.json() : []).catch(() => []));
+        const statuses = await Promise.all(parr.map(p =>
+          fetch(base + `/api/v1/printers/${p.id}/status`).then(r => r.ok ? r.json() : null).catch(() => null)));
+        stats = {
+          printersTotal: parr.length,
+          printersOnline: statuses.filter(s => s && s.connected).length,
+          activeJobs: statuses.filter(s => s && /print|run/i.test(String(s.state || ''))).length
+        };
+      } catch { /* engine down -> zeros */ }
+    }
+    return { ...i, stats };
+  }));
+  return { instances: withStats };
+});
+// Owner provisions an instance for an existing/new user by email.
+app.post('/api/admin/instances', async (req, reply) => {
+  const owner = await requireOwner(req, reply); if (!owner) return;
+  const email = (req.body?.email || '').trim().toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return reply.code(400).send({ error: 'valid email required' });
+  const user = await upsertUser(email, req.body?.name || null);
+  try {
+    const inst = await provisionForUser(user);
+    return { ok: true, subdomain: inst.subdomain, status: inst.status };
+  } catch (e) {
+    return reply.code(500).send({ error: 'provisioning failed: ' + e.message });
+  }
+});
+
+// ---- public: signup with invite code ------------------------------------
+// Exposed via npmplus /api/pub/ (NO forward-auth). Redeems an invite, creates the
+// login user in Authentik, then provisions their instance. Errors are generic
+// (no account/invite enumeration).
+// Tells the signup page whether an invite is required yet — so the very first
+// (bootstrap) account never sees an invite field that would only confuse them.
+app.get('/api/pub/signup-info', async () => {
+  return { inviteRequired: (await countUsers()) > 0, enabled: authentikConfigured() };
+});
+app.post('/api/pub/signup', async (req, reply) => {
+  const b = req.body || {};
+  const code = (b.code || '').toString().trim();
+  const email = (b.email || '').toString().trim().toLowerCase();
+  const name = (b.name || '').toString().trim().slice(0, 100);
+  const password = (b.password || '').toString();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) || password.length < 10) {
+    return reply.code(400).send({ error: 'a valid email and a 10+ character password are required' });
+  }
+  if (!authentikConfigured()) return reply.code(503).send({ error: 'signup is unavailable right now' });
+
+  // Bootstrap: the very first account needs no invite and becomes the owner.
+  const bootstrap = (await countUsers()) === 0;
+  let invite = null;
+  if (!bootstrap) {
+    if (!code) return reply.code(400).send({ error: 'an invite code is required' });
+    invite = await getValidInvite(code);
+    if (!invite) return reply.code(400).send({ error: 'invalid or expired invite code' });
+    if (invite.email && invite.email !== email) return reply.code(400).send({ error: 'this invite is for a different email' });
+  }
+  if (await getUserByEmail(email) || await authentikUserExists(email)) {
+    return reply.code(409).send({ error: 'an account with this email already exists' });
+  }
+  // Create the Authentik login identity first; only then consume the invite +
+  // provision, so a failed create leaves the code still redeemable. The first
+  // user is placed in the owner group to match their bootstrapped is_owner flag.
+  try {
+    await createAuthentikUser(email, name, password, { owner: bootstrap });
+  } catch (e) {
+    req.log.error({ err: e.message }, 'authentik user create failed');
+    return reply.code(502).send({ error: 'could not create the login account' });
+  }
+  const user = await upsertUser(email, name || null);
+  if (invite) await consumeInvite(code, user.id).catch(() => {});
+  try { await provisionForUser(user); } catch (e) { req.log.error({ err: e.message }, 'provision after signup failed'); }
+  return { ok: true, email, owner: bootstrap };
 });
 
 // ---- power circuits -----------------------------------------------------
