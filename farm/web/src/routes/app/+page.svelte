@@ -113,7 +113,8 @@
       <span class="chip {instance?.status === 'running' ? 'ok' : 'accent'}">{instance?.status ?? 'unknown'}</span>
     </div>
     <div class="kv mono">
-      <div><span>subdomain</span>{instance?.subdomain ?? '—'}.internal.example.com</div>
+      <div><span>instance</span>{instance?.subdomain ?? '—'}</div>
+      <div><span>access</span><a href="/app">internal.example.com</a></div>
       <div><span>engine</span>{instance?.engineVersion ?? 'openprinthq-engine'}</div>
       <div><span>created</span>{fmtDate(instance?.createdAt)}</div>
     </div>

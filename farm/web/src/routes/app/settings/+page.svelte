@@ -98,7 +98,7 @@
     {#if inst}
       <div class="kv mono">
         <div><span>status</span><span class="chip {inst.status === 'running' ? 'ok' : 'accent'}">{inst.status}</span></div>
-        <div><span>subdomain</span>{inst.subdomain}</div>
+        <div><span>instance</span>{inst.subdomain}</div>
         <div><span>engine</span>{inst.engineVersion}</div>
         <div><span>created</span>{fmtDate(inst.createdAt)}</div>
       </div>
