@@ -68,6 +68,11 @@ export const api = {
   createConnector: (name) => req('/connectors', { method: 'POST', body: JSON.stringify({ name }) }),
   deleteConnector: (id) => req('/connectors/' + id, { method: 'DELETE' }),
   testConnector: (body) => req('/connectors/test', { method: 'POST', body: JSON.stringify(body) }),
+  // command-signing key pair (RSA-2048): control-plane holds the private key,
+  // connector holds the public key and verifies every command.
+  signingKey: () => req('/connector/signing-key'),
+  generateSigningKey: () => req('/connector/signing-key', { method: 'POST' }),
+  deleteSigningKey: () => req('/connector/signing-key', { method: 'DELETE' }),
   // ---- printer automation: bed ejection / continuous printing (#20) ----
   printerAutomation: () => req('/printer-automation'),
   savePrinterAutomation: (map) => req('/printer-automation', { method: 'PUT', body: JSON.stringify(map) }),

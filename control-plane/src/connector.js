@@ -11,6 +11,7 @@ import crypto from 'node:crypto';
 import net from 'node:net';
 import { EventEmitter } from 'node:events';
 import { getConnectorByToken, touchConnector } from './db.js';
+import { signJobIfKeyed } from './signing.js';
 
 // connectorId -> { raw, userId, name, lastSeen, heartbeat }
 const streams = new Map();
@@ -46,12 +47,14 @@ export function proxyViaConnector(userId, job, timeoutMs = 22000) {
   for (const s of streams.values()) if (s.userId === userId) { target = s; break; }
   if (!target) return Promise.resolve({ status: 503, error: 'no connector online for this account' });
   const id = crypto.randomUUID();
-  const payload = JSON.stringify({ id, ...job });
+  const j = { id, ...job };
   return new Promise((resolve) => {
     const timer = setTimeout(() => { pending.delete(id); resolve({ status: 504, error: 'connector timeout' }); }, timeoutMs);
     pending.set(id, { resolve, timer });
-    try { target.raw.write(`data: ${payload}\n\n`); }
-    catch { clearTimeout(timer); pending.delete(id); resolve({ status: 502, error: 'connector write failed' }); }
+    signJobIfKeyed(userId, j).then(() => {
+      try { target.raw.write(`data: ${JSON.stringify(j)}\n\n`); }
+      catch { clearTimeout(timer); pending.delete(id); resolve({ status: 502, error: 'connector write failed' }); }
+    }).catch(() => { clearTimeout(timer); pending.delete(id); resolve({ status: 500, error: 'signing failed' }); });
   });
 }
 
@@ -76,8 +79,11 @@ export function openTcpStream(userId, host, port) {
     if (s) try { writeToConnector(s, { id, kind: 'tcp-close' }); } catch { /* */ }
     tcpStreams.delete(id);
   };
-  try { writeToConnector(target, { id, kind: 'tcp-open', host, port }); }
-  catch { tcpStreams.delete(id); queueMicrotask(() => em.emit('close', 'connector write failed')); }
+  const openJob = { id, kind: 'tcp-open', host, port };
+  signJobIfKeyed(userId, openJob).then(() => {
+    try { writeToConnector(target, openJob); }
+    catch { tcpStreams.delete(id); em.emit('close', 'connector write failed'); }
+  }).catch(() => { tcpStreams.delete(id); em.emit('close', 'signing failed'); });
   return em;
 }
 
