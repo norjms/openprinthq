@@ -129,6 +129,8 @@ export const api = {
   compatiblePresets: (printer) => req('/slicer/compatible?printer=' + encodeURIComponent(printer)),
   // Bambu HMS error dictionary (short_code -> description) for decoding alerts.
   hmsDescriptions: () => req('/hms/descriptions'),
+  // Clear/acknowledge a printer's HMS flags (like dismissing on the printer screen).
+  hmsClear: (id) => req('/engine/api/v1/printers/' + id + '/hms/clear', { method: 'POST' }),
   // Power circuits (printer_id -> circuit label) for staggered batch printing.
   circuits: () => req('/printer-circuits'),
   saveCircuits: (map) => req('/printer-circuits', { method: 'PUT', body: JSON.stringify(map) }),

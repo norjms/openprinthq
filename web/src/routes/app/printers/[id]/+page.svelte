@@ -103,13 +103,17 @@
   // ---- printer alerts (Bambu HMS errors) ----
   // The engine hands us raw HMS entries {code:"0x4038", attr:<int>, severity}.
   // The lookup key for the description table is the short code "MMMM_EEEE":
-  // module from attr bits 16-31, error from the numeric part of code — this
-  // mirrors the engine's own _format_hms_error_summary()/get_error_description.
+  // module from attr bits 16-31, error from the LOW 16 BITS of code. Masking to
+  // 0xFFFF matters: some entries carry high bits (e.g. 0x20006) whose real error
+  // nibble is the low half (0x0006). Without the mask we'd render "20006" and
+  // miss the catalogue key.
+  function hmsErrNum(e) {
+    return (parseInt(String(e?.code ?? '').replace(/^0x/i, ''), 16) || 0) & 0xffff;
+  }
   function hmsShortCode(e) {
-    const codeNum = parseInt(String(e?.code ?? '').replace(/^0x/i, ''), 16) || 0;
     const attr = Number(e?.attr) || 0;
     const moduleHex = ((attr >>> 16) & 0xffff).toString(16).toUpperCase().padStart(4, '0');
-    const errHex = codeNum.toString(16).toUpperCase().padStart(4, '0');
+    const errHex = hmsErrNum(e).toString(16).toUpperCase().padStart(4, '0');
     return `${moduleHex}_${errHex}`;
   }
 
@@ -126,17 +130,36 @@
   });
 
   const alerts = $derived.by(() =>
-    (st?.hms_errors || []).map((e) => {
-      const code = hmsShortCode(e);
-      const sev = Number(e.severity) || 0;
-      return {
-        code,
-        desc: hmsMap ? hmsMap[code] : undefined,
-        // Bambu severity: 1 = fatal, 2 = serious → red; everything else amber.
-        severe: sev === 1 || sev === 2
-      };
-    })
+    (st?.hms_errors || [])
+      // Only genuine faults surface as alerts. Bambu reserves error nibbles
+      // >= 0x4000 for real HMS faults; lower values are status/phase codes the
+      // firmware emits during normal operation (e.g. 0x0006) and must not be
+      // shown as warnings — otherwise a healthy printer looks like it's erroring.
+      .filter((e) => hmsErrNum(e) >= 0x4000)
+      .map((e) => {
+        const code = hmsShortCode(e);
+        const sev = Number(e.severity) || 0;
+        return {
+          code,
+          desc: hmsMap ? hmsMap[code] : undefined,
+          // Bambu severity: 1 = fatal, 2 = serious → red; everything else amber.
+          severe: sev === 1 || sev === 2
+        };
+      })
   );
+
+  // ---- clear HMS flags (acknowledge/dismiss, like tapping the printer screen) ----
+  let clearingHms = $state(false);
+  async function clearHms() {
+    clearingHms = true;
+    try {
+      await api.hmsClear(id);
+      await api.printerAction(id, 'refresh-status').catch(() => {});
+      await loadStatus(false);
+    } catch (e) {
+      error = e.message || 'could not clear alerts';
+    } finally { clearingHms = false; }
+  }
 
   // ---- loaded filament (Bambu AMS units + external spool) ----
   const hexColor = (c) => (c ? '#' + String(c).slice(0, 6) : '');
@@ -299,12 +322,15 @@
       {#each alerts as a}
         <div class="alert {a.severe ? 'sev' : ''}">
           <span class="ai">⚠</span>
-          <span>
+          <span class="atext">
             {#if a.desc}{a.desc}{:else}Printer alert — check the printer's screen for details.{/if}
             <span class="mono acode">HMS {a.code}</span>
           </span>
         </div>
       {/each}
+      <button class="btn btn-ghost btn-sm clr" onclick={clearHms} disabled={clearingHms}>
+        {clearingHms ? 'Clearing…' : 'Clear alerts'}
+      </button>
     </div>
   {/if}
 
@@ -488,7 +514,9 @@
   .alert { display: flex; align-items: center; gap: 0.6rem; padding: 0.7rem 1rem; border-radius: var(--radius-sm); font-size: 0.9rem; border: 1px solid rgba(245,166,35,0.35); background: rgba(245,166,35,0.08); color: var(--ophq-warn); }
   .alert.sev { border-color: rgba(255,92,108,0.35); background: rgba(255,92,108,0.08); color: var(--ophq-danger); }
   .alert .ai { font-size: 1rem; }
+  .alert .atext { flex: 1; }
   .alert .acode { opacity: 0.7; font-size: 0.8rem; margin-left: 0.4rem; white-space: nowrap; }
+  .alerts .clr { align-self: flex-end; }
   .filament { margin-top: 1.2rem; }
   .filament h3 { margin: 0; font-size: 1.05rem; }
   .fils { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 0.9rem; }
