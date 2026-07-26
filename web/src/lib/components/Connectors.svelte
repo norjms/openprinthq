@@ -16,6 +16,9 @@
   let copied = $state(false);
   let confirmDel = $state(null);
   let os = $state('docker');
+  let keyFormId = $state(null);   // connector id whose client-key form is open
+  let keyPem = $state('');
+  let keyBusy = $state(false);
   let printers = $state([]);
   let routing = $state({});   // printerId -> connector_id|null
 
@@ -68,6 +71,19 @@
     catch { /* ignore */ } finally { signBusy = false; }
   }
   async function copyPub() { try { await navigator.clipboard.writeText(signPub); pubCopied = true; setTimeout(() => (pubCopied = false), 2000); } catch { /* */ } }
+
+  function openKeyForm(c) { keyFormId = keyFormId === c.id ? null : c.id; keyPem = ''; }
+  async function saveClientKey(c) {
+    keyBusy = true;
+    try { await api.setConnectorClientKey(c.id, keyPem); keyFormId = null; keyPem = ''; await load(); }
+    catch (e) { error = e.message || 'could not save key'; }
+    finally { keyBusy = false; }
+  }
+  async function clearClientKey(c) {
+    keyBusy = true;
+    try { await api.setConnectorClientKey(c.id, ''); keyFormId = null; await load(); }
+    catch { /* */ } finally { keyBusy = false; }
+  }
 
   async function create() {
     if (!name.trim() || creating) return;
@@ -149,15 +165,29 @@
       {#each list as c (c.id)}
         <div class="crow">
           <div class="cmain">
-            <div class="cname">{c.name} <span class="dot {c.online ? 'on' : ''}" title={c.online ? 'online' : 'offline'}></span><span class="st muted">{c.online ? 'online' : 'offline'}</span></div>
+            <div class="cname">{c.name} <span class="dot {c.online ? 'on' : ''}" title={c.online ? 'online' : 'offline'}></span><span class="st muted">{c.online ? 'online' : 'offline'}</span>{#if c.has_client_key}<span class="lock" title="Mutual key auth enabled">🔒 mutual auth</span>{/if}</div>
             <div class="cmeta muted mono">last seen {fmt(c.last_seen)}</div>
           </div>
-          {#if confirmDel === c.id}
-            <span class="flex gap"><button class="btn btn-danger btn-xs" onclick={() => del(c)}>Revoke</button><button class="btn btn-ghost btn-xs" onclick={() => (confirmDel = null)}>✕</button></span>
-          {:else}
-            <button class="btn btn-ghost btn-xs" onclick={() => (confirmDel = c.id)}>Revoke</button>
-          {/if}
+          <div class="flex gap">
+            <button class="btn btn-ghost btn-xs" onclick={() => openKeyForm(c)} title="Register this connector's public key">{c.has_client_key ? 'Key ✓' : 'Key'}</button>
+            {#if confirmDel === c.id}
+              <button class="btn btn-danger btn-xs" onclick={() => del(c)}>Revoke</button><button class="btn btn-ghost btn-xs" onclick={() => (confirmDel = null)}>✕</button>
+            {:else}
+              <button class="btn btn-ghost btn-xs" onclick={() => (confirmDel = c.id)}>Revoke</button>
+            {/if}
+          </div>
         </div>
+        {#if keyFormId === c.id}
+          <div class="keyform">
+            <p class="muted tiny">Paste this connector's <b>public</b> key (run <code>node src/agent.js --pubkey</code> on the connector, or copy it from the connector's startup log). Once set, the connector must prove it holds the matching private key on every connect.</p>
+            <textarea class="input kf" rows="4" placeholder="-----BEGIN PUBLIC KEY-----&#10;...&#10;-----END PUBLIC KEY-----" bind:value={keyPem} spellcheck="false"></textarea>
+            <div class="flex gap">
+              <button class="btn btn-primary btn-xs" onclick={() => saveClientKey(c)} disabled={keyBusy || !keyPem.trim()}>{keyBusy ? 'Saving…' : 'Save key'}</button>
+              {#if c.has_client_key}<button class="btn btn-ghost btn-xs" onclick={() => clearClientKey(c)} disabled={keyBusy}>Remove (disable mutual auth)</button>{/if}
+              <button class="btn btn-ghost btn-xs" onclick={() => (keyFormId = null)}>Cancel</button>
+            </div>
+          </div>
+        {/if}
       {/each}
     </div>
   {/if}
@@ -207,6 +237,9 @@
   .st { font-size: 0.78rem; font-weight: 400; }
   .cmeta { font-size: 0.72rem; margin-top: 0.15rem; }
   .err { color: var(--ophq-danger); font-size: 0.88rem; }
+  .lock { font-size: 0.68rem; color: var(--ophq-success); border: 1px solid rgba(53,196,107,0.3); background: rgba(53,196,107,0.08); padding: 0.05rem 0.4rem; border-radius: 999px; }
+  .keyform { margin: -0.2rem 0 0.3rem; padding: 0.7rem 0.8rem; border: 1px solid var(--ophq-border); border-top: none; border-radius: 0 0 var(--radius-sm) var(--radius-sm); background: var(--ophq-bg-2); }
+  .kf { font-family: var(--font-mono); font-size: 0.76rem; margin: 0.3rem 0 0.5rem; resize: vertical; }
   .signing { margin-top: 1.2rem; border-top: 1px solid var(--ophq-border); padding-top: 0.9rem; }
   .signing .snip pre { max-height: 150px; }
   .skacts { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.6rem; flex-wrap: wrap; }
