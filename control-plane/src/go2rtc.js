@@ -68,3 +68,28 @@ export async function ensureStream(instance, userId, printerId) {
 }
 
 export { GO2RTC_URL };
+
+// ---- ICE servers (STUN always; Cloudflare TURN for remote/CGNAT) ----------
+// Cloudflare issues SHORT-LIVED TURN credentials, so the control-plane mints a
+// fresh set per session and hands them to the browser (no static secret that
+// expires). Configured via env; returns STUN-only when TURN isn't set up.
+const CF_TURN_KEY = process.env.OPHQ_CF_TURN_KEY_ID || '';
+const CF_TURN_TOKEN = process.env.OPHQ_CF_TURN_API_TOKEN || '';
+
+export async function iceServers(ttl = 3600) {
+  const list = [{ urls: 'stun:stun.l.google.com:19302' }];
+  if (CF_TURN_KEY && CF_TURN_TOKEN) {
+    try {
+      const r = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${CF_TURN_KEY}/credentials/generate`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${CF_TURN_TOKEN}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ ttl })
+      });
+      if (r.ok) {
+        const j = await r.json();
+        if (j && j.iceServers) list.push(j.iceServers); // {urls:[...], username, credential}
+      }
+    } catch { /* fall back to STUN only */ }
+  }
+  return list;
+}

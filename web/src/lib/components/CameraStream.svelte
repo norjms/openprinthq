@@ -39,7 +39,14 @@
   async function start() {
     if (typeof RTCPeerConnection === 'undefined') { done = true; return; }
     try {
-      pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+      // Fresh ICE servers (STUN + short-lived TURN for remote/CGNAT) from the
+      // control-plane; STUN-only fallback if that call fails.
+      let ice = [{ urls: 'stun:stun.l.google.com:19302' }];
+      try {
+        const r = await fetch('/api/camera/ice', { credentials: 'include' });
+        if (r.ok) { const j = await r.json(); if (Array.isArray(j.iceServers) && j.iceServers.length) ice = j.iceServers; }
+      } catch { /* keep STUN default */ }
+      pc = new RTCPeerConnection({ iceServers: ice });
       pc.addTransceiver('video', { direction: 'recvonly' });
       pc.addTransceiver('audio', { direction: 'recvonly' });
       pc.addEventListener('track', (e) => {
