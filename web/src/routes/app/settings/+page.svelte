@@ -4,6 +4,7 @@
   import NotificationSettings from '$lib/components/NotificationSettings.svelte';
   import ObicoSettings from '$lib/components/ObicoSettings.svelte';
   import ApiKeys from '$lib/components/ApiKeys.svelte';
+  import Connectors from '$lib/components/Connectors.svelte';
 
   let me = $state(null);
   let inst = $state(null);
@@ -279,6 +280,8 @@ scrape_configs:
 </div>
 
 <ApiKeys />
+
+<Connectors />
 
 <div class="card card-pad more">
   <span class="eyebrow">Coming soon</span>
