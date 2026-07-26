@@ -16,16 +16,35 @@
   let copied = $state(false);
   let confirmDel = $state(null);
   let os = $state('docker');
+  let printers = $state([]);
+  let routing = $state({});   // printerId -> connector_id|null
 
   const base = $derived(typeof window !== 'undefined' ? window.location.origin : 'https://your-instance');
 
   async function load() {
     loading = true; error = null;
-    try { const r = await api.connectors(); list = Array.isArray(r) ? r : (r?.items || []); }
+    try {
+      const [r, pl, auto] = await Promise.all([
+        api.connectors(),
+        api.printers().catch(() => []),
+        api.printerAutomation().catch(() => ({}))
+      ]);
+      list = Array.isArray(r) ? r : (r?.items || []);
+      printers = (Array.isArray(pl) ? pl : (pl?.printers || pl?.items || [])).map((p) => ({ id: p.id ?? p.printer_id, name: p.name || ('Printer ' + p.id) }));
+      const map = {};
+      for (const p of printers) { const c = auto?.[p.id] || auto?.[String(p.id)]; map[p.id] = c?.connector_id ?? ''; }
+      routing = map;
+    }
     catch (e) { error = e.message || 'could not load connectors'; }
     finally { loading = false; }
   }
   onMount(load);
+
+  async function setRoute(printerId, connectorId) {
+    routing = { ...routing, [printerId]: connectorId };
+    try { await api.savePrinterAutomation({ [printerId]: { connector_id: connectorId === '' ? null : Number(connectorId) } }); }
+    catch { /* ignore */ }
+  }
 
   async function create() {
     if (!name.trim() || creating) return;
@@ -97,6 +116,24 @@
       {/each}
     </div>
   {/if}
+
+  {#if !loading && !error && list.length > 0 && printers.length > 0}
+    <div class="routing">
+      <span class="gl">Printer routing</span>
+      <p class="muted tiny">Choose how each printer is reached. <b>Direct</b> = this instance talks to it on its own network; <b>via a connector</b> = tunnelled through that agent (for printers on a remote LAN). Assignment is saved immediately; it takes effect when the printer connects through the connector.</p>
+      <div class="rlist">
+        {#each printers as p (p.id)}
+          <div class="rrow">
+            <span class="rn">{p.name}</span>
+            <select class="input rsel" value={routing[p.id] ?? ''} onchange={(e) => setRoute(p.id, e.currentTarget.value)}>
+              <option value="">Direct (same network)</option>
+              {#each list as c (c.id)}<option value={c.id}>via {c.name}</option>{/each}
+            </select>
+          </div>
+        {/each}
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -125,4 +162,10 @@
   .st { font-size: 0.78rem; font-weight: 400; }
   .cmeta { font-size: 0.72rem; margin-top: 0.15rem; }
   .err { color: var(--ophq-danger); font-size: 0.88rem; }
+  .routing { margin-top: 1.2rem; border-top: 1px solid var(--ophq-border); padding-top: 0.9rem; }
+  .gl { display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ophq-muted); margin-bottom: 0.4rem; }
+  .rlist { display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.6rem; }
+  .rrow { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+  .rn { font-size: 0.9rem; }
+  .rsel { max-width: 240px; }
 </style>
