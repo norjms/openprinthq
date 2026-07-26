@@ -65,6 +65,21 @@ export const api = {
     req('/engine/api/v1/printers/' + id + '/' + action, { method: 'POST' }),
   // ---- fleet firmware (transport-aware: Bambu wiki / Klipper Moonraker) ----
   firmwareUpdates: () => req('/engine/api/v1/firmware/updates'),
+  // ---- failure analysis ----
+  failureAnalysis: (days = 30) => req('/engine/api/v1/archives/analysis/failures?period_days=' + days),
+  // ---- projects ----
+  projects: () => req('/engine/api/v1/projects/'),
+  project: (id) => req('/engine/api/v1/projects/' + id),
+  createProject: (body) => req('/engine/api/v1/projects/', { method: 'POST', body: JSON.stringify(body) }),
+  projectArchives: (id) => req('/engine/api/v1/projects/' + id + '/archives'),
+  projectQueue: (id) => req('/engine/api/v1/projects/' + id + '/queue'),
+  // ---- inventory (spools) ----
+  spoolsInv: () => req('/engine/api/v1/inventory/spools'),
+  spoolLocations: () => req('/engine/api/v1/inventory/locations'),
+  addSpool: (body) => req('/engine/api/v1/inventory/spools', { method: 'POST', body: JSON.stringify(body) }),
+  archiveSpool: (id) => req('/engine/api/v1/inventory/spools/' + id + '/archive', { method: 'POST' }),
+  // ---- cloud (Bambu / OrcaSlicer cloud presets) ----
+  cloudStatus: () => req('/engine/api/v1/cloud/status'),
   // ---- smart plugs / power control + energy metering ----
   plugByPrinter: (pid) => req('/engine/api/v1/smart-plugs/by-printer/' + pid),
   plugStatus: (id) => req('/engine/api/v1/smart-plugs/' + id + '/status'),

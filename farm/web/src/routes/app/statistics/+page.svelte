@@ -7,6 +7,7 @@
   let s = $state(null);
   let printerNames = $state({});
   let recent = $state([]);
+  let fa = $state(null);        // failure analysis
 
   async function load() {
     loading = true; error = null;
@@ -15,6 +16,7 @@
       const pl = await api.printers().catch(() => []);
       const arr = Array.isArray(pl) ? pl : (pl?.printers || pl?.items || []);
       printerNames = Object.fromEntries(arr.map((p) => [String(p.id), p.name || p.model || ('Printer ' + p.id)]));
+      fa = await api.failureAnalysis(30).catch(() => null);
       const log = await api.printLog(25).catch(() => null);
       const entries = (log && log.items) || (Array.isArray(log) ? log : []);
       recent = entries.map((e) => ({
@@ -62,6 +64,9 @@
     { label: 'Energy', value: (s.total_energy_kwh ?? 0).toFixed(1) + ' kWh' },
     { label: 'Energy cost', value: '$' + (s.total_energy_cost ?? 0).toFixed(2) }
   ] : []);
+  const faReasons = $derived(fa?.failures_by_reason ? Object.entries(fa.failures_by_reason).sort((a, b) => b[1] - a[1]) : []);
+  const faPrinters = $derived(fa?.failures_by_printer ? Object.entries(fa.failures_by_printer).sort((a, b) => b[1] - a[1]) : []);
+  const faFilament = $derived(fa?.failures_by_filament ? Object.entries(fa.failures_by_filament).sort((a, b) => b[1] - a[1]) : []);
   const byType = $derived(s?.prints_by_filament_type ? Object.entries(s.prints_by_filament_type) : []);
   const byPrinter = $derived(s?.prints_by_printer
     ? Object.entries(s.prints_by_printer).map(([k, v]) => [printerNames[k] || (k === 'unknown' ? 'Unknown' : `Printer ${k}`), v])
@@ -120,6 +125,39 @@
         {/each}
       </div>
     {/if}
+
+    {#if fa && fa.failed_prints > 0}
+      <div class="card card-pad fa">
+        <div class="flex between center">
+          <span class="eyebrow">Failure analysis</span>
+          <span class="muted tiny">last {fa.period_days} days</span>
+        </div>
+        <div class="fatiles">
+          <div class="fatile"><span class="muted">Failure rate</span><b class="warn">{fa.failure_rate}%</b></div>
+          <div class="fatile"><span class="muted">Failed</span><b>{fa.failed_prints}<span class="muted of"> / {fa.total_prints}</span></b></div>
+        </div>
+        <div class="grid three">
+          <div>
+            <span class="fahd">By reason</span>
+            {#if faReasons.length}{#each faReasons as [k, v]}<div class="row"><span>{k}</span><span class="mono">{v}</span></div>{/each}{:else}<p class="muted">—</p>{/if}
+          </div>
+          <div>
+            <span class="fahd">By printer</span>
+            {#if faPrinters.length}{#each faPrinters as [k, v]}<div class="row"><span>{k}</span><span class="mono">{v}</span></div>{/each}{:else}<p class="muted">—</p>{/if}
+          </div>
+          <div>
+            <span class="fahd">By filament</span>
+            {#if faFilament.length}{#each faFilament as [k, v]}<div class="row"><span>{k}</span><span class="mono">{v}</span></div>{/each}{:else}<p class="muted">—</p>{/if}
+          </div>
+        </div>
+        {#if fa.recent_failures?.length}
+          <span class="fahd">Recent failures</span>
+          {#each fa.recent_failures.slice(0, 6) as rf}
+            <div class="row"><span>{rf.print_name || 'Print'} <span class="muted">· {rf.failure_reason || 'unknown'}</span></span><span class="muted mono">{rf.filament_type || ''}</span></div>
+          {/each}
+        {/if}
+      </div>
+    {/if}
   {/if}
 {/if}
 
@@ -132,6 +170,16 @@
   .tile b.ok { color: var(--ophq-success); }
   .note { margin-top: 1.2rem; }
   .two { grid-template-columns: 1fr 1fr; margin-top: 1.2rem; }
+  .three { grid-template-columns: repeat(3, 1fr); gap: 1.2rem; margin: 0.8rem 0; }
+  .fa { margin-top: 1.2rem; }
+  .fatiles { display: flex; gap: 2rem; margin: 0.9rem 0; }
+  .fatile { display: flex; flex-direction: column; gap: 0.2rem; }
+  .fatile b { font-family: var(--font-mono); font-size: 1.6rem; }
+  .fatile b.warn { color: var(--ophq-accent); }
+  .fatile .of { font-size: 1rem; }
+  .fahd { display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ophq-muted); margin: 0.8rem 0 0.4rem; }
+  .fa .tiny { font-size: 0.78rem; }
+  @media (max-width: 820px) { .three { grid-template-columns: 1fr; } }
   .row { display: flex; justify-content: space-between; padding: 0.4rem 0; border-bottom: 1px solid var(--ophq-border-soft); }
   .row:last-child { border-bottom: none; }
 
