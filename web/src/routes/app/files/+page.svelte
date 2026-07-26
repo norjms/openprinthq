@@ -70,6 +70,56 @@
     finally { uploading = false; e.target.value = ''; }
   }
 
+  // ---- batch print dialog (temperature-staggered) ----
+  let batchFile = $state(null);
+  let batchPrinters = $state([]);      // [{id,name,connected,state,circuit,sel}]
+  let batchLoading = $state(false);
+  let batchStagger = $state(true);
+  let batchMaxPreheat = $state(1);
+  let batchBusy = $state(false);
+  let batchErr = $state(null);
+
+  async function openBatch(f) {
+    batchFile = f; batchErr = null; batchLoading = true; batchPrinters = [];
+    try {
+      const [pl, circ] = await Promise.all([api.printers().catch(() => []), api.circuits().catch(() => ({}))]);
+      const arr = Array.isArray(pl) ? pl : (pl?.printers || pl?.items || []);
+      const withState = await Promise.all(arr.map(async (p) => {
+        const id = p.id ?? p.printer_id;
+        let st = null; try { st = await api.printerStatus(id); } catch { /* offline */ }
+        const connected = !!st?.connected;
+        const state = (st?.state || (connected ? 'idle' : 'offline')).toString().toLowerCase();
+        const busy = /print|run|pause/.test(state);
+        return { id, name: p.name || p.model || ('Printer ' + id), connected, state, busy,
+                 circuit: circ[id] || '', sel: connected && !busy };
+      }));
+      batchPrinters = withState;
+    } catch (e) { batchErr = e.message || 'could not load printers'; }
+    finally { batchLoading = false; }
+  }
+  function closeBatch() { batchFile = null; }
+  const batchSelCount = $derived(batchPrinters.filter((p) => p.sel).length);
+
+  async function doBatch() {
+    const chosen = batchPrinters.filter((p) => p.sel);
+    if (chosen.length === 0) { batchErr = 'Select at least one printer.'; return; }
+    batchBusy = true; batchErr = null;
+    try {
+      await api.batchStart({
+        file_id: batchFile.id, file_name: batchFile.name,
+        printers: chosen.map((p) => ({ id: p.id, name: p.name })),
+        staggered: batchStagger,
+        max_preheat: Math.max(1, Number(batchMaxPreheat) || 1)
+      });
+      showToast('ok', batchStagger
+        ? `Batch started on ${chosen.length} printer${chosen.length > 1 ? 's' : ''} — heat-up is staggered per circuit.`
+        : `Batch sent to ${chosen.length} printer${chosen.length > 1 ? 's' : ''}.`);
+      closeBatch();
+    } catch (e) {
+      batchErr = e.message || 'could not start batch';
+    } finally { batchBusy = false; }
+  }
+
   // ---- slice dialog ----
   let sliceFile = $state(null);
   let presetsLoading = $state(false);
@@ -275,13 +325,66 @@
           {#if f.sliceable}
             <button class="btn btn-ghost btn-sm slicebtn" onclick={() => openSlice(f)}>◈ Slice</button>
           {:else if f.queueable}
-            <button class="btn btn-ghost btn-sm slicebtn" onclick={() => addToQueue(f)} disabled={queuingId === f.id}>
-              {queuingId === f.id ? 'Queuing…' : '↳ Add to queue'}
-            </button>
+            <div class="qacts">
+              <button class="btn btn-ghost btn-sm slicebtn" onclick={() => addToQueue(f)} disabled={queuingId === f.id}>
+                {queuingId === f.id ? 'Queuing…' : '↳ Add to queue'}
+              </button>
+              <button class="btn btn-ghost btn-sm slicebtn" onclick={() => openBatch(f)} title="Print on multiple printers with staggered heat-up">⧉ Batch</button>
+            </div>
           {/if}
         </div>
       </div>
     {/each}
+  </div>
+{/if}
+
+{#if batchFile}
+  <div class="overlay" role="presentation" onclick={closeBatch}>
+    <div class="dialog card" role="dialog" onclick={(e) => e.stopPropagation()}>
+      <div class="dhead">
+        <div><span class="eyebrow">Batch print</span><h3>Print “{batchFile.name}” on multiple printers</h3></div>
+        <button class="btn btn-ghost btn-sm" onclick={closeBatch}>✕</button>
+      </div>
+      {#if batchLoading}
+        <p class="muted">Loading printers…</p>
+      {:else if batchPrinters.length === 0}
+        <p class="muted">No printers found. <a href="/app/printers/add">Add a printer</a> first.</p>
+      {:else}
+        <div class="plist">
+          {#each batchPrinters as p (p.id)}
+            <label class="prow" class:off={!p.connected}>
+              <input type="checkbox" bind:checked={p.sel} disabled={!p.connected || p.busy} />
+              <span class="pn">{p.name}</span>
+              {#if p.circuit}<span class="cchip mono">{p.circuit}</span>{:else}<span class="cchip none mono">no circuit</span>{/if}
+              <span class="pst mono {p.busy ? 'busy' : p.connected ? 'ok' : 'off'}">{p.busy ? p.state : p.connected ? 'idle' : 'offline'}</span>
+            </label>
+          {/each}
+        </div>
+
+        <label class="q-opt tog">
+          <input type="checkbox" bind:checked={batchStagger} disabled={batchBusy} />
+          <span><b>Temperature-staggered start</b> — wait for each printer's bed &amp; chamber to reach target before starting the next on the same circuit.</span>
+        </label>
+
+        {#if batchStagger}
+          <div class="preheat">
+            <label for="mp">Max printers preheating at once <span class="muted">(per circuit)</span></label>
+            <input id="mp" class="input mp-in" type="number" min="1" max="20" bind:value={batchMaxPreheat} disabled={batchBusy} />
+          </div>
+          <p class="muted hint">Printers on different circuits preheat in parallel. Set circuits in <a href="/app/settings">Settings → Power circuits</a>. You can override the wait any time from the <a href="/app/queue">queue</a>.</p>
+        {:else}
+          <p class="muted hint">All selected printers will start at once (no heat-up staggering).</p>
+        {/if}
+
+        {#if batchErr}<p class="err">{batchErr}</p>{/if}
+        <div class="flex gap dactions">
+          <button class="btn btn-primary" onclick={doBatch} disabled={batchBusy || batchSelCount === 0}>
+            {batchBusy ? 'Starting…' : `Start batch (${batchSelCount})`}
+          </button>
+          <button class="btn btn-ghost" onclick={closeBatch} disabled={batchBusy}>Cancel</button>
+        </div>
+      {/if}
+    </div>
   </div>
 {/if}
 
@@ -350,6 +453,24 @@
   .foot { display: flex; align-items: center; justify-content: space-between; margin-top: auto; padding-top: 0.5rem; }
   .sz { font-size: 0.8rem; }
   .slicebtn { padding: 0.3rem 0.6rem; font-size: 0.8rem; }
+  .qacts { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+
+  .plist { display: flex; flex-direction: column; gap: 0.35rem; max-height: 260px; overflow-y: auto; margin-bottom: 0.4rem; }
+  .prow { display: flex; align-items: center; gap: 0.6rem; padding: 0.45rem 0.6rem; border: 1px solid var(--ophq-border); border-radius: var(--radius-sm); background: var(--ophq-surface); cursor: pointer; }
+  .prow.off { opacity: 0.55; cursor: default; }
+  .prow input { width: auto; accent-color: var(--ophq-primary); }
+  .prow .pn { flex: 1; font-size: 0.9rem; }
+  .cchip { font-size: 0.72rem; padding: 0.1rem 0.4rem; border-radius: 999px; border: 1px solid var(--ophq-border); color: var(--ophq-text-2); background: var(--ophq-bg-2); }
+  .cchip.none { opacity: 0.6; }
+  .pst { font-size: 0.72rem; }
+  .pst.ok { color: var(--ophq-success); }
+  .pst.busy { color: var(--ophq-primary-2); }
+  .pst.off { color: var(--ophq-muted); }
+  .tog { align-items: flex-start; }
+  .tog span { line-height: 1.45; }
+  .preheat { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin: 0.8rem 0 0.2rem; font-size: 0.9rem; }
+  .preheat label { color: var(--ophq-text-2); }
+  .mp-in { max-width: 90px; }
 
   .overlay { position: fixed; inset: 0; background: rgba(5,8,12,0.66); backdrop-filter: blur(3px); display: grid; place-items: center; z-index: 100; padding: 1.5rem; }
   .dialog { width: 100%; max-width: 460px; padding: 1.5rem; box-shadow: var(--shadow-glow); }
