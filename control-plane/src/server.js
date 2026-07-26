@@ -5,7 +5,7 @@ import cookie from '@fastify/cookie';
 import { readFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { migrate, upsertUser, getUserByEmail, getInstanceForUser, getCompatiblePresets,
-  getCircuits, setCircuit, getBatchById,
+  getCircuits, setCircuit, getAutomation, setAutomation, getBatchById,
   getIntegrationToken, setIntegrationToken, getUserByIntegrationToken } from './db.js';
 import { provisionForUser } from './provisioner.js';
 import { startBatch, activeBatchForUser, advanceBatch, cancelBatch, startOrchestrator } from './batch.js';
@@ -222,6 +222,23 @@ app.put('/api/printer-circuits', async (req, reply) => {
     await setCircuit(user.id, id, circuit == null ? '' : String(circuit));
   }
   return await getCircuits(user.id);
+});
+
+// ---- printer automation (bed ejection / continuous printing, #20) -------
+app.get('/api/printer-automation', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  return await getAutomation(user.id);
+});
+app.put('/api/printer-automation', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  const map = req.body || {};
+  if (typeof map !== 'object' || Array.isArray(map)) return reply.code(400).send({ error: 'expected an object' });
+  for (const [pid, cfg] of Object.entries(map)) {
+    const id = Number(pid);
+    if (!Number.isInteger(id) || !cfg || typeof cfg !== 'object') continue;
+    await setAutomation(user.id, id, { auto_eject: !!cfg.auto_eject, eject_gcode: cfg.eject_gcode });
+  }
+  return await getAutomation(user.id);
 });
 
 // ---- temperature-staggered batch printing -------------------------------
