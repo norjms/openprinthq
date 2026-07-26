@@ -63,6 +63,11 @@ export const api = {
   // action: 'print/pause' | 'print/resume' | 'print/stop' | 'connect' | 'disconnect' | 'refresh-status'
   printerAction: (id, action) =>
     req('/engine/api/v1/printers/' + id + '/' + action, { method: 'POST' }),
+  // ---- raw g-code console / macros (#23) + Klipper tuning (#24) ----
+  sendGcode: (id, command) =>
+    req('/engine/api/v1/printers/' + id + '/gcode', { method: 'POST', body: JSON.stringify({ command }) }),
+  klipperLevel: (id) => req('/engine/api/v1/printers/' + id + '/klipper/level', { method: 'POST' }),
+  klipperEmergencyStop: (id) => req('/engine/api/v1/printers/' + id + '/klipper/emergency-stop', { method: 'POST' }),
   // ---- fleet firmware (transport-aware: Bambu wiki / Klipper Moonraker) ----
   firmwareUpdates: () => req('/engine/api/v1/firmware/updates'),
   // ---- failure analysis ----
