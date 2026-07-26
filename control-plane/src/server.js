@@ -15,6 +15,7 @@ import { provisionForUser } from './provisioner.js';
 import { startBatch, activeBatchForUser, advanceBatch, cancelBatch, startOrchestrator } from './batch.js';
 import { activateRoute, deactivateRoute, reconcileRoutes } from './routing.js';
 import { generateKeyPair, encryptPrivate, invalidateSigningCache } from './signing.js';
+import { ensureStream, GO2RTC_URL } from './go2rtc.js';
 
 // Bambu HMS error dictionary (short_code "XXXX_YYYY" -> human description),
 // extracted from the engine's HMS table. Loaded once at startup and served to
@@ -515,23 +516,22 @@ app.put('/api/appearance', async (req, reply) => {
 // printers) through this tiny SDP passthrough. ONLY the offer/answer handshake
 // flows here; the video then streams peer-to-peer browser<->go2rtc, so the
 // control-plane never carries camera traffic.
-const GO2RTC_URL = process.env.OPHQ_GO2RTC_URL || 'http://openprinthq-go2rtc:1984';
 app.post('/api/camera/webrtc/:printerId', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
   const pid = String(req.params.printerId).replace(/[^0-9]/g, '');
   if (!pid) return reply.code(400).send({ error: 'bad printer id' });
-  // Only broker signaling for a printer that belongs to THIS user's engine.
   const inst = await getInstanceForUser(user.id);
-  const base = engineBase(inst);
-  if (!base) return reply.code(409).send({ error: 'no running instance' });
-  try {
-    const chk = await fetch(`${base}/api/v1/printers/${pid}`, { headers: { accept: 'application/json' } });
-    if (!chk.ok) return reply.code(404).send({ error: 'printer not found' });
-  } catch { return reply.code(502).send({ error: 'engine unreachable' }); }
+  if (!inst) return reply.code(409).send({ error: 'no running instance' });
+  // Register (idempotent) the printer's camera as a go2rtc stream, read straight
+  // from this user's engine DB. Returns null for non-RTSP printers -> 404 -> the
+  // browser falls back to snapshot polling. Also scopes access to the user's own
+  // engine, so no separate ownership check is needed.
+  const name = await ensureStream(inst, user.id, pid);
+  if (!name) return reply.code(404).send({ error: 'no WebRTC camera stream for this printer' });
   // Relay the SDP offer to go2rtc and return its answer verbatim.
   try {
     const body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
-    const res = await fetch(`${GO2RTC_URL}/api/webrtc?src=printer_${pid}`, {
+    const res = await fetch(`${GO2RTC_URL}/api/webrtc?src=${encodeURIComponent(name)}`, {
       method: 'POST',
       headers: { 'content-type': req.headers['content-type'] || 'application/json' },
       body

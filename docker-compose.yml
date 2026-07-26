@@ -48,3 +48,18 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     expose:
       - "8080"
+
+  # WebRTC camera media server, co-located with the printers. Ingests each
+  # printer's RTSP camera and streams it peer-to-peer to browsers; the
+  # control-plane only relays SDP signaling (never video). Streams are
+  # registered at runtime by the control-plane (control-plane/src/go2rtc.js),
+  # so the mounted config carries no streams or secrets.
+  go2rtc:
+    image: alexxit/go2rtc:latest
+    container_name: openprinthq-go2rtc
+    restart: unless-stopped
+    ports:
+      - "8555:8555/tcp"   # WebRTC media (published so LAN browsers reach it direct)
+      - "8555:8555/udp"
+    volumes:
+      - ./infra/go2rtc/go2rtc.yaml:/config/go2rtc.yaml
