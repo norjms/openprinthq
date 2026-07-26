@@ -63,6 +63,23 @@ export const api = {
   // action: 'print/pause' | 'print/resume' | 'print/stop' | 'connect' | 'disconnect' | 'refresh-status'
   printerAction: (id, action) =>
     req('/engine/api/v1/printers/' + id + '/' + action, { method: 'POST' }),
+  // ---- smart plugs / power control + energy metering ----
+  plugByPrinter: (pid) => req('/engine/api/v1/smart-plugs/by-printer/' + pid),
+  plugStatus: (id) => req('/engine/api/v1/smart-plugs/' + id + '/status'),
+  plugControl: (id, action) =>
+    req('/engine/api/v1/smart-plugs/' + id + '/control', { method: 'POST', body: JSON.stringify({ action }) }),
+  plugCreate: (body) => req('/engine/api/v1/smart-plugs/', { method: 'POST', body: JSON.stringify(body) }),
+  plugUpdate: (id, body) => req('/engine/api/v1/smart-plugs/' + id, { method: 'PATCH', body: JSON.stringify(body) }),
+  plugDelete: (id) => req('/engine/api/v1/smart-plugs/' + id, { method: 'DELETE' }),
+  // ---- AMS filament backup (auto-switch to a backup spool on runout) ----
+  amsBackup: (id, enabled) =>
+    req('/engine/api/v1/printers/' + id + '/ams-backup?enabled=' + (enabled ? 'true' : 'false'), { method: 'POST' }),
+  // ---- AMS filament drying ----
+  dryingStart: (id, { temp, duration, filament, rotate_tray }) =>
+    req('/engine/api/v1/printers/' + id + '/drying/start?temp=' + temp + '&duration=' + duration +
+        '&filament=' + encodeURIComponent(filament || '') + '&rotate_tray=' + (rotate_tray ? 'true' : 'false'),
+      { method: 'POST' }),
+  dryingStop: (id) => req('/engine/api/v1/printers/' + id + '/drying/stop', { method: 'POST' }),
   // AMS filament load (tray_id: 0-15 AMS slot = ams*4+slot, 254 external) / unload.
   amsLoad: (id, trayId) =>
     req('/engine/api/v1/printers/' + id + '/ams/load?tray_id=' + encodeURIComponent(trayId), { method: 'POST' }),
