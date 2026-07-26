@@ -84,8 +84,8 @@
   const tempCards = $derived.by(() => {
     const t = st?.temperatures || {};
     const kinds = [
-      { kind: 'nozzle', label: 'Nozzle', key: 'nozzle' },
-      { kind: 'nozzle', label: 'Nozzle 2', key: 'nozzle_2', settable: false },
+      { kind: 'nozzle', label: 'Nozzle', key: 'nozzle', nozzle: 0 },
+      { kind: 'nozzle', label: 'Nozzle 2', key: 'nozzle_2', nozzle: 1 },
       { kind: 'bed', label: 'Bed', key: 'bed' },
       { kind: 'chamber', label: 'Chamber', key: 'chamber' }
     ];
@@ -256,12 +256,12 @@
     }
   }
 
-  async function setTemp(kind, key) {
+  async function setTemp(kind, key, nozzle) {
     const v = targets[key];
     if (v === undefined || v === '') return;
     acting = `set-${key}`;
     try {
-      await api.setTemp(id, kind, Number(v));
+      await api.setTemp(id, kind, Number(v), nozzle);
       targets[key] = '';
       await loadStatus(false);
     } catch (e) {
@@ -392,10 +392,10 @@
               <div class="tset">
                 <input class="input" type="number" min="0" placeholder="target °C"
                        bind:value={targets[c.key]} />
-                <button class="btn btn-ghost btn-sm" onclick={() => setTemp(c.kind, c.key)}
+                <button class="btn btn-ghost btn-sm" onclick={() => setTemp(c.kind, c.key, c.nozzle)}
                         disabled={acting === `set-${c.key}`}>Set</button>
                 {#if c.target}
-                  <button class="btn btn-ghost btn-sm" onclick={() => { targets[c.key] = 0; setTemp(c.kind, c.key); }}
+                  <button class="btn btn-ghost btn-sm" onclick={() => { targets[c.key] = 0; setTemp(c.kind, c.key, c.nozzle); }}
                           disabled={acting === `set-${c.key}`}>Off</button>
                 {/if}
               </div>
