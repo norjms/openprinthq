@@ -63,6 +63,11 @@ export const api = {
   // action: 'print/pause' | 'print/resume' | 'print/stop' | 'connect' | 'disconnect' | 'refresh-status'
   printerAction: (id, action) =>
     req('/engine/api/v1/printers/' + id + '/' + action, { method: 'POST' }),
+  // ---- local connectors: outbound tunnel for LAN printers (#28/#29) ----
+  connectors: () => req('/connectors'),
+  createConnector: (name) => req('/connectors', { method: 'POST', body: JSON.stringify({ name }) }),
+  deleteConnector: (id) => req('/connectors/' + id, { method: 'DELETE' }),
+  testConnector: (body) => req('/connectors/test', { method: 'POST', body: JSON.stringify(body) }),
   // ---- printer automation: bed ejection / continuous printing (#20) ----
   printerAutomation: () => req('/printer-automation'),
   savePrinterAutomation: (map) => req('/printer-automation', { method: 'PUT', body: JSON.stringify(map) }),
