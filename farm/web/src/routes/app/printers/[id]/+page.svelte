@@ -9,6 +9,7 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { api } from '$lib/api';
+  import CameraImg from '$lib/components/CameraImg.svelte';
   import PowerPanel from '$lib/components/PowerPanel.svelte';
   import ControlPanel from '$lib/components/ControlPanel.svelte';
   import AmsPanel from '$lib/components/AmsPanel.svelte';
@@ -33,7 +34,6 @@
   let camTick = $state(0);
   let camAvailable = $state(true);
   let camZoom = $state(false);   // fullscreen lightbox
-  const camSrc = $derived(`/api/engine/api/v1/printers/${id}/camera/snapshot?t=${camTick}`);
 
   async function loadStatus(initial = false) {
     if (initial) { loading = true; error = null; }
@@ -479,7 +479,7 @@
   {#if camAvailable}
     <div class="card card-pad cover">
       <h3>Camera</h3>
-      <img class="cam zoomable" src={camSrc} alt="{meta?.name || 'printer'} camera live view"
+      <CameraImg printerId={id} tick={camTick} alt="{meta?.name || 'printer'} camera live view" mode="detail"
            onerror={() => (camAvailable = false)} onclick={() => (camZoom = true)} title="Click to expand" />
     </div>
   {:else if st?.cover_url}
@@ -493,7 +493,7 @@
 {#if camZoom && camAvailable}
   <div class="lightbox" role="presentation" onclick={() => (camZoom = false)}>
     <button class="lb-close" onclick={() => (camZoom = false)} aria-label="Close">✕</button>
-    <img src={camSrc} alt="{meta?.name || 'printer'} camera live view" onclick={(e) => e.stopPropagation()} />
+    <CameraImg printerId={id} tick={camTick} alt="{meta?.name || 'printer'} camera live view" mode="contain" onclick={(e) => e.stopPropagation()} />
     <div class="lb-cap mono">{meta?.name || 'Printer'} · live</div>
   </div>
 {/if}
