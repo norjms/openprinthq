@@ -5,6 +5,7 @@
   // running instance.
   import Header from '$lib/components/Header.svelte';
   import Footer from '$lib/components/Footer.svelte';
+  import { branding } from '$lib/stores/appearance';
 
   // Served as .zip (not .tar.gz): the static server tags .gz with
   // Content-Encoding: gzip, which the edge proxy transparently decompresses —
@@ -15,7 +16,7 @@
 </script>
 
 <svelte:head>
-  <title>License, attribution & source · OpenPrintHQ</title>
+  <title>License, attribution &amp; source · {$branding.siteName}</title>
   <meta name="description" content="OpenPrintHQ is free software under the GNU AGPL v3. License, upstream attribution, and complete corresponding source." />
 </svelte:head>
 
