@@ -83,6 +83,10 @@ export const api = {
   // ---- integrations (Home Assistant / Homepage / Prometheus) ----
   integrationToken: () => req('/integration-token'),
   regenIntegrationToken: () => req('/integration-token/regenerate', { method: 'POST' }),
+  // ---- archives / timelapses ----
+  archives: (limit = 60) => req('/engine/api/v1/archives/?limit=' + limit),
+  archiveThumbUrl: (id) => base + '/engine/api/v1/archives/' + id + '/thumbnail',
+  archiveTimelapseUrl: (id) => base + '/engine/api/v1/archives/' + id + '/timelapse',
   // ---- Obico AI failure detection ----
   obicoStatus: () => req('/engine/api/v1/obico/status'),
   obicoTest: () => req('/engine/api/v1/obico/test-connection', { method: 'POST' }),
