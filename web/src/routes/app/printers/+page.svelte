@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
   import PageTitle from '$lib/components/PageTitle.svelte';
+  import CameraImg from '$lib/components/CameraImg.svelte';
 
   let loading = $state(true);
   let error = $state(null);
@@ -11,7 +12,6 @@
   // and remember which printers have no reachable camera so we stop trying.
   let camTick = $state(0);
   let camErr = $state({});
-  const camSrc = (id) => `/api/engine/api/v1/printers/${id}/camera/snapshot?t=${camTick}`;
 
   function base(data) {
     const arr = Array.isArray(data) ? data : (data?.printers || data?.items || data?.results || []);
@@ -120,7 +120,7 @@
         </div>
         {#if p.live?.connected && !camErr[p.id]}
           <div class="cam">
-            <img src={camSrc(p.id)} alt={`${p.name || 'Printer'} live camera view`} loading="lazy" onerror={() => (camErr = { ...camErr, [p.id]: true })} />
+            <CameraImg printerId={p.id} tick={camTick} alt={`${p.name || 'Printer'} live camera view`} mode="fill" onerror={() => (camErr = { ...camErr, [p.id]: true })} />
             {#if /run|print/.test(st) && p.live.progress != null}
               <span class="cam-prog mono">{Math.round(p.live.progress)}%</span>
             {/if}

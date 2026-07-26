@@ -1,6 +1,7 @@
 <script>
   import Logo from './Logo.svelte';
   import { page } from '$app/state';
+  import { branding } from '$lib/stores/appearance';
 
   let { children } = $props();
 
@@ -38,8 +39,11 @@
       <span class="ic" aria-hidden="true">⎋</span>Sign out
     </a>
     <div class="side-foot">
-      <span class="chip ok">AGPL-3.0</span>
-      <a class="muted src" href="/legal">source ↗</a>
+      {#if $branding.trademark}<span class="tm muted">{$branding.trademark}</span>{/if}
+      <div class="foot-links">
+        <a class="chip ok" href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener license">AGPL-3.0</a>
+        <a class="muted src" href="/legal">source ↗</a>
+      </div>
     </div>
   </aside>
 
@@ -61,7 +65,10 @@
   .logout { margin-top: 0.5rem; color: var(--ophq-muted); }
   .logout:hover { background: color-mix(in srgb, var(--ophq-danger) 12%, transparent); color: var(--ophq-danger); }
   .ic { width: 1.2rem; text-align: center; opacity: 0.9; }
-  .side-foot { display: flex; align-items: center; justify-content: space-between; padding: 0.6rem 0.5rem 0.2rem; }
+  .side-foot { display: flex; flex-direction: column; gap: 0.5rem; padding: 0.6rem 0.5rem 0.2rem; }
+  .tm { font-size: 0.72rem; line-height: 1.35; }
+  .foot-links { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+  a.chip.ok { text-decoration: none; }
   .src { font-size: 0.8rem; }
 
   .main { display: flex; flex-direction: column; }
