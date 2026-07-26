@@ -78,6 +78,11 @@ export const api = {
   createProject: (body) => req('/engine/api/v1/projects/', { method: 'POST', body: JSON.stringify(body) }),
   projectArchives: (id) => req('/engine/api/v1/projects/' + id + '/archives'),
   projectQueue: (id) => req('/engine/api/v1/projects/' + id + '/queue'),
+  // BOM / bill of materials (#22)
+  projectBom: (id) => req('/engine/api/v1/projects/' + id + '/bom'),
+  addBomItem: (id, body) => req('/engine/api/v1/projects/' + id + '/bom', { method: 'POST', body: JSON.stringify(body) }),
+  updateBomItem: (id, itemId, body) => req('/engine/api/v1/projects/' + id + '/bom/' + itemId, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteBomItem: (id, itemId) => req('/engine/api/v1/projects/' + id + '/bom/' + itemId, { method: 'DELETE' }),
   // ---- inventory (spools) ----
   spoolsInv: () => req('/engine/api/v1/inventory/spools'),
   spoolLocations: () => req('/engine/api/v1/inventory/locations'),
