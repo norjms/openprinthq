@@ -3,6 +3,7 @@
   import { api } from '$lib/api';
   import NotificationSettings from '$lib/components/NotificationSettings.svelte';
   import ObicoSettings from '$lib/components/ObicoSettings.svelte';
+  import ApiKeys from '$lib/components/ApiKeys.svelte';
 
   let me = $state(null);
   let inst = $state(null);
@@ -277,9 +278,11 @@ scrape_configs:
   {/if}
 </div>
 
+<ApiKeys />
+
 <div class="card card-pad more">
   <span class="eyebrow">Coming soon</span>
-  <p class="muted">Instance controls (restart, backup/restore), notification channels, API keys &amp; webhooks, and SSO session management.</p>
+  <p class="muted">Instance controls (restart, backup/restore) and SSO session management.</p>
 </div>
 
 {#if err}<p class="err">{err}</p>{/if}

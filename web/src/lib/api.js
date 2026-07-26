@@ -87,6 +87,11 @@ export const api = {
   archiveSpool: (id) => req('/engine/api/v1/inventory/spools/' + id + '/archive', { method: 'POST' }),
   // ---- cloud (Bambu / OrcaSlicer cloud presets) ----
   cloudStatus: () => req('/engine/api/v1/cloud/status'),
+  // ---- API keys (#15): scoped keys for the /webhook/* automation endpoints ----
+  apiKeys: () => req('/engine/api/v1/api-keys/'),
+  createApiKey: (body) => req('/engine/api/v1/api-keys/', { method: 'POST', body: JSON.stringify(body) }),
+  updateApiKey: (id, body) => req('/engine/api/v1/api-keys/' + id, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteApiKey: (id) => req('/engine/api/v1/api-keys/' + id, { method: 'DELETE' }),
   // ---- integrations (Home Assistant / Homepage / Prometheus) ----
   integrationToken: () => req('/integration-token'),
   regenIntegrationToken: () => req('/integration-token/regenerate', { method: 'POST' }),
