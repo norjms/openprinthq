@@ -82,6 +82,8 @@ export const api = {
   spoolsInv: () => req('/engine/api/v1/inventory/spools'),
   spoolLocations: () => req('/engine/api/v1/inventory/locations'),
   addSpool: (body) => req('/engine/api/v1/inventory/spools', { method: 'POST', body: JSON.stringify(body) }),
+  addSpoolsBulk: (spool, quantity) => req('/engine/api/v1/inventory/spools/bulk', { method: 'POST', body: JSON.stringify({ spool, quantity }) }),
+  updateSpool: (id, body) => req('/engine/api/v1/inventory/spools/' + id, { method: 'PATCH', body: JSON.stringify(body) }),
   archiveSpool: (id) => req('/engine/api/v1/inventory/spools/' + id + '/archive', { method: 'POST' }),
   // ---- cloud (Bambu / OrcaSlicer cloud presets) ----
   cloudStatus: () => req('/engine/api/v1/cloud/status'),
