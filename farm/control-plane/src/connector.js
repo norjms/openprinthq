@@ -26,7 +26,9 @@ const relays = new Map();
 // when a printer is routed "via connector". A stable, per-printer relay port
 // keeps the engine's stored address valid across control-plane restarts.
 export const RELAY_HOST = process.env.OPHQ_RELAY_HOST || 'openprinthq-control-plane-1';
-export function relayPortForPrinter(printerId) { return 39000 + Number(printerId); }
+// Stable relay port per (printer, endpoint index) — up to 10 endpoints/printer.
+export function relayPort(printerId, idx = 0) { return 39000 + Number(printerId) * 10 + Number(idx); }
+export function relayPortForPrinter(printerId) { return relayPort(printerId, 0); }
 
 // Mutual auth: if a connector has registered its own public key, it must prove
 // possession of the matching private key on every stream-connect by signing

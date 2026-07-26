@@ -141,13 +141,19 @@ See `.env.example` for every option (`OPHQ_ALLOW`, `OPHQ_ALLOW_PORTS`, …).
   live Moonraker request round-tripped over a raw TCP stream.
 - **Per-printer routing** — each printer can be set to *Direct* or *via a
   connector* in Settings → Connectors (stored as `printer_automation.connector_id`).
-- **Auto-activation** — setting a **Klipper** printer "via connector" now takes
-  effect automatically: the control-plane opens a stable local relay
-  (`RELAY_HOST:39000+printerId`) that tunnels to the printer through the agent,
-  saves the printer's real address, and repoints its engine connection at the
-  relay (the engine disconnects + reconnects through the tunnel). Setting it back
-  to *Direct* restores the saved address and drops the relay; relays are re-opened
-  on control-plane restart. Verified live: a Voron was rerouted through the tunnel
-  and stayed connected, then reverted cleanly.
-- **Next:** Bambu auto-activation (it uses several ports — MQTT/FTP/camera — so
-  needs a relay per endpoint rather than the single Moonraker port Klipper uses).
+- **Auto-activation (vendor-agnostic, multi-port)** — setting a printer "via
+  connector" takes effect automatically. A **connection-profile registry**
+  (`routing.js`) describes each printer type's endpoints; the control-plane opens
+  one stable relay per endpoint (`RELAY_HOST:39000 + printerId*10 + i`), saves the
+  real address, and repoints the engine. Any port a printer uses is served by a
+  single relay host because the engine reads a per-role **`endpoint_overrides`**
+  map (`{role: 'host:port'}`) — so `ip_address` stays the relay host and each
+  service picks up its own relay port. Setting it back to *Direct* restores the
+  address and drops the relays; relays re-open on control-plane restart.
+  - **Klipper** — single Moonraker endpoint. Verified live (rerouted + reverted).
+  - **Bambu** — MQTT (8883) + FTP (990) endpoints. **Verified live:** an H2C was
+    rerouted through the tunnel (two relays stood up) and stayed connected, then
+    reverted cleanly. (Engine consumes the MQTT override today; FTP + camera
+    override consumption are the next endpoints.)
+  - **Other vendors** — add a profile entry + teach that vendor's engine client
+    to honour `endpoint_overrides`; the relay/activation layer is unchanged.
