@@ -111,8 +111,15 @@ See `.env.example` for every option (`OPHQ_ALLOW`, `OPHQ_ALLOW_PORTS`, …).
 
 ## Status / roadmap
 
-- **Now:** HTTP(S) proxying — fully covers Klipper/Moonraker printers and
-  HTTP/MJPEG cameras, plus TCP reachability probes.
-- **Next:** raw TCP stream tunneling for Bambu (MQTT 8883 / FTP 990) and
-  per-printer "reach via connector" selection in the printer settings. The
-  control-plane exposes `proxyViaConnector()` which those code paths will call.
+- **HTTP(S) proxying** — covers Klipper/Moonraker printers and HTTP/MJPEG
+  cameras. (`proxyViaConnector()`.)
+- **Raw TCP tunnelling** — multiplexed bidirectional byte streams carry *any*
+  TCP protocol through the connector, including Bambu MQTT (8883) and FTP (990).
+  (`openTcpStream()`; agent `tcp-open`/`tcp-data`/`tcp-close`.) Verified with a
+  live Moonraker request round-tripped over a raw TCP stream.
+- **Per-printer routing** — each printer can be set to *Direct* or *via a
+  connector* in Settings → Connectors (stored as `printer_automation.connector_id`).
+- **Next:** auto-activation — when a printer is set "via connector", have the
+  control-plane stand up a persistent local relay and point that printer's
+  engine connection at it (opt-in, so existing local printers are never
+  silently rerouted).

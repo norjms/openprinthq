@@ -8,12 +8,21 @@
 // server.js via registerConnectorRoutes(app). It has no extra dependencies —
 // SSE is written straight to the raw Node response after reply.hijack().
 import crypto from 'node:crypto';
+import { EventEmitter } from 'node:events';
 import { getConnectorByToken, touchConnector } from './db.js';
 
 // connectorId -> { raw, userId, name, lastSeen, heartbeat }
 const streams = new Map();
-// jobId -> { resolve, timer }
+// jobId -> { resolve, timer }   (one-shot HTTP proxy jobs)
 const pending = new Map();
+// streamId -> { userId, connectorId, emitter }   (long-lived raw TCP tunnels)
+const tcpStreams = new Map();
+
+function connectorFor(userId) {
+  for (const s of streams.values()) if (s.userId === userId) return s;
+  return null;
+}
+function writeToConnector(target, obj) { target.raw.write(`data: ${JSON.stringify(obj)}\n\n`); }
 
 function bearer(req) {
   const h = req.headers['authorization'] || '';
@@ -35,6 +44,32 @@ export function proxyViaConnector(userId, job, timeoutMs = 22000) {
     try { target.raw.write(`data: ${payload}\n\n`); }
     catch { clearTimeout(timer); pending.delete(id); resolve({ status: 502, error: 'connector write failed' }); }
   });
+}
+
+// Open a raw bidirectional TCP tunnel to host:port through the user's
+// connector. Returns an EventEmitter that emits 'open', 'data' (Buffer),
+// 'close' (error?), and exposes .write(buf) and .close(). Carries any TCP
+// protocol (Bambu MQTT 8883, FTP 990, …), not just HTTP.
+export function openTcpStream(userId, host, port) {
+  const target = connectorFor(userId);
+  const em = new EventEmitter();
+  if (!target) { queueMicrotask(() => em.emit('close', 'no connector online')); return em; }
+  const id = crypto.randomUUID();
+  tcpStreams.set(id, { userId, connectorId: target.connectorId, emitter: em });
+  em.write = (buf) => {
+    const s = connectorFor(userId);
+    if (!s) return false;
+    try { writeToConnector(s, { id, kind: 'tcp-data', data: Buffer.from(buf).toString('base64') }); return true; }
+    catch { return false; }
+  };
+  em.close = () => {
+    const s = connectorFor(userId);
+    if (s) try { writeToConnector(s, { id, kind: 'tcp-close' }); } catch { /* */ }
+    tcpStreams.delete(id);
+  };
+  try { writeToConnector(target, { id, kind: 'tcp-open', host, port }); }
+  catch { tcpStreams.delete(id); queueMicrotask(() => em.emit('close', 'connector write failed')); }
+  return em;
 }
 
 export function connectorOnline(userId) {
@@ -60,24 +95,39 @@ export function registerConnectorRoutes(app) {
     raw.write(': connected\n\n');
     const name = (req.query?.name || conn.name || 'connector').toString();
     const heartbeat = setInterval(() => { try { raw.write(': ping\n\n'); } catch { /* closed */ } }, 20000);
-    streams.set(conn.id, { raw, userId: conn.user_id, name, lastSeen: Date.now(), heartbeat });
+    streams.set(conn.id, { raw, userId: conn.user_id, connectorId: conn.id, name, lastSeen: Date.now(), heartbeat });
     touchConnector(conn.id).catch(() => {});
     const cleanup = () => {
       clearInterval(heartbeat);
       const s = streams.get(conn.id);
       if (s && s.raw === raw) streams.delete(conn.id);
+      // Tear down any TCP tunnels that belonged to this connector.
+      for (const [sid, t] of tcpStreams) if (t.connectorId === conn.id) { t.emitter.emit('close', 'connector disconnected'); tcpStreams.delete(sid); }
     };
     raw.on('close', cleanup);
     raw.on('error', cleanup);
   });
 
-  // Agent → cloud: the result of a job it performed on the LAN.
+  // Agent → cloud: the result of a job it performed on the LAN. Handles both
+  // one-shot HTTP jobs (resolve a pending promise) and raw-TCP stream events.
   app.post('/api/connector/result', async (req, reply) => {
     const conn = await getConnectorByToken(bearer(req));
     if (!conn) return reply.code(401).send({ error: 'invalid connector token' });
-    const { id } = req.body || {};
+    const body = req.body || {};
+    const { id, event } = body;
+    touchConnector(conn.id).catch(() => {});
+    if (event) {
+      // Raw TCP tunnel event.
+      const t = id && tcpStreams.get(id);
+      if (t) {
+        if (event === 'open') t.emitter.emit('open');
+        else if (event === 'data') t.emitter.emit('data', Buffer.from(body.data || '', 'base64'));
+        else if (event === 'close') { t.emitter.emit('close', body.error || null); tcpStreams.delete(id); }
+      }
+      return { ok: true };
+    }
     const p = id && pending.get(id);
-    if (p) { clearTimeout(p.timer); pending.delete(id); p.resolve(req.body); touchConnector(conn.id).catch(() => {}); }
+    if (p) { clearTimeout(p.timer); pending.delete(id); p.resolve(body); }
     return { ok: true };
   });
 }

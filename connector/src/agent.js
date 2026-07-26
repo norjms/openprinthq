@@ -107,17 +107,42 @@ async function runTcpProbe(job) {
   });
 }
 
-async function handleJob(job) {
-  let result;
-  if (job.kind === 'tcp-probe') result = await runTcpProbe(job);
-  else result = await runHttpJob(job);
+async function post(body) {
   try {
     await fetch(`${CONFIG.controlUrl}/api/connector/result`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${CONFIG.token}` },
-      body: JSON.stringify({ id: job.id, ...result })
+      body: JSON.stringify(body)
     });
-  } catch (e) { log('failed to post result for job', job.id, e?.message); }
+  } catch (e) { log('post failed', body?.id, e?.message); }
+}
+
+// ---- raw TCP tunnelling --------------------------------------------------
+// Multiplexed byte streams keyed by stream id. Cloud→agent bytes arrive as
+// `tcp-data` SSE events; agent→cloud bytes are POSTed as {event:'data'}. This
+// carries any TCP protocol — Bambu MQTT (8883), FTP (990), etc.
+const sockets = new Map();   // streamId -> net.Socket
+
+function openTcp(job) {
+  const { id, host, port } = job;
+  if (!hostAllowed(host) || !portAllowed(port)) { post({ id, event: 'close', error: 'not allowed' }); return; }
+  const sock = net.connect({ host, port });
+  sockets.set(id, sock);
+  sock.on('connect', () => post({ id, event: 'open' }));
+  sock.on('data', (chunk) => post({ id, event: 'data', data: chunk.toString('base64') }));
+  sock.on('error', (e) => { post({ id, event: 'close', error: e.message }); sockets.delete(id); });
+  sock.on('close', () => { post({ id, event: 'close' }); sockets.delete(id); });
+  sock.setTimeout(0);
+}
+function dataTcp(job) { const s = sockets.get(job.id); if (s && job.data) s.write(Buffer.from(job.data, 'base64')); }
+function closeTcp(job) { const s = sockets.get(job.id); if (s) { s.end(); sockets.delete(job.id); } }
+
+async function handleJob(job) {
+  if (job.kind === 'tcp-open') return openTcp(job);
+  if (job.kind === 'tcp-data') return dataTcp(job);
+  if (job.kind === 'tcp-close') return closeTcp(job);
+  const result = (job.kind === 'tcp-probe') ? await runTcpProbe(job) : await runHttpJob(job);
+  await post({ id: job.id, ...result });
 }
 
 // ---- SSE stream consumer -------------------------------------------------
