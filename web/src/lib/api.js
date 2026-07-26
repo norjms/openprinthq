@@ -42,6 +42,9 @@ async function req(path, opts = {}) {
 export const api = {
   health: () => req('/health'),
   me: () => req('/me'),
+  // Per-user Look & Feel (theme mode, colour overrides, text scale, a11y, branding).
+  appearance: () => req('/appearance'),
+  saveAppearance: (config) => req('/appearance', { method: 'PUT', body: JSON.stringify(config) }),
   myInstance: () => req('/instance'),
   provision: () => req('/instance/provision', { method: 'POST' }),
   stats: () => req('/instance/stats'),

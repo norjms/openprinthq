@@ -140,7 +140,32 @@ export async function migrate() {
     );
   `);
 
+  // Per-user appearance (Settings -> Look & Feel): theme mode, colour overrides,
+  // text scale, accessibility toggles, and branding (site name, tagline, logo /
+  // favicon data-URIs). A single JSON blob per user keeps it schema-light and
+  // isolated - one user's theme never touches another's.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS appearance (
+      user_id    INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      config     JSONB NOT NULL DEFAULT '{}'::jsonb,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+
   await seedSlicerCompat();
+}
+
+// ---- appearance (Look & Feel) -------------------------------------------
+export async function getAppearance(userId) {
+  const { rows } = await pool.query('SELECT config FROM appearance WHERE user_id = $1', [userId]);
+  return rows[0]?.config || null;
+}
+export async function setAppearance(userId, config) {
+  await pool.query(
+    `INSERT INTO appearance (user_id, config) VALUES ($1, $2)
+     ON CONFLICT (user_id) DO UPDATE SET config = EXCLUDED.config, updated_at = now()`,
+    [userId, config]);
+  return config;
 }
 
 // ---- integration tokens -------------------------------------------------

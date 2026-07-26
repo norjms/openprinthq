@@ -1,14 +1,43 @@
 <!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="light">
   <head>
     <meta charset="utf-8" />
-    <link rel="icon" href="%sveltekit.assets%/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="%sveltekit.assets%/favicon.svg" type="image/svg+xml" id="ophq-favicon" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#0d1117" />
+    <meta name="theme-color" content="#999999" />
     <meta name="description" content="OpenPrintHQ — one command center for every 3D printer. Bambu Lab, Creality, Prusa, Snapmaker and Voron in one private, self-hostable HQ. Open source, AGPL-3.0." />
     <meta property="og:title" content="OpenPrintHQ — One HQ for every printer" />
     <meta property="og:description" content="Multi-brand 3D print farm management. Your printers, your data, your rules." />
     <meta property="og:type" content="website" />
+    <script>
+      /* No-FOUC appearance bootstrap. Reads the `ophq_appearance` cookie (a small
+         JSON cache of the user's saved Look & Feel settings) and applies theme,
+         custom colour overrides, text scale, and accessibility attributes to
+         <html> synchronously, before the first paint. The app re-applies from the
+         server on load and refreshes this cookie. Fails safe to the default theme. */
+      (function () {
+        try {
+          var m = document.cookie.match(/(?:^|;\s*)ophq_appearance=([^;]+)/);
+          if (!m) return;
+          var cfg = JSON.parse(decodeURIComponent(m[1]));
+          var el = document.documentElement;
+          if (cfg.mode) el.setAttribute('data-theme', cfg.mode);
+          var ov = cfg.overrides || {};
+          for (var k in ov) { if (ov.hasOwnProperty(k)) el.style.setProperty(k, ov[k]); }
+          if (cfg.textScale) el.style.setProperty('--ophq-text-scale', cfg.textScale);
+          var a = cfg.a11y || {};
+          if (a.underline) el.setAttribute('data-a11y-underline', 'on');
+          if (a.focus) el.setAttribute('data-a11y-focus', 'strong');
+          if (a.targets) el.setAttribute('data-a11y-targets', 'large');
+          if (a.font) el.setAttribute('data-a11y-font', 'legible');
+          if (a.motion) el.setAttribute('data-a11y-motion', 'reduce');
+          if (cfg.favicon) {
+            var f = document.getElementById('ophq-favicon');
+            if (f) { f.setAttribute('href', cfg.favicon); f.removeAttribute('type'); }
+          }
+        } catch (e) { /* fail safe: keep default theme */ }
+      })();
+    </script>
     %sveltekit.head%
   </head>
   <body data-sveltekit-preload-data="hover">

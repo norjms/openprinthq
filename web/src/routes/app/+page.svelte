@@ -1,6 +1,8 @@
 <script>
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
+  import PageTitle from '$lib/components/PageTitle.svelte';
+  import { branding } from '$lib/stores/appearance';
 
   let loading = $state(true);
   let instance = $state(null);
@@ -46,12 +48,12 @@
   }
 </script>
 
-<svelte:head><title>Overview · OpenPrintHQ</title></svelte:head>
+<PageTitle page="Overview" />
 
 <div class="head">
   <div>
     <h1>Overview</h1>
-    <p class="muted">Your OpenPrintHQ command center.</p>
+    <p class="muted">Your {$branding.siteName} command center.</p>
   </div>
   <a href="/app/printers" class="btn btn-primary btn-sm">+ Add printer</a>
 </div>

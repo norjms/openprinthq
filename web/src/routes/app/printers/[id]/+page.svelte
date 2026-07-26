@@ -16,6 +16,7 @@
   import KlipperTuning from '$lib/components/KlipperTuning.svelte';
   import GcodeConsole from '$lib/components/GcodeConsole.svelte';
   import EjectPanel from '$lib/components/EjectPanel.svelte';
+  import PageTitle from '$lib/components/PageTitle.svelte';
 
   const id = $derived($page.params.id);
 
@@ -317,7 +318,7 @@
   }
 </script>
 
-<svelte:head><title>{st?.name || meta?.name || 'Printer'} · OpenPrintHQ</title></svelte:head>
+<PageTitle page={st?.name || meta?.name || 'Printer'} />
 
 <div class="head">
   <a href="/app/printers" class="btn btn-ghost btn-sm">← Printers</a>

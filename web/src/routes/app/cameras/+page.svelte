@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
+  import PageTitle from '$lib/components/PageTitle.svelte';
 
   let loading = $state(true);
   let error = $state(null);
@@ -45,7 +46,7 @@
   const anyCams = $derived(printers.some((p) => p.connected && !camErr[p.id]));
 </script>
 
-<svelte:head><title>Cameras · OpenPrintHQ</title></svelte:head>
+<PageTitle page="Cameras" />
 <svelte:window onkeydown={(e) => { if (e.key === 'Escape') zoomId = null; }} />
 
 <div class="head">

@@ -1,6 +1,7 @@
 <script>
   import Header from '$lib/components/Header.svelte';
   import Footer from '$lib/components/Footer.svelte';
+  import { branding } from '$lib/stores/appearance';
 
   const printers = [
     { name: 'Bambu Lab', models: 'X1 · P1 · A1 · H2D', note: 'AMS, HMS, LAN & cloud' },
@@ -26,7 +27,7 @@
   ];
 </script>
 
-<svelte:head><title>OpenPrintHQ — One HQ for every printer</title></svelte:head>
+<svelte:head><title>{$branding.siteName} — One HQ for every printer</title></svelte:head>
 
 <Header />
 
@@ -36,7 +37,7 @@
     <span class="chip primary">Open source · AGPL-3.0 · Self-hostable</span>
     <h1>One command center for<br /><span class="grad">every 3D printer.</span></h1>
     <p class="lead">
-      OpenPrintHQ brings Bambu Lab, Creality, Prusa, Snapmaker and Voron into a single private HQ —
+      {$branding.siteName} brings Bambu Lab, Creality, Prusa, Snapmaker and Voron into a single private HQ —
       queue, slice, monitor and manage your whole farm from one place. Every user gets their own isolated instance.
     </p>
     <div class="cta">

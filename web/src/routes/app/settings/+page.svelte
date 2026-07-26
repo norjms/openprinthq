@@ -5,6 +5,10 @@
   import ObicoSettings from '$lib/components/ObicoSettings.svelte';
   import ApiKeys from '$lib/components/ApiKeys.svelte';
   import Connectors from '$lib/components/Connectors.svelte';
+  import LookAndFeel from '$lib/components/LookAndFeel.svelte';
+
+  // Top-level settings tab (General account/instance settings vs Look & Feel).
+  let tab = $state('general');
 
   let me = $state(null);
   let inst = $state(null);
@@ -156,11 +160,19 @@ scrape_configs:
   }
 </script>
 
-<svelte:head><title>Settings · OpenPrintHQ</title></svelte:head>
+<PageTitle page="Settings" />
 
 <h1>Settings</h1>
 <p class="muted lead">Your account and instance.</p>
 
+<div class="pagetabs" role="tablist" aria-label="Settings sections">
+  <button role="tab" aria-selected={tab === 'general'} class:on={tab === 'general'} onclick={() => (tab = 'general')}>General</button>
+  <button role="tab" aria-selected={tab === 'look'} class:on={tab === 'look'} onclick={() => (tab = 'look')}>Look &amp; Feel</button>
+</div>
+
+{#if tab === 'look'}
+  <LookAndFeel />
+{:else}
 <div class="grid two">
   <div class="card card-pad">
     <span class="eyebrow">Account</span>
@@ -289,9 +301,14 @@ scrape_configs:
 </div>
 
 {#if err}<p class="err">{err}</p>{/if}
+{/if}
 
 <style>
   .lead { margin: 0.3rem 0 1.4rem; }
+  .pagetabs { display: flex; gap: 0.4rem; margin: 0 0 1.4rem; border-bottom: 1px solid var(--ophq-border-soft); }
+  .pagetabs button { background: transparent; border: 0; border-bottom: 2px solid transparent; color: var(--ophq-text-2); padding: 0.5rem 0.9rem; font-size: 0.95rem; font-weight: 600; cursor: pointer; margin-bottom: -1px; }
+  .pagetabs button.on { color: var(--ophq-text); border-bottom-color: var(--ophq-primary); }
+  .pagetabs button:hover { color: var(--ophq-text); }
   .two { grid-template-columns: 1fr 1fr; }
   .kv { display: grid; gap: 0.5rem; margin: 0.8rem 0 1rem; font-size: 0.9rem; }
   .kv > div { display: flex; gap: 1rem; align-items: center; color: var(--ophq-text-2); }
