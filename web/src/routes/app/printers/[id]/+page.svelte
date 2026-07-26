@@ -12,6 +12,7 @@
   import PowerPanel from '$lib/components/PowerPanel.svelte';
   import ControlPanel from '$lib/components/ControlPanel.svelte';
   import AmsPanel from '$lib/components/AmsPanel.svelte';
+  import MaintenancePanel from '$lib/components/MaintenancePanel.svelte';
 
   const id = $derived($page.params.id);
 
@@ -457,6 +458,8 @@
   {/if}
 
   <PowerPanel printerId={id} />
+
+  <MaintenancePanel printerId={id} />
 
   {#if camAvailable}
     <div class="card card-pad cover">
