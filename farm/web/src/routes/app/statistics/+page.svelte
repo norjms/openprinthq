@@ -8,17 +8,34 @@
   let printerNames = $state({});
   let recent = $state([]);
   let fa = $state(null);        // failure analysis
+  let cur = $state('USD');      // currency from engine settings
+  let failedCost = $state(null); // computed cost of failed prints
+
+  const CUR_SYM = { USD: '$', EUR: '€', GBP: '£', CAD: '$', AUD: '$', JPY: '¥', CHF: 'CHF ', SEK: 'kr ', NOK: 'kr ', DKK: 'kr ', PLN: 'zł ', INR: '₹', CNY: '¥', NZD: '$', ZAR: 'R ', BRL: 'R$ ', MXN: '$' };
+  const sym = $derived(CUR_SYM[cur] || (cur + ' '));
+  const money = (v) => sym + (Number(v) || 0).toFixed(2);
 
   async function load() {
     loading = true; error = null;
     try {
       s = await api.printStats();
+      const eng = await api.engineSettings().catch(() => null);
+      if (eng?.currency) cur = eng.currency;
       const pl = await api.printers().catch(() => []);
       const arr = Array.isArray(pl) ? pl : (pl?.printers || pl?.items || []);
       printerNames = Object.fromEntries(arr.map((p) => [String(p.id), p.name || p.model || ('Printer ' + p.id)]));
       fa = await api.failureAnalysis(30).catch(() => null);
-      const log = await api.printLog(25).catch(() => null);
+      const log = await api.printLog(200).catch(() => null);
       const entries = (log && log.items) || (Array.isArray(log) ? log : []);
+      // Cost of failed prints = their actual filament + energy usage, valued at
+      // the fleet's average cost/gram and energy rate (per-print cost isn't stored).
+      const failed = entries.filter((e) => /fail/i.test(String(e.status || '')));
+      const costPerG = s.total_filament_grams > 0 ? (s.total_cost || 0) / s.total_filament_grams : 0;
+      const kwhPerHr = s.total_print_time_hours > 0 ? (s.total_energy_kwh || 0) / s.total_print_time_hours : 0;
+      const rate = s.total_energy_kwh > 0 ? (s.total_energy_cost || 0) / s.total_energy_kwh : 0;
+      const fGrams = failed.reduce((a, e) => a + (Number(e.filament_used_grams) || 0), 0);
+      const fHours = failed.reduce((a, e) => a + (Number(e.duration_seconds) || 0), 0) / 3600;
+      failedCost = failed.length ? (fGrams * costPerG) + (fHours * kwhPerHr * rate) : 0;
       recent = entries.map((e) => ({
         id: e.id,
         name: e.print_name || 'Print',
@@ -57,12 +74,13 @@
   const tiles = $derived(s ? [
     { label: 'Total prints', value: s.total_prints ?? 0 },
     { label: 'Success rate', value: successRate == null ? '—' : successRate + '%', ok: true },
-    { label: 'Failed', value: s.failed_prints ?? 0 },
+    { label: 'Failed', value: s.failed_prints ?? 0, danger: (s.failed_prints ?? 0) > 0,
+      sub: (s.failed_prints ?? 0) > 0 && failedCost != null ? money(failedCost) + ' lost' : null },
     { label: 'Print time', value: (s.total_print_time_hours ?? 0).toFixed(1) + ' h' },
     { label: 'Filament used', value: ((s.total_filament_grams ?? 0) / 1000).toFixed(2) + ' kg' },
-    { label: 'Cost', value: '$' + (s.total_cost ?? 0).toFixed(2) },
+    { label: 'Cost', value: money(s.total_cost ?? 0) },
     { label: 'Energy', value: (s.total_energy_kwh ?? 0).toFixed(1) + ' kWh' },
-    { label: 'Energy cost', value: '$' + (s.total_energy_cost ?? 0).toFixed(2) }
+    { label: 'Energy cost', value: money(s.total_energy_cost ?? 0) }
   ] : []);
   const faReasons = $derived(fa?.failures_by_reason ? Object.entries(fa.failures_by_reason).sort((a, b) => b[1] - a[1]) : []);
   const faPrinters = $derived(fa?.failures_by_printer ? Object.entries(fa.failures_by_printer).sort((a, b) => b[1] - a[1]) : []);
@@ -89,7 +107,11 @@
 {:else}
   <div class="tiles">
     {#each tiles as t}
-      <div class="card card-pad tile"><span class="muted">{t.label}</span><b class:ok={t.ok}>{t.value}</b></div>
+      <div class="card card-pad tile">
+        <span class="muted">{t.label}</span>
+        <b class:ok={t.ok} class:danger={t.danger}>{t.value}</b>
+        {#if t.sub}<span class="sub mono">{t.sub}</span>{/if}
+      </div>
     {/each}
   </div>
   {#if s.total_prints === 0}
@@ -168,6 +190,8 @@
   .tile { display: flex; flex-direction: column; gap: 0.3rem; }
   .tile b { font-size: 1.7rem; font-family: var(--font-mono); }
   .tile b.ok { color: var(--ophq-success); }
+  .tile b.danger { color: var(--ophq-danger); }
+  .tile .sub { font-size: 0.8rem; color: var(--ophq-danger); margin-top: 0.1rem; }
   .note { margin-top: 1.2rem; }
   .two { grid-template-columns: 1fr 1fr; margin-top: 1.2rem; }
   .three { grid-template-columns: repeat(3, 1fr); gap: 1.2rem; margin: 0.8rem 0; }

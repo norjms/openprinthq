@@ -9,6 +9,10 @@
   let busyId = $state(null);
   let toast = $state(null);
   let confirmArch = $state(null);
+  let cur = $state('USD');
+  const CUR_SYM = { USD: '$', EUR: '€', GBP: '£', CAD: '$', AUD: '$', NZD: '$', JPY: '¥', CNY: '¥', CHF: 'CHF ', SEK: 'kr ', NOK: 'kr ', DKK: 'kr ', PLN: 'zł ', INR: '₹', ZAR: 'R ', BRL: 'R$ ', MXN: '$' };
+  const sym = $derived(CUR_SYM[cur] || (cur + ' '));
+  const money = (v) => sym + (Number(v) || 0).toFixed(2);
 
   function norm(d) {
     const arr = Array.isArray(d) ? d : (d?.spools || d?.items || d?.results || []);
@@ -41,7 +45,11 @@
   }
   async function load() {
     loading = true; error = null;
-    try { spools = norm(await api.spools()); }
+    try {
+      const eng = await api.engineSettings().catch(() => null);
+      if (eng?.currency) cur = eng.currency;
+      spools = norm(await api.spools());
+    }
     catch (e) { error = e.status === 409 ? 'no-instance' : (e.message || 'engine unreachable'); }
     finally { loading = false; }
   }
@@ -92,7 +100,7 @@
   <div class="sumrow">
     <div class="card card-pad st"><span class="muted">Spools</span><b>{summary.count}</b></div>
     <div class="card card-pad st"><span class="muted">Remaining</span><b>{summary.kg.toFixed(2)} kg</b></div>
-    {#if summary.value != null}<div class="card card-pad st"><span class="muted">Stock value</span><b>${summary.value.toFixed(2)}</b></div>{/if}
+    {#if summary.value != null}<div class="card card-pad st"><span class="muted">Stock value</span><b>{money(summary.value)}</b></div>{/if}
   </div>
   <div class="grid spools">
     {#each spools as s}
@@ -106,10 +114,10 @@
         </div>
         {#if pct(s) != null}
           <div class="bar"><div class="fill" style="width:{pct(s)}%"></div></div>
-          <div class="muted mono rem">{s.remaining} g left · {pct(s)}%{#if s.value != null} · ${s.value.toFixed(2)}{/if}</div>
+          <div class="muted mono rem">{s.remaining} g left · {pct(s)}%{#if s.value != null} · {money(s.value)}{/if}</div>
         {/if}
         <div class="sfoot">
-          <span class="muted mono tiny">{s.brand}{#if s.location} · {s.location}{/if}{#if s.costPerKg != null} · ${s.costPerKg}/kg{/if}</span>
+          <span class="muted mono tiny">{s.brand}{#if s.location} · {s.location}{/if}{#if s.costPerKg != null} · {sym}{s.costPerKg}/kg{/if}</span>
           {#if confirmArch === s.id}
             <span class="flex gap center"><button class="btn btn-danger btn-xs" onclick={() => archive(s)} disabled={busyId === s.id}>Confirm</button><button class="btn btn-ghost btn-xs" onclick={() => (confirmArch = null)}>✕</button></span>
           {:else}
