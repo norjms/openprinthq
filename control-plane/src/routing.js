@@ -1,17 +1,24 @@
-// OpenPrintHQ control-plane — connector auto-activation (routing)
+// OpenPrintHQ control-plane — connector auto-activation (vendor-agnostic routing)
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 // Copied to control-plane/src/routing.js. When a printer is set "via connector"
-// this module stands up a stable local TCP relay (openTcpRelay) that tunnels to
-// the printer through the connector, and repoints that printer's engine
-// connection at the relay. Setting it back to "Direct" restores the saved real
-// address and tears the relay down. Only single-endpoint Klipper/Moonraker
-// printers are auto-activated today (Bambu uses several ports — a follow-up).
+// this module stands up one stable local TCP relay per endpoint the printer's
+// vendor needs, tunnels each through the connector, and repoints the engine at
+// the relays. Setting it back to "Direct" restores the real address and drops
+// the relays.
+//
+// Vendor-agnostic: each printer type is described by a CONNECTION PROFILE below
+// (the endpoints it exposes + how to write/restore the engine's address fields).
+// Adding a vendor = add a profile entry, and — if it introduces a new address
+// field — teach the engine to honour `endpoint_overrides` for that role. The
+// engine keeps `ip_address` as the (relay) host and reads a per-role PORT from
+// `endpoint_overrides`, so a single relay host serves every port a printer uses.
 import { getInstanceForUser, getAutomation, setRouteDirect, listActiveRoutes } from './db.js';
-import { openTcpRelay, closeRelay, connectorOnline, RELAY_HOST, relayPortForPrinter } from './connector.js';
+import { openTcpRelay, closeRelay, connectorOnline, RELAY_HOST, relayPort } from './connector.js';
 
 const ENGINE_PORT = 8000;
 const engineBase = (inst) => (inst && inst.subdomain ? `http://ophq-${inst.subdomain}:${ENGINE_PORT}` : null);
+const MAX_ENDPOINTS = 8;   // relay-port slots reserved per printer
 
 async function eng(base, path, opts = {}) {
   const headers = { accept: 'application/json' };
@@ -22,7 +29,32 @@ async function eng(base, path, opts = {}) {
   return ct.includes('application/json') ? res.json() : res.text();
 }
 
-// Enable "via connector" for a printer. Returns { ok, reason?, relayPort? }.
+// ---- vendor connection profiles -----------------------------------------
+// endpoints: the printer ports that must be reachable, in a stable order.
+// apply(ports): the engine PATCH that points the printer at the relays
+//   (ports maps role -> allocated relay port).
+// restore(direct): the engine PATCH that puts it back on its real address.
+const PROFILES = {
+  klipper: (p) => ({
+    endpoints: [{ role: 'moonraker', port: Number(p.moonraker_port) || 7125 }],
+    apply: (ports) => ({ ip_address: RELAY_HOST, moonraker_port: ports.moonraker, endpoint_overrides: { moonraker: `${RELAY_HOST}:${ports.moonraker}` } }),
+    restore: (d) => ({ ip_address: d.host, moonraker_port: Number(d.port) || 7125, endpoint_overrides: null })
+  }),
+  bambu: () => ({
+    // MQTT (status/control) + FTP (file upload). Camera is a follow-on endpoint.
+    endpoints: [{ role: 'mqtt', port: 8883 }, { role: 'ftp', port: 990 }],
+    apply: (ports) => ({ ip_address: RELAY_HOST, endpoint_overrides: { mqtt: `${RELAY_HOST}:${ports.mqtt}`, ftp: `${RELAY_HOST}:${ports.ftp}` } }),
+    restore: (d) => ({ ip_address: d.host, endpoint_overrides: null })
+  })
+};
+function profileFor(printer) {
+  const key = (printer.connection_type || '').toLowerCase();
+  const fn = PROFILES[key];
+  return fn ? { key, ...fn(printer) } : null;
+}
+export function supportedVendors() { return Object.keys(PROFILES); }
+
+// Enable "via connector" for a printer. Returns { ok, reason?, endpoints? }.
 export async function activateRoute(userId, printerId) {
   const inst = await getInstanceForUser(userId);
   const base = engineBase(inst);
@@ -32,13 +64,12 @@ export async function activateRoute(userId, printerId) {
   let printer;
   try { printer = await eng(base, `/api/v1/printers/${printerId}`); }
   catch { return { ok: false, reason: 'printer not found' }; }
-  if ((printer.connection_type || '').toLowerCase() !== 'klipper') {
-    return { ok: false, reason: 'auto-activation currently supports Klipper printers only' };
-  }
+  const prof = profileFor(printer);
+  if (!prof) return { ok: false, reason: `auto-activation not supported for ${printer.connection_type || 'this'} printers yet` };
 
-  const relayPort = relayPortForPrinter(printerId);
-  // Capture the real address the first time (don't save the relay host as "direct").
-  let directHost = printer.ip_address, directPort = printer.moonraker_port || 7125;
+  // Capture the real host once (don't save the relay host as "direct").
+  let directHost = printer.ip_address;
+  let directPort = Number(printer.moonraker_port) || null;
   if (directHost === RELAY_HOST) {
     const auto = (await getAutomation(userId))[printerId] || {};
     directHost = auto.direct_host; directPort = auto.direct_port;
@@ -47,38 +78,48 @@ export async function activateRoute(userId, printerId) {
     await setRouteDirect(userId, printerId, directHost, directPort);
   }
 
-  openTcpRelay(userId, directHost, directPort, relayPort);
-  // Repoint the engine at the relay (this disconnects+reconnects the printer).
-  await eng(base, `/api/v1/printers/${printerId}`, {
-    method: 'PATCH', body: JSON.stringify({ ip_address: RELAY_HOST, moonraker_port: relayPort })
+  // One relay per endpoint (stable per-printer ports).
+  const ports = {};
+  prof.endpoints.forEach((ep, idx) => {
+    const rp = relayPort(printerId, idx);
+    openTcpRelay(userId, directHost, ep.port, rp);
+    ports[ep.role] = rp;
   });
-  return { ok: true, relayPort };
+  await eng(base, `/api/v1/printers/${printerId}`, { method: 'PATCH', body: JSON.stringify(prof.apply(ports)) });
+  return { ok: true, vendor: prof.key, endpoints: prof.endpoints.map((ep, i) => ({ role: ep.role, relayPort: relayPort(printerId, i) })) };
 }
 
-// Disable "via connector": restore the real address and drop the relay.
+// Disable "via connector": restore the real address and drop every relay.
 export async function deactivateRoute(userId, printerId) {
   const inst = await getInstanceForUser(userId);
   const base = engineBase(inst);
   const auto = (await getAutomation(userId))[printerId] || {};
   if (base && auto.direct_host) {
-    try {
-      await eng(base, `/api/v1/printers/${printerId}`, {
-        method: 'PATCH', body: JSON.stringify({ ip_address: auto.direct_host, moonraker_port: auto.direct_port || 7125 })
-      });
-    } catch { /* best effort */ }
+    let printer = null;
+    try { printer = await eng(base, `/api/v1/printers/${printerId}`); } catch { /* */ }
+    const prof = printer ? profileFor(printer) : null;
+    const patch = prof ? prof.restore({ host: auto.direct_host, port: auto.direct_port })
+                       : { ip_address: auto.direct_host, moonraker_port: auto.direct_port || 7125, endpoint_overrides: null };
+    try { await eng(base, `/api/v1/printers/${printerId}`, { method: 'PATCH', body: JSON.stringify(patch) }); } catch { /* best effort */ }
   }
-  closeRelay(relayPortForPrinter(printerId));
+  for (let i = 0; i < MAX_ENDPOINTS; i++) closeRelay(relayPort(printerId, i));
   return { ok: true };
 }
 
-// On boot, re-open relays for every printer still routed via a connector. The
-// engine's stored address (RELAY_HOST:stablePort) is unchanged, so only the
-// relay listener needs recreating.
+// On boot, re-open every routed printer's relays (engine addresses are stable).
 export async function reconcileRoutes() {
   let rows = [];
   try { rows = await listActiveRoutes(); } catch { return; }
+  let n = 0;
   for (const r of rows) {
-    if (r.direct_host) openTcpRelay(r.user_id, r.direct_host, r.direct_port || 7125, relayPortForPrinter(r.printer_id));
+    if (!r.direct_host) continue;
+    const base = engineBase(await getInstanceForUser(r.user_id));
+    let printer = null;
+    try { if (base) printer = await eng(base, `/api/v1/printers/${r.printer_id}`); } catch { /* */ }
+    const prof = printer ? profileFor(printer) : null;
+    if (prof) prof.endpoints.forEach((ep, idx) => openTcpRelay(r.user_id, r.direct_host, ep.port, relayPort(r.printer_id, idx)));
+    else openTcpRelay(r.user_id, r.direct_host, r.direct_port || 7125, relayPort(r.printer_id, 0));
+    n++;
   }
-  if (rows.length) console.log(`[routing] reconciled ${rows.length} via-connector printer(s)`);
+  if (n) console.log(`[routing] reconciled ${n} via-connector printer(s)`);
 }
