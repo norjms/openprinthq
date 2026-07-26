@@ -1,0 +1,15 @@
+# OpenPrintHQ local connector — Docker Compose
+# 1) cp .env.example .env  and fill in OPHQ_CONTROL_URL + OPHQ_CONNECTOR_TOKEN
+# 2) docker compose up -d
+#
+# network_mode: host lets the connector reach printers on your LAN by their
+# real IPs. On Docker Desktop (macOS/Windows) host networking is limited — use
+# the default bridge and set OPHQ_ALLOW to the specific printer IPs instead.
+services:
+  connector:
+    build: .
+    image: openprinthq/connector:latest
+    container_name: openprinthq-connector
+    restart: unless-stopped
+    env_file: .env
+    network_mode: host

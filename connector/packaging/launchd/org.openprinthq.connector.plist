@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  OpenPrintHQ local connector — launchd agent (macOS)
+
+  Install:
+    mkdir -p ~/Library/Application\ Support/openprinthq-connector
+    cp -r src package.json ~/Library/Application\ Support/openprinthq-connector/
+    cp packaging/launchd/org.openprinthq.connector.plist ~/Library/LaunchAgents/
+    # Edit the plist: set the three OPHQ_* values and the correct node path
+    #   (run `which node` — Apple-silicon Homebrew is /opt/homebrew/bin/node,
+    #    Intel is /usr/local/bin/node).
+    launchctl load ~/Library/LaunchAgents/org.openprinthq.connector.plist
+    launchctl start org.openprinthq.connector
+    tail -f /tmp/openprinthq-connector.log
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>org.openprinthq.connector</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/node</string>
+    <string>REPLACE_WITH_HOME/Library/Application Support/openprinthq-connector/src/agent.js</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>OPHQ_CONTROL_URL</key><string>https://openprinthq.example.org</string>
+    <key>OPHQ_CONNECTOR_TOKEN</key><string>PASTE_TOKEN_HERE</string>
+    <key>OPHQ_CONNECTOR_NAME</key><string>mac</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>/tmp/openprinthq-connector.log</string>
+  <key>StandardErrorPath</key><string>/tmp/openprinthq-connector.log</string>
+</dict>
+</plist>
