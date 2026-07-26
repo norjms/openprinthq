@@ -48,6 +48,17 @@ export const api = {
   myInstance: () => req('/instance'),
   provision: () => req('/instance/provision', { method: 'POST' }),
   stats: () => req('/instance/stats'),
+  // Public signup (invite code -> Authentik user + instance).
+  signupInfo: () => req('/pub/signup-info'),
+  signup: (body) => req('/pub/signup', { method: 'POST', body: JSON.stringify(body) }),
+  // Owner-only admin (invites, users, instances, usage).
+  adminSummary: () => req('/admin/summary'),
+  adminInvites: () => req('/admin/invites'),
+  createInvite: (body) => req('/admin/invites', { method: 'POST', body: JSON.stringify(body || {}) }),
+  revokeInvite: (code) => req('/admin/invites/' + encodeURIComponent(code), { method: 'DELETE' }),
+  adminUsers: () => req('/admin/users'),
+  adminInstances: () => req('/admin/instances'),
+  adminProvision: (body) => req('/admin/instances', { method: 'POST', body: JSON.stringify(body) }),
   // Proxy straight to the logged-in user's engine (frontend-first model).
   engine: (path, opts) => req('/engine' + path, opts),
   printers: () => req('/engine/api/v1/printers/'),

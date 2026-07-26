@@ -1,9 +1,15 @@
 <script>
   import Logo from './Logo.svelte';
   import { page } from '$app/state';
+  import { onMount } from 'svelte';
+  import { api } from '$lib/api';
   import { branding } from '$lib/stores/appearance';
 
   let { children } = $props();
+
+  // Owner-only nav (the Instances admin tab) is hidden entirely for non-owners.
+  let isOwner = $state(false);
+  onMount(() => { api.me().then((m) => { isOwner = !!m?.isOwner; }).catch(() => {}); });
 
   const nav = [
     { href: '/app', label: 'Overview', icon: '▚' },
@@ -34,6 +40,11 @@
           <span class="ic" aria-hidden="true">{item.icon}</span>{item.label}
         </a>
       {/each}
+      {#if isOwner}
+        <a href="/app/instances" class="navitem" class:active={current.startsWith('/app/instances')}>
+          <span class="ic" aria-hidden="true">🛰</span>Instances
+        </a>
+      {/if}
     </nav>
     <a href="/logout" class="navitem logout" data-sveltekit-preload-data="off">
       <span class="ic" aria-hidden="true">⎋</span>Sign out
