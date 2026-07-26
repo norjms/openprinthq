@@ -10,6 +10,8 @@
   import { page } from '$app/stores';
   import { api } from '$lib/api';
   import PowerPanel from '$lib/components/PowerPanel.svelte';
+  import ControlPanel from '$lib/components/ControlPanel.svelte';
+  import AmsPanel from '$lib/components/AmsPanel.svelte';
 
   const id = $derived($page.params.id);
 
@@ -440,84 +442,21 @@
     </div>
   </div>
 
-  {#if loadedFilament.length}
-    <div class="card card-pad filament">
-      <div class="flex between center">
-        <h3>Loaded filament</h3>
-        {#if confirmUnload}
-          <span class="flex gap center">
-            <span class="muted tiny">Unload current filament?</span>
-            <button class="btn btn-danger btn-sm" onclick={amsUnload} disabled={amsBusy}>Confirm</button>
-            <button class="btn btn-ghost btn-sm" onclick={() => (confirmUnload = false)}>Cancel</button>
-          </span>
-        {:else}
-          <button class="btn btn-ghost btn-sm" onclick={() => { confirmUnload = true; confirmLoad = null; }} disabled={amsBusy}>Unload</button>
-        {/if}
-      </div>
-      <div class="fils">
-        {#each loadedFilament as f}
-          <div class="fil">
-            <span class="sw" style="background:{f.color || 'var(--ophq-faint)'}"></span>
-            <span class="ft">{f.type}</span>
-            <span class="muted mono fw">{f.where}{#if f.remain > 0} · {f.remain}%{/if}</span>
-            {#if confirmLoad === f.trayId}
-              <button class="btn btn-primary btn-xs" onclick={() => amsLoad(f.trayId)} disabled={amsBusy}>Confirm</button>
-              <button class="btn btn-ghost btn-xs" onclick={() => (confirmLoad = null)}>✕</button>
-            {:else}
-              <button class="btn btn-ghost btn-xs load" onclick={() => { confirmLoad = f.trayId; confirmUnload = false; }} disabled={amsBusy} title="Load this filament into the hotend">Load</button>
-            {/if}
-          </div>
-        {/each}
-      </div>
-      {#if amsMsg}<p class={amsMsg.kind === 'ok' ? 'ok-msg' : 'err'}>{amsMsg.text}</p>{/if}
-      {#if hasAms}
-        <label class="opt bkp">
-          <input type="checkbox" checked={st?.ams_filament_backup} onchange={toggleAmsBackup} disabled={amsBackupBusy} />
-          <span>Filament backup — auto-switch to another spool of the same type when one runs out</span>
-        </label>
-      {/if}
-    </div>
+  {#if st?.connected}
+    <ControlPanel printerId={id} status={st} refresh={() => loadStatus(false)} />
+  {/if}
+
+  {#if hasAms || (st?.vt_tray)}
+    <AmsPanel printerId={id} status={st} refresh={() => loadStatus(false)} />
+    {#if hasAms}
+      <label class="opt bkp standalone">
+        <input type="checkbox" checked={st?.ams_filament_backup} onchange={toggleAmsBackup} disabled={amsBackupBusy} />
+        <span>Filament backup — auto-switch to another spool of the same type when one runs out</span>
+      </label>
+    {/if}
   {/if}
 
   <PowerPanel printerId={id} />
-
-  {#if hasAms && amsUnits.length}
-    <div class="card card-pad amscard">
-      <h3>AMS units</h3>
-      <div class="amslist">
-        {#each amsUnits as u (u.id)}
-          <div class="amsu">
-            <div class="amsu-hd">
-              <span class="amst">{u.type} <span class="muted">#{u.num}</span></span>
-              <span class="amsmeta">
-                {#if u.humidity != null}<span class="hum mono" title="Relative humidity">◐ {u.humidity}%</span>{/if}
-                {#if u.drying}<span class="chip accent">drying</span>{/if}
-              </span>
-            </div>
-            {#if u.canDry}
-              {#if u.drying}
-                <div class="dryactive">
-                  <span class="muted">Drying{#if u.dryFilament} {u.dryFilament}{/if}{#if u.dryTarget} @ {u.dryTarget}°C{/if}.</span>
-                  <button class="btn btn-ghost btn-sm danger-text" onclick={() => stopDrying(u)} disabled={dryBusyId === u.id}>Stop</button>
-                </div>
-              {:else}
-                <div class="dryrow">
-                  <label>Filament <input class="input xs" type="text" value={dryVal(u, 'filament', u.suggestFilament)} oninput={(e) => setDry(u.id, 'filament', e.target.value)} placeholder="PLA" /></label>
-                  <label>Temp <input class="input xs" type="number" min="45" max="85" value={dryVal(u, 'temp', u.dryTarget || 45)} oninput={(e) => setDry(u.id, 'temp', e.target.value)} /> °C</label>
-                  <label>Time <input class="input xs" type="number" min="1" max="24" value={dryVal(u, 'duration', 4)} oninput={(e) => setDry(u.id, 'duration', e.target.value)} /> h</label>
-                  <button class="btn btn-primary btn-sm" onclick={() => startDrying(u)} disabled={dryBusyId === u.id}>{dryBusyId === u.id ? 'Starting…' : 'Dry'}</button>
-                </div>
-              {/if}
-            {:else}
-              <p class="muted tiny nodry">This unit has no dryer.</p>
-            {/if}
-          </div>
-        {/each}
-      </div>
-      <p class="muted tiny">Drying runs inside the AMS. Typical: PLA/PETG 45–55 °C, PA/PC 70–80 °C.</p>
-      {#if dryMsg}<p class={dryMsg.kind === 'ok' ? 'ok-msg' : 'err'}>{dryMsg.text}</p>{/if}
-    </div>
-  {/if}
 
   {#if camAvailable}
     <div class="card card-pad cover">
@@ -592,6 +531,7 @@
   .opt { display: flex; align-items: center; gap: 0.5rem; font-size: 0.86rem; color: var(--ophq-text-2); cursor: pointer; }
   .opt input { width: auto; accent-color: var(--ophq-primary); }
   .opt.bkp { margin-top: 0.9rem; padding-top: 0.8rem; border-top: 1px solid var(--ophq-border-soft); }
+  .opt.bkp.standalone { margin: 0.7rem 0.2rem 0; padding: 0; border: none; }
   .amscard { margin-top: 1.2rem; }
   .amscard h3 { margin: 0 0 0.8rem; font-size: 1.05rem; }
   .amslist { display: flex; flex-direction: column; gap: 0.6rem; }
