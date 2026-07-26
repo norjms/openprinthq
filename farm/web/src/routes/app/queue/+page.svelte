@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
+  import PageTitle from '$lib/components/PageTitle.svelte';
 
   let loading = $state(true);
   let error = $state(null);
@@ -213,7 +214,7 @@
   }
 </script>
 
-<svelte:head><title>Print queue · OpenPrintHQ</title></svelte:head>
+<PageTitle page="Print queue" />
 
 <div class="head">
   <div><h1>Print queue</h1><p class="muted">One queue across your whole fleet.</p></div>
@@ -319,8 +320,8 @@
         <span><span class="chip {tone(q.status)}">{q.status}</span></span>
         <span class="acts">
           {#if isPending(q.status)}
-            <button class="ib" title={filtered ? 'Clear filter to reorder' : 'Move up'} onclick={() => move(i, -1)} disabled={busyId === q.id || i === 0 || filtered}>↑</button>
-            <button class="ib" title={filtered ? 'Clear filter to reorder' : 'Move down'} onclick={() => move(i, 1)} disabled={busyId === q.id || i === shownItems.length - 1 || filtered}>↓</button>
+            <button class="ib" title={filtered ? 'Clear filter to reorder' : 'Move up'} onclick={() => move(i, -1)} disabled={busyId === q.id || i === 0 || filtered} aria-label="Move up">↑</button>
+            <button class="ib" title={filtered ? 'Clear filter to reorder' : 'Move down'} onclick={() => move(i, 1)} disabled={busyId === q.id || i === shownItems.length - 1 || filtered} aria-label="Move down">↓</button>
             <button class="btn btn-ghost btn-sm" onclick={() => act(q.id, () => api.queueStart(q.id), 'Print started.')} disabled={busyId === q.id}>Start</button>
           {/if}
           {#if isActive(q.status)}
@@ -330,7 +331,7 @@
             <button class="btn btn-danger btn-sm" onclick={() => act(q.id, () => api.queueDelete(q.id), 'Removed from queue.')} disabled={busyId === q.id}>Confirm</button>
             <button class="btn btn-ghost btn-sm" onclick={() => (confirmDel = null)}>Keep</button>
           {:else}
-            <button class="ib" title="Remove" onclick={() => (confirmDel = q.id)} disabled={busyId === q.id}>✕</button>
+            <button class="ib" title="Remove" onclick={() => (confirmDel = q.id)} disabled={busyId === q.id} aria-label="Remove">✕</button>
           {/if}
         </span>
       </div>

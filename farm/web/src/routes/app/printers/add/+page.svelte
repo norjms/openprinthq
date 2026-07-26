@@ -1,6 +1,7 @@
 <script>
   import { goto } from '$app/navigation';
   import { api } from '$lib/api';
+  import PageTitle from '$lib/components/PageTitle.svelte';
 
   // Connection types are the engine's authoritative set (printer_capabilities.py).
   const F = {
@@ -108,7 +109,7 @@
   }
 </script>
 
-<svelte:head><title>Add printer · OpenPrintHQ</title></svelte:head>
+<PageTitle page="Add printer" />
 
 <div class="head">
   <h1>Add a printer</h1>

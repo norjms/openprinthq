@@ -30,7 +30,7 @@
         <a href={item.href}
            class="navitem"
            class:active={item.href === '/app' ? current === '/app' : current.startsWith(item.href)}>
-          <span class="ic">{item.icon}</span>{item.label}
+          <span class="ic" aria-hidden="true">{item.icon}</span>{item.label}
         </a>
       {/each}
     </nav>

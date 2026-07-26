@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
+  import PageTitle from '$lib/components/PageTitle.svelte';
 
   let loading = $state(true);
   let error = $state(null);
@@ -71,7 +72,7 @@
   }
 </script>
 
-<svelte:head><title>Printers · OpenPrintHQ</title></svelte:head>
+<PageTitle page="Printers" />
 
 <div class="head">
   <div>
@@ -119,7 +120,7 @@
         </div>
         {#if p.live?.connected && !camErr[p.id]}
           <div class="cam">
-            <img src={camSrc(p.id)} alt="" loading="lazy" onerror={() => (camErr = { ...camErr, [p.id]: true })} />
+            <img src={camSrc(p.id)} alt={`${p.name || 'Printer'} live camera view`} loading="lazy" onerror={() => (camErr = { ...camErr, [p.id]: true })} />
             {#if /run|print/.test(st) && p.live.progress != null}
               <span class="cam-prog mono">{Math.round(p.live.progress)}%</span>
             {/if}

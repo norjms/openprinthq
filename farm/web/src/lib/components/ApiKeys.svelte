@@ -128,7 +128,7 @@
           <div class="kacts">
             <button class="btn btn-ghost btn-xs" onclick={() => toggleEnabled(k)}>{k.enabled ? 'Disable' : 'Enable'}</button>
             {#if confirmDel === k.id}
-              <button class="btn btn-danger btn-xs" onclick={() => del(k)}>Revoke</button><button class="btn btn-ghost btn-xs" onclick={() => (confirmDel = null)}>✕</button>
+              <button class="btn btn-danger btn-xs" onclick={() => del(k)}>Revoke</button><button class="btn btn-ghost btn-xs" onclick={() => (confirmDel = null)} aria-label="Cancel">✕</button>
             {:else}
               <button class="btn btn-ghost btn-xs" onclick={() => (confirmDel = k.id)}>Revoke</button>
             {/if}
@@ -156,7 +156,7 @@
 {#if showForm}
   <div class="overlay" role="presentation" onclick={() => (showForm = false)}>
     <div class="dialog card" role="dialog" onclick={(e) => e.stopPropagation()}>
-      <div class="dhead"><div><span class="eyebrow">New API key</span><h3>Create key</h3></div><button class="btn btn-ghost btn-sm" onclick={() => (showForm = false)}>✕</button></div>
+      <div class="dhead"><div><span class="eyebrow">New API key</span><h3>Create key</h3></div><button class="btn btn-ghost btn-sm" onclick={() => (showForm = false)} aria-label="Close">✕</button></div>
       <div class="fld"><label for="kn">Name</label><input id="kn" class="input" bind:value={form.name} placeholder="Home Assistant, CI runner…" /></div>
       <span class="gl">Permissions</span>
       <div class="scopes">

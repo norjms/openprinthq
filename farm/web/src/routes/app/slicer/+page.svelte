@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
+  import PageTitle from '$lib/components/PageTitle.svelte';
 
   let loading = $state(true);
   let error = $state(null);
@@ -27,7 +28,7 @@
   onMount(load);
 </script>
 
-<svelte:head><title>Slicer · OpenPrintHQ</title></svelte:head>
+<PageTitle page="Slicer" />
 
 <div class="head">
   <div><h1>Slicer</h1><p class="muted">OrcaSlicer, built in — slice server-side, no desktop app.</p></div>
