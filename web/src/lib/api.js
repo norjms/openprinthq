@@ -100,6 +100,19 @@ export const api = {
         '&filament=' + encodeURIComponent(filament || '') + '&rotate_tray=' + (rotate_tray ? 'true' : 'false'),
       { method: 'POST' }),
   dryingStop: (id, ams_id) => req('/engine/api/v1/printers/' + id + '/drying/stop?ams_id=' + ams_id, { method: 'POST' }),
+  // ---- motion / hardware control (Bambu + Klipper via gcode) ----
+  xyJog: (id, x, y) => req('/engine/api/v1/printers/' + id + '/xy-jog?x=' + x + '&y=' + y, { method: 'POST' }),
+  bedJog: (id, distance) => req('/engine/api/v1/printers/' + id + '/bed-jog?distance=' + distance, { method: 'POST' }),
+  extruderJog: (id, distance) => req('/engine/api/v1/printers/' + id + '/extruder-jog?distance=' + distance, { method: 'POST' }),
+  homeAxes: (id, axes) => req('/engine/api/v1/printers/' + id + '/home-axes?axes=' + encodeURIComponent(axes), { method: 'POST' }),
+  selectExtruder: (id, extruder) => req('/engine/api/v1/printers/' + id + '/select-extruder?extruder=' + extruder, { method: 'POST' }),
+  fanSpeed: (id, fan, speed) => req('/engine/api/v1/printers/' + id + '/fan-speed?fan=' + fan + '&speed=' + speed, { method: 'POST' }),
+  chamberLight: (id, on) => req('/engine/api/v1/printers/' + id + '/chamber-light?on=' + (on ? 'true' : 'false'), { method: 'POST' }),
+  // Print speed mode: 1=silent, 2=standard, 3=sport, 4=ludicrous.
+  printSpeed: (id, mode) => req('/engine/api/v1/printers/' + id + '/print-speed?mode=' + mode, { method: 'POST' }),
+  // Re-read an AMS slot's RFID (filament reread).
+  amsSlotRefresh: (id, amsId, slotId) =>
+    req('/engine/api/v1/printers/' + id + '/ams/' + amsId + '/slot/' + slotId + '/refresh', { method: 'POST' }),
   // AMS filament load (tray_id: 0-15 AMS slot = ams*4+slot, 254 external) / unload.
   amsLoad: (id, trayId) =>
     req('/engine/api/v1/printers/' + id + '/ams/load?tray_id=' + encodeURIComponent(trayId), { method: 'POST' }),
