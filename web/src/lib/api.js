@@ -63,6 +63,9 @@ export const api = {
   // action: 'print/pause' | 'print/resume' | 'print/stop' | 'connect' | 'disconnect' | 'refresh-status'
   printerAction: (id, action) =>
     req('/engine/api/v1/printers/' + id + '/' + action, { method: 'POST' }),
+  // ---- printer automation: bed ejection / continuous printing (#20) ----
+  printerAutomation: () => req('/printer-automation'),
+  savePrinterAutomation: (map) => req('/printer-automation', { method: 'PUT', body: JSON.stringify(map) }),
   // ---- raw g-code console / macros (#23) + Klipper tuning (#24) ----
   sendGcode: (id, command) =>
     req('/engine/api/v1/printers/' + id + '/gcode', { method: 'POST', body: JSON.stringify({ command }) }),

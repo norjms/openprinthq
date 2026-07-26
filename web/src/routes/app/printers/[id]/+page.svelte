@@ -15,6 +15,7 @@
   import MaintenancePanel from '$lib/components/MaintenancePanel.svelte';
   import KlipperTuning from '$lib/components/KlipperTuning.svelte';
   import GcodeConsole from '$lib/components/GcodeConsole.svelte';
+  import EjectPanel from '$lib/components/EjectPanel.svelte';
 
   const id = $derived($page.params.id);
 
@@ -467,6 +468,8 @@
   {#if isKlipper}
     <KlipperTuning printerId={id} connected={st?.connected} printing={isPrinting} />
   {/if}
+
+  <EjectPanel printerId={id} connected={st?.connected} kind={meta?.connection_type} status={st} />
 
   {#if st?.connected}
     <GcodeConsole printerId={id} kind={meta?.connection_type} printing={isPrinting} />
