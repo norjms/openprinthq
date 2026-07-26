@@ -83,6 +83,9 @@ export const api = {
   // ---- integrations (Home Assistant / Homepage / Prometheus) ----
   integrationToken: () => req('/integration-token'),
   regenIntegrationToken: () => req('/integration-token/regenerate', { method: 'POST' }),
+  // ---- Obico AI failure detection ----
+  obicoStatus: () => req('/engine/api/v1/obico/status'),
+  obicoTest: () => req('/engine/api/v1/obico/test-connection', { method: 'POST' }),
   // ---- maintenance ----
   maintenancePrinter: (pid) => req('/engine/api/v1/maintenance/printers/' + pid),
   maintenanceOverview: () => req('/engine/api/v1/maintenance/overview'),
