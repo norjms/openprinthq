@@ -510,6 +510,40 @@ app.put('/api/appearance', async (req, reply) => {
   return { ok: true };
 });
 
+// ---- camera WebRTC signaling (video never touches the control-plane) -------
+// The browser negotiates a WebRTC session with go2rtc (co-located with the
+// printers) through this tiny SDP passthrough. ONLY the offer/answer handshake
+// flows here; the video then streams peer-to-peer browser<->go2rtc, so the
+// control-plane never carries camera traffic.
+const GO2RTC_URL = process.env.OPHQ_GO2RTC_URL || 'http://openprinthq-go2rtc:1984';
+app.post('/api/camera/webrtc/:printerId', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  const pid = String(req.params.printerId).replace(/[^0-9]/g, '');
+  if (!pid) return reply.code(400).send({ error: 'bad printer id' });
+  // Only broker signaling for a printer that belongs to THIS user's engine.
+  const inst = await getInstanceForUser(user.id);
+  const base = engineBase(inst);
+  if (!base) return reply.code(409).send({ error: 'no running instance' });
+  try {
+    const chk = await fetch(`${base}/api/v1/printers/${pid}`, { headers: { accept: 'application/json' } });
+    if (!chk.ok) return reply.code(404).send({ error: 'printer not found' });
+  } catch { return reply.code(502).send({ error: 'engine unreachable' }); }
+  // Relay the SDP offer to go2rtc and return its answer verbatim.
+  try {
+    const body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+    const res = await fetch(`${GO2RTC_URL}/api/webrtc?src=printer_${pid}`, {
+      method: 'POST',
+      headers: { 'content-type': req.headers['content-type'] || 'application/json' },
+      body
+    });
+    reply.code(res.status);
+    const ct = res.headers.get('content-type'); if (ct) reply.header('content-type', ct);
+    return reply.send(Buffer.from(await res.arrayBuffer()));
+  } catch (e) {
+    return reply.code(502).send({ error: 'signaling relay failed: ' + e.message });
+  }
+});
+
 // Authenticated gateway: proxy the logged-in user's request to THEIR engine.
 // Frontend calls /api/engine/<engine-path>; we resolve the user's instance and
 // forward. (JSON + GET today; multipart upload proxying is a follow-up.)
