@@ -83,6 +83,12 @@ export const api = {
   // ---- integrations (Home Assistant / Homepage / Prometheus) ----
   integrationToken: () => req('/integration-token'),
   regenIntegrationToken: () => req('/integration-token/regenerate', { method: 'POST' }),
+  // ---- maintenance ----
+  maintenancePrinter: (pid) => req('/engine/api/v1/maintenance/printers/' + pid),
+  maintenanceOverview: () => req('/engine/api/v1/maintenance/overview'),
+  maintenancePerform: (itemId, body) => req('/engine/api/v1/maintenance/items/' + itemId + '/perform', { method: 'POST', body: JSON.stringify(body || {}) }),
+  maintenanceTypes: () => req('/engine/api/v1/maintenance/types'),
+  maintenanceAssign: (pid, typeId) => req('/engine/api/v1/maintenance/printers/' + pid + '/assign/' + typeId, { method: 'POST' }),
   // ---- notification channels ----
   notifProviders: () => req('/engine/api/v1/notifications/'),
   notifCreate: (body) => req('/engine/api/v1/notifications/', { method: 'POST', body: JSON.stringify(body) }),
