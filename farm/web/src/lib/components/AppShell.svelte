@@ -34,6 +34,9 @@
         </a>
       {/each}
     </nav>
+    <a href="/logout" class="navitem logout" data-sveltekit-preload-data="off">
+      <span class="ic" aria-hidden="true">⎋</span>Sign out
+    </a>
     <div class="side-foot">
       <span class="chip ok">AGPL-3.0</span>
       <a class="muted src" href="/legal">source ↗</a>
@@ -55,6 +58,8 @@
   .navitem { display: flex; align-items: center; gap: 0.7rem; padding: 0.6rem 0.7rem; border-radius: var(--radius-sm); color: var(--ophq-text-2); font-size: 0.93rem; font-weight: 500; }
   .navitem:hover { background: var(--ophq-surface); color: var(--ophq-text); }
   .navitem.active { background: var(--ophq-primary-dim); color: var(--ophq-primary-2); box-shadow: inset 2px 0 0 var(--ophq-primary); }
+  .logout { margin-top: 0.5rem; color: var(--ophq-muted); }
+  .logout:hover { background: color-mix(in srgb, var(--ophq-danger) 12%, transparent); color: var(--ophq-danger); }
   .ic { width: 1.2rem; text-align: center; opacity: 0.9; }
   .side-foot { display: flex; align-items: center; justify-content: space-between; padding: 0.6rem 0.5rem 0.2rem; }
   .src { font-size: 0.8rem; }

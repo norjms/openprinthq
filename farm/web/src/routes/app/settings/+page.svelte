@@ -6,6 +6,7 @@
   import ApiKeys from '$lib/components/ApiKeys.svelte';
   import Connectors from '$lib/components/Connectors.svelte';
   import LookAndFeel from '$lib/components/LookAndFeel.svelte';
+  import PageTitle from '$lib/components/PageTitle.svelte';
 
   // Top-level settings tab (General account/instance settings vs Look & Feel).
   let tab = $state('general');

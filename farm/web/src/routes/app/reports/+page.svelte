@@ -231,7 +231,13 @@
   .fld label { font-size: 0.78rem; color: var(--ophq-text-2); }
   .fld .input { min-width: 150px; }
 
-  .report { background: var(--ophq-surface); }
+  .report {
+    background: linear-gradient(180deg, var(--ophq-surface), var(--ophq-surface-2));
+    border: 1px solid var(--ophq-border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 1.5rem 1.7rem;
+  }
   .rhead { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid var(--ophq-primary); padding-bottom: 0.9rem; margin-bottom: 1.3rem; }
   .brand { display: flex; flex-direction: column; }
   .logo { font-weight: 800; font-size: 1.2rem; letter-spacing: -0.01em; }
@@ -267,7 +273,8 @@
     :global(.content) { padding: 0 !important; max-width: none !important; }
     :global(body), .report { background: #fff !important; color: #111 !important; }
     .no-print { display: none !important; }
-    .report { color: #111; }
+    /* Strip the on-screen card frame for a clean printed page. */
+    .report { color: #111; border: none !important; box-shadow: none !important; border-radius: 0 !important; padding: 0 !important; }
     .stat, .tbl th, .tbl td { border-color: #ccc !important; }
     .stat.hero { background: #eef !important; }
     .rhead { border-color: #333 !important; }
