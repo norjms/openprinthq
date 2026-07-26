@@ -5,8 +5,10 @@ import cookie from '@fastify/cookie';
 import { readFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { migrate, upsertUser, getUserByEmail, getInstanceForUser, getCompatiblePresets,
-  getCircuits, setCircuit, getAutomation, setAutomation, getBatchById,
+  getCircuits, setCircuit, getAutomation, setAutomation,
+  createConnector, listConnectors, deleteConnector, getBatchById,
   getIntegrationToken, setIntegrationToken, getUserByIntegrationToken } from './db.js';
+import { registerConnectorRoutes, connectorOnline, isConnectorOnline, proxyViaConnector } from './connector.js';
 import { provisionForUser } from './provisioner.js';
 import { startBatch, activeBatchForUser, advanceBatch, cancelBatch, startOrchestrator } from './batch.js';
 
@@ -239,6 +241,39 @@ app.put('/api/printer-automation', async (req, reply) => {
     await setAutomation(user.id, id, { auto_eject: !!cfg.auto_eject, eject_gcode: cfg.eject_gcode });
   }
   return await getAutomation(user.id);
+});
+
+// ---- local connectors: outbound tunnel for LAN printers (#28/#29) --------
+registerConnectorRoutes(app);
+app.get('/api/connectors', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  const list = await listConnectors(user.id);
+  return list.map((c) => ({ ...c, online: isConnectorOnline(c.id) }));
+});
+app.post('/api/connectors', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  const name = (req.body?.name || 'connector').toString().slice(0, 60);
+  return await createConnector(user.id, name);
+});
+app.delete('/api/connectors/:id', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  const id = Number(req.params.id);
+  if (Number.isInteger(id)) await deleteConnector(user.id, id);
+  return { ok: true };
+});
+
+app.post('/api/connectors/test', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  const b = req.body || {};
+  const host = (b.host || '').toString();
+  const port = Number(b.port) || 80;
+  if (!host) return reply.code(400).send({ error: 'host required' });
+  const r = await proxyViaConnector(user.id, {
+    host, port, scheme: (b.scheme || 'http').toString(),
+    path: (b.path || '/').toString(), method: 'GET'
+  });
+  const bytes = r.body ? Buffer.from(r.body, 'base64').length : 0;
+  return { status: r.status ?? null, error: r.error || null, bytes };
 });
 
 // ---- temperature-staggered batch printing -------------------------------

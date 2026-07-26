@@ -1,0 +1,10 @@
+{
+  "name": "openprinthq-connector",
+  "version": "0.1.0",
+  "description": "OpenPrintHQ local connector — outbound tunnel that lets cloud-hosted OpenPrintHQ reach printers behind NAT/CGNAT/firewalls with no inbound ports.",
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "bin": { "openprinthq-connector": "src/agent.js" },
+  "scripts": { "start": "node src/agent.js" },
+  "engines": { "node": ">=20" }
+}

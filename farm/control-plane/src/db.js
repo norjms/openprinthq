@@ -116,6 +116,17 @@ export async function migrate() {
     );
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS connectors (
+      id         SERIAL PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name       TEXT NOT NULL DEFAULT 'connector',
+      token      TEXT UNIQUE NOT NULL,
+      last_seen  TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+
   await seedSlicerCompat();
 }
 
@@ -172,6 +183,32 @@ export async function setAutomation(userId, printerId, { auto_eject, eject_gcode
     `INSERT INTO printer_automation (user_id, printer_id, auto_eject, eject_gcode) VALUES ($1, $2, $3, $4)
      ON CONFLICT (user_id, printer_id) DO UPDATE SET auto_eject = EXCLUDED.auto_eject, eject_gcode = EXCLUDED.eject_gcode`,
     [userId, printerId, !!auto_eject, (eject_gcode || '').toString()]);
+}
+
+// ---- local connectors (outbound tunnel, #28/#29) ------------------------
+import crypto from 'node:crypto';
+export async function createConnector(userId, name) {
+  const token = 'ophqc_' + crypto.randomBytes(24).toString('hex');
+  const { rows } = await pool.query(
+    `INSERT INTO connectors (user_id, name, token) VALUES ($1, $2, $3)
+     RETURNING id, name, token, created_at`, [userId, (name || 'connector').slice(0, 60), token]);
+  return rows[0];
+}
+export async function listConnectors(userId) {
+  const { rows } = await pool.query(
+    'SELECT id, name, last_seen, created_at FROM connectors WHERE user_id = $1 ORDER BY id', [userId]);
+  return rows;
+}
+export async function deleteConnector(userId, id) {
+  await pool.query('DELETE FROM connectors WHERE user_id = $1 AND id = $2', [userId, id]);
+}
+export async function getConnectorByToken(token) {
+  if (!token) return null;
+  const { rows } = await pool.query('SELECT * FROM connectors WHERE token = $1', [token]);
+  return rows[0] || null;
+}
+export async function touchConnector(id) {
+  await pool.query('UPDATE connectors SET last_seen = now() WHERE id = $1', [id]);
 }
 
 // ---- batch runs ---------------------------------------------------------
