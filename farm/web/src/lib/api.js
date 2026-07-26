@@ -94,12 +94,12 @@ export const api = {
   // ---- AMS filament backup (auto-switch to a backup spool on runout) ----
   amsBackup: (id, enabled) =>
     req('/engine/api/v1/printers/' + id + '/ams-backup?enabled=' + (enabled ? 'true' : 'false'), { method: 'POST' }),
-  // ---- AMS filament drying ----
-  dryingStart: (id, { temp, duration, filament, rotate_tray }) =>
-    req('/engine/api/v1/printers/' + id + '/drying/start?temp=' + temp + '&duration=' + duration +
+  // ---- AMS filament drying (per AMS unit; ams_id required by the engine) ----
+  dryingStart: (id, { ams_id, temp, duration, filament, rotate_tray }) =>
+    req('/engine/api/v1/printers/' + id + '/drying/start?ams_id=' + ams_id + '&temp=' + temp + '&duration=' + duration +
         '&filament=' + encodeURIComponent(filament || '') + '&rotate_tray=' + (rotate_tray ? 'true' : 'false'),
       { method: 'POST' }),
-  dryingStop: (id) => req('/engine/api/v1/printers/' + id + '/drying/stop', { method: 'POST' }),
+  dryingStop: (id, ams_id) => req('/engine/api/v1/printers/' + id + '/drying/stop?ams_id=' + ams_id, { method: 'POST' }),
   // AMS filament load (tray_id: 0-15 AMS slot = ams*4+slot, 254 external) / unload.
   amsLoad: (id, trayId) =>
     req('/engine/api/v1/printers/' + id + '/ams/load?tray_id=' + encodeURIComponent(trayId), { method: 'POST' }),
