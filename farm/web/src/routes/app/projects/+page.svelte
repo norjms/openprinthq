@@ -6,6 +6,11 @@
   let error = $state(null);
   let projects = $state([]);
 
+  let cur = $state('USD');
+  const CUR_SYM = { USD: '$', EUR: '€', GBP: '£', CAD: '$', AUD: '$', NZD: '$', JPY: '¥', CNY: '¥', CHF: 'CHF ', SEK: 'kr ', NOK: 'kr ', DKK: 'kr ', PLN: 'zł ', INR: '₹', ZAR: 'R ', BRL: 'R$ ', MXN: '$' };
+  const sym = $derived(CUR_SYM[cur] || (cur + ' '));
+  const money = (v) => sym + (Number(v) || 0).toFixed(2);
+
   // create form
   let creating = $state(false);
   let nf = $state({ name: '', description: '', color: '#7c6cff', target_count: '' });
@@ -28,7 +33,11 @@
   }
   async function load() {
     loading = true; error = null;
-    try { projects = norm(await api.projects()); }
+    try {
+      const eng = await api.engineSettings().catch(() => null);
+      if (eng?.currency) cur = eng.currency;
+      projects = norm(await api.projects());
+    }
     catch (e) { error = e.status === 409 ? 'no-instance' : (e.message || 'engine unreachable'); }
     finally { loading = false; }
   }
@@ -48,19 +57,59 @@
   }
 
   async function toggleOpen(id) {
-    if (openId === id) { openId = null; detail = null; return; }
-    openId = id; detail = null; detailLoading = true;
+    if (openId === id) { openId = null; detail = null; bom = []; return; }
+    openId = id; detail = null; bom = []; detailLoading = true;
     try {
-      const [archives, queue] = await Promise.all([
+      const [archives, queue, bomList] = await Promise.all([
         api.projectArchives(id).catch(() => []),
-        api.projectQueue(id).catch(() => [])
+        api.projectQueue(id).catch(() => []),
+        api.projectBom(id).catch(() => [])
       ]);
       detail = {
         archives: Array.isArray(archives) ? archives : (archives?.items || archives?.archives || []),
         queue: Array.isArray(queue) ? queue : (queue?.items || queue?.queue || [])
       };
+      bom = normBom(bomList);
     } catch { detail = { archives: [], queue: [] }; }
     finally { detailLoading = false; }
+  }
+
+  // ---- BOM / bill of materials (#22) ----
+  let bom = $state([]);
+  let bomForm = $state({ name: '', quantity_needed: 1, unit_price: '' });
+  let bomBusy = $state(false);
+  function normBom(d) {
+    const arr = Array.isArray(d) ? d : (d?.items || d?.bom || []);
+    return arr.map((b) => ({
+      id: b.id, name: b.name, needed: b.quantity_needed ?? 1, acquired: b.quantity_acquired ?? 0,
+      unitPrice: b.unit_price ?? null, url: b.sourcing_url || '', remarks: b.remarks || '',
+      complete: b.is_complete ?? ((b.quantity_acquired ?? 0) >= (b.quantity_needed ?? 1))
+    }));
+  }
+  const bomRollup = $derived.by(() => {
+    let done = 0, cost = 0;
+    for (const b of bom) { if (b.complete || b.acquired >= b.needed) done++; cost += (b.unitPrice || 0) * b.needed; }
+    return { total: bom.length, done, cost };
+  });
+  async function addBom() {
+    if (!bomForm.name.trim() || bomBusy) return;
+    bomBusy = true;
+    try {
+      const body = { name: bomForm.name.trim(), quantity_needed: Math.max(1, Number(bomForm.quantity_needed) || 1) };
+      if (bomForm.unit_price !== '') body.unit_price = Number(bomForm.unit_price);
+      await api.addBomItem(openId, body);
+      bomForm = { name: '', quantity_needed: 1, unit_price: '' };
+      bom = normBom(await api.projectBom(openId).catch(() => []));
+    } catch { /* ignore */ } finally { bomBusy = false; }
+  }
+  async function setAcquired(item, delta) {
+    const next = Math.max(0, item.acquired + delta);
+    try { await api.updateBomItem(openId, item.id, { quantity_acquired: next }); bom = normBom(await api.projectBom(openId).catch(() => [])); }
+    catch { /* ignore */ }
+  }
+  async function delBom(item) {
+    try { await api.deleteBomItem(openId, item.id); bom = bom.filter((b) => b.id !== item.id); }
+    catch { /* ignore */ }
   }
 
   const pct = (p) => (p.target && p.target > 0 ? Math.min(100, Math.round((p.completed / p.target) * 100)) : null);
@@ -137,6 +186,37 @@
               </div>
             {/if}
           </div>
+          {#if !detailLoading}
+            <div class="bom">
+              <div class="bomh">
+                <span class="dh">Bill of materials{#if bomRollup.total} — {bomRollup.done}/{bomRollup.total} complete{#if bomRollup.cost > 0} · {money(bomRollup.cost)}{/if}{/if}</span>
+              </div>
+              {#if bom.length}
+                <div class="bomlist">
+                  {#each bom as b (b.id)}
+                    <div class="bomrow" class:done={b.complete || b.acquired >= b.needed}>
+                      <span class="bn">{b.name}{#if b.url} <a href={b.url} target="_blank" rel="noopener" class="src">↗</a>{/if}</span>
+                      <span class="qty">
+                        <button class="stp" onclick={() => setAcquired(b, -1)} disabled={b.acquired <= 0} aria-label="decrease">−</button>
+                        <span class="qn mono">{b.acquired}/{b.needed}</span>
+                        <button class="stp" onclick={() => setAcquired(b, 1)} aria-label="increase">+</button>
+                      </span>
+                      {#if b.unitPrice != null}<span class="up muted mono">{money(b.unitPrice)}</span>{:else}<span class="up"></span>{/if}
+                      <button class="del" onclick={() => delBom(b)} aria-label="remove">✕</button>
+                    </div>
+                  {/each}
+                </div>
+              {:else}
+                <p class="muted tiny">No parts listed. Add the components this assembly needs.</p>
+              {/if}
+              <div class="bomadd">
+                <input class="input" placeholder="Part / component name" bind:value={bomForm.name} onkeydown={(e) => e.key === 'Enter' && addBom()} />
+                <input class="input qi" type="number" min="1" bind:value={bomForm.quantity_needed} title="Quantity needed" />
+                <input class="input pi" type="number" min="0" step="0.01" placeholder="unit $" bind:value={bomForm.unit_price} title="Unit price" />
+                <button class="btn btn-ghost btn-sm" onclick={addBom} disabled={bomBusy || !bomForm.name.trim()}>Add part</button>
+              </div>
+            </div>
+          {/if}
         {/if}
       </div>
     {/each}
@@ -174,4 +254,23 @@
   .chip.accent { color: var(--ophq-accent); border-color: rgba(255,176,32,0.3); background: rgba(255,176,32,0.08); }
   .chip.ok { color: var(--ophq-success); border-color: rgba(53,196,107,0.3); background: rgba(53,196,107,0.08); }
   @media (max-width: 720px) { .pdetail { grid-template-columns: 1fr; } .pstats { display: none; } }
+
+  .bom { padding: 0.4rem 1.1rem 1.1rem; border-top: 1px solid var(--ophq-border); }
+  .bomh { margin: 0.6rem 0 0.5rem; }
+  .bomlist { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.7rem; }
+  .bomrow { display: grid; grid-template-columns: 1fr auto auto auto; align-items: center; gap: 0.7rem; padding: 0.35rem 0.5rem; border: 1px solid var(--ophq-border-soft); border-radius: var(--radius-sm); background: var(--ophq-surface); font-size: 0.86rem; }
+  .bomrow.done { border-color: rgba(53,196,107,0.35); background: rgba(53,196,107,0.06); }
+  .bn { font-weight: 500; }
+  .src { color: var(--ophq-primary-2); text-decoration: none; }
+  .qty { display: flex; align-items: center; gap: 0.35rem; }
+  .stp { width: 22px; height: 22px; border-radius: 5px; border: 1px solid var(--ophq-border); background: var(--ophq-bg-2); color: var(--ophq-text); cursor: pointer; line-height: 1; }
+  .stp:disabled { opacity: 0.4; cursor: default; }
+  .qn { min-width: 40px; text-align: center; font-size: 0.82rem; }
+  .up { font-size: 0.8rem; min-width: 48px; text-align: right; }
+  .del { border: none; background: none; color: var(--ophq-muted); cursor: pointer; font-size: 0.8rem; }
+  .del:hover { color: var(--ophq-danger); }
+  .bomadd { display: flex; gap: 0.4rem; align-items: center; }
+  .bomadd .input { flex: 1; }
+  .bomadd .qi { max-width: 70px; flex: none; }
+  .bomadd .pi { max-width: 90px; flex: none; }
 </style>
