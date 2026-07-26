@@ -11,7 +11,22 @@
   let currency = $state('USD');
   let rateSaving = $state(false);
   let rateMsg = $state(null);
-  const currencySymbol = $derived(({ USD: '$', EUR: '€', GBP: '£', CAD: '$', AUD: '$', JPY: '¥' })[currency] || (currency + ' '));
+  let curSaving = $state(false);
+  const CURRENCIES = [
+    ['USD', 'US Dollar ($)'], ['EUR', 'Euro (€)'], ['GBP', 'British Pound (£)'], ['CAD', 'Canadian Dollar ($)'],
+    ['AUD', 'Australian Dollar ($)'], ['NZD', 'NZ Dollar ($)'], ['JPY', 'Japanese Yen (¥)'], ['CNY', 'Chinese Yuan (¥)'],
+    ['CHF', 'Swiss Franc'], ['SEK', 'Swedish Krona'], ['NOK', 'Norwegian Krone'], ['DKK', 'Danish Krone'],
+    ['PLN', 'Polish Złoty'], ['INR', 'Indian Rupee (₹)'], ['ZAR', 'South African Rand'], ['BRL', 'Brazilian Real'],
+    ['MXN', 'Mexican Peso ($)']
+  ];
+  const CUR_SYM = { USD: '$', EUR: '€', GBP: '£', CAD: '$', AUD: '$', NZD: '$', JPY: '¥', CNY: '¥', CHF: 'CHF ', SEK: 'kr ', NOK: 'kr ', DKK: 'kr ', PLN: 'zł ', INR: '₹', ZAR: 'R ', BRL: 'R$ ', MXN: '$' };
+  const currencySymbol = $derived(CUR_SYM[currency] || (currency + ' '));
+  async function saveCurrency(v) {
+    currency = v; curSaving = true; rateMsg = null;
+    try { await api.updateEngineSettings({ currency: v }); rateMsg = { kind: 'ok', text: 'Currency saved.' }; }
+    catch (e) { rateMsg = { kind: 'err', text: e.message || 'could not save currency' }; }
+    finally { curSaving = false; }
+  }
 
   // power circuits (for temperature-staggered batch printing)
   let circPrinters = $state([]);   // [{id, name, circuit}]
@@ -169,8 +184,14 @@ scrape_configs:
 </div>
 
 <div class="card card-pad rate-card">
-  <span class="eyebrow">Electricity rate</span>
-  <p class="muted">Cost per kWh used to calculate energy cost in <a href="/app/statistics">Statistics</a>.</p>
+  <span class="eyebrow">Currency &amp; electricity rate</span>
+  <p class="muted">Currency and per-kWh cost used for all cost figures in <a href="/app/statistics">Statistics</a> and filament stock value.</p>
+  <div class="cur-row">
+    <label for="cursel">Currency</label>
+    <select id="cursel" class="input cursel" value={currency} onchange={(e) => saveCurrency(e.target.value)} disabled={curSaving}>
+      {#each CURRENCIES as [code, label]}<option value={code}>{label}</option>{/each}
+    </select>
+  </div>
   <div class="rate-row">
     <span class="cur mono">{currencySymbol}</span>
     <input class="input rate-in" type="number" step="0.01" min="0" bind:value={rate} placeholder="0.15" />
@@ -264,6 +285,9 @@ scrape_configs:
   .kv > div { display: flex; gap: 1rem; align-items: center; color: var(--ophq-text-2); }
   .kv span:first-child { color: var(--ophq-faint); width: 90px; display: inline-block; }
   .rate-card { margin-top: 1.2rem; }
+  .cur-row { display: flex; align-items: center; gap: 0.8rem; margin-bottom: 0.9rem; }
+  .cur-row label { font-size: 0.88rem; color: var(--ophq-text-2); }
+  .cursel { max-width: 240px; }
   .rate-card p { margin: 0.3rem 0 0.9rem; font-size: 0.9rem; }
   .rate-row { display: flex; align-items: center; gap: 0.6rem; }
   .rate-row .cur { color: var(--ophq-text-2); font-size: 1rem; }
