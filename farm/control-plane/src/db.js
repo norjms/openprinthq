@@ -96,7 +96,36 @@ export async function migrate() {
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_batch_runs_status ON batch_runs (status);`);
 
+  // Integration tokens: a per-user bearer token for external read-only access
+  // (Home Assistant, Homepage dashboard, Prometheus) that can't do Authentik SSO.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS integration_tokens (
+      user_id    INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      token      TEXT UNIQUE NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+
   await seedSlicerCompat();
+}
+
+// ---- integration tokens -------------------------------------------------
+export async function getIntegrationToken(userId) {
+  const { rows } = await pool.query('SELECT token FROM integration_tokens WHERE user_id = $1', [userId]);
+  return rows[0]?.token || null;
+}
+export async function setIntegrationToken(userId, token) {
+  await pool.query(
+    `INSERT INTO integration_tokens (user_id, token) VALUES ($1, $2)
+     ON CONFLICT (user_id) DO UPDATE SET token = EXCLUDED.token, created_at = now()`,
+    [userId, token]);
+  return token;
+}
+export async function getUserByIntegrationToken(token) {
+  if (!token) return null;
+  const { rows } = await pool.query(
+    `SELECT u.* FROM users u JOIN integration_tokens t ON t.user_id = u.id WHERE t.token = $1`, [token]);
+  return rows[0] || null;
 }
 
 // ---- power circuits -----------------------------------------------------

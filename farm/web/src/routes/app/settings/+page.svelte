@@ -29,10 +29,67 @@
       }
       await loadCircuits();
       cloud = await api.cloudStatus().catch(() => null);
+      await loadToken();
     } catch (e) { err = e.message; }
   });
 
   let cloud = $state(null);
+
+  // integrations (HA / Homepage / Prometheus)
+  let intToken = $state(null);
+  let intReveal = $state(false);
+  let intBusy = $state(false);
+  let intTab = $state('homepage');
+  let copied = $state(null);
+  const origin = $derived(typeof window !== 'undefined' ? window.location.origin : 'https://internal.example.com');
+  const summaryUrl = $derived(intToken ? `${origin}/api/pub/summary?token=${intToken}` : '');
+  const metricsUrl = $derived(intToken ? `${origin}/api/pub/metrics?token=${intToken}` : '');
+
+  async function loadToken() {
+    try { intToken = (await api.integrationToken())?.token || null; } catch { intToken = null; }
+  }
+  async function regenToken() {
+    intBusy = true;
+    try { intToken = (await api.regenIntegrationToken())?.token || null; }
+    catch { /* ignore */ } finally { intBusy = false; }
+  }
+  async function copy(text, which) {
+    try { await navigator.clipboard.writeText(text); copied = which; setTimeout(() => (copied = null), 1500); } catch { /* ignore */ }
+  }
+  const homepageSnippet = $derived(`- OpenPrintHQ:
+    widget:
+      type: customapi
+      url: ${summaryUrl}
+      refreshInterval: 10000
+      mappings:
+        - field: printers_online
+          label: Online
+        - field: active_jobs
+          label: Printing
+        - field: queued
+          label: Queued`);
+  const haSnippet = $derived(`# configuration.yaml
+sensor:
+  - platform: rest
+    name: OpenPrintHQ
+    resource: ${summaryUrl}
+    value_template: "{{ value_json.printers_online }}"
+    json_attributes:
+      - printers_total
+      - active_jobs
+      - queued
+      - printers
+    scan_interval: 15`);
+  const promSnippet = $derived(`# prometheus.yml
+scrape_configs:
+  - job_name: openprinthq
+    scrape_interval: 30s
+    metrics_path: /api/pub/metrics
+    params:
+      token: ["${intToken || 'YOUR_TOKEN'}"]
+    scheme: https
+    static_configs:
+      - targets: ["${origin.replace(/^https?:\/\//, '')}"]`);
 
   async function loadCircuits() {
     try {
@@ -162,6 +219,37 @@
   </div>
 {/if}
 
+<div class="card card-pad int-card">
+  <span class="eyebrow">Integrations — Home Assistant · Homepage · Prometheus</span>
+  <p class="muted">A read-only access token lets external dashboards pull your fleet status without signing in. Keep it private — anyone with it can read your fleet summary.</p>
+  <div class="tokrow">
+    <input class="input mono tok" type={intReveal ? 'text' : 'password'} readonly value={intToken ?? ''} />
+    <button class="btn btn-ghost btn-sm" onclick={() => (intReveal = !intReveal)}>{intReveal ? 'Hide' : 'Show'}</button>
+    <button class="btn btn-ghost btn-sm" onclick={() => copy(intToken, 'token')} disabled={!intToken}>{copied === 'token' ? 'Copied' : 'Copy'}</button>
+    <button class="btn btn-ghost btn-sm" onclick={regenToken} disabled={intBusy}>Regenerate</button>
+  </div>
+  <div class="urls">
+    <div><span class="muted">Summary (JSON)</span><code>{summaryUrl}</code></div>
+    <div><span class="muted">Metrics (Prometheus)</span><code>{metricsUrl}</code></div>
+  </div>
+
+  <div class="tabs">
+    <button class:on={intTab === 'homepage'} onclick={() => (intTab = 'homepage')}>Homepage</button>
+    <button class:on={intTab === 'ha'} onclick={() => (intTab = 'ha')}>Home Assistant</button>
+    <button class:on={intTab === 'prom'} onclick={() => (intTab = 'prom')}>Prometheus</button>
+  </div>
+  {#if intTab === 'homepage'}
+    <div class="snip"><button class="cbtn" onclick={() => copy(homepageSnippet, 'hp')}>{copied === 'hp' ? 'Copied' : 'Copy'}</button><pre>{homepageSnippet}</pre></div>
+    <p class="muted tiny">Add to your Homepage <code>services.yaml</code> as a custom-API widget.</p>
+  {:else if intTab === 'ha'}
+    <div class="snip"><button class="cbtn" onclick={() => copy(haSnippet, 'ha')}>{copied === 'ha' ? 'Copied' : 'Copy'}</button><pre>{haSnippet}</pre></div>
+    <p class="muted tiny">Add to Home Assistant <code>configuration.yaml</code> — a REST sensor with fleet attributes for cards &amp; automations.</p>
+  {:else}
+    <div class="snip"><button class="cbtn" onclick={() => copy(promSnippet, 'pr')}>{copied === 'pr' ? 'Copied' : 'Copy'}</button><pre>{promSnippet}</pre></div>
+    <p class="muted tiny">Add to <code>prometheus.yml</code>; the metrics feed Grafana dashboards.</p>
+  {/if}
+</div>
+
 <div class="card card-pad more">
   <span class="eyebrow">Coming soon</span>
   <p class="muted">Instance controls (restart, backup/restore), notification channels, API keys &amp; webhooks, and SSO session management.</p>
@@ -192,6 +280,21 @@
   .cloud-card { margin-top: 1.2rem; }
   .cloud-card p { margin: 0.3rem 0 0.9rem; font-size: 0.9rem; }
   .cloud-card .tiny { font-size: 0.82rem; margin-top: 0.6rem; }
+  .int-card { margin-top: 1.2rem; }
+  .int-card p { margin: 0.3rem 0 0.9rem; font-size: 0.9rem; max-width: 72ch; }
+  .tokrow { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+  .tok { flex: 1; min-width: 220px; font-size: 0.8rem; }
+  .urls { display: flex; flex-direction: column; gap: 0.4rem; margin: 0.9rem 0; }
+  .urls > div { display: flex; flex-direction: column; gap: 0.2rem; }
+  .urls span { font-size: 0.75rem; }
+  .urls code { font-size: 0.72rem; word-break: break-all; color: var(--ophq-text-2); background: var(--ophq-bg-2); padding: 0.35rem 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--ophq-border-soft); }
+  .tabs { display: flex; gap: 0.3rem; margin: 0.8rem 0 0.6rem; }
+  .tabs button { background: var(--ophq-bg-2); border: 1px solid var(--ophq-border); color: var(--ophq-text-2); padding: 0.35rem 0.8rem; border-radius: 999px; font-size: 0.82rem; cursor: pointer; }
+  .tabs button.on { border-color: var(--ophq-primary); color: var(--ophq-text); background: var(--ophq-primary-dim); }
+  .snip { position: relative; }
+  .snip pre { background: var(--ophq-bg-2); border: 1px solid var(--ophq-border); border-radius: var(--radius-sm); padding: 0.8rem 0.9rem; overflow-x: auto; font-size: 0.75rem; font-family: var(--font-mono); line-height: 1.5; margin: 0; }
+  .cbtn { position: absolute; top: 0.5rem; right: 0.5rem; background: var(--ophq-surface); border: 1px solid var(--ophq-border); color: var(--ophq-text-2); border-radius: var(--radius-sm); padding: 0.15rem 0.5rem; font-size: 0.72rem; cursor: pointer; }
+  .int-card .tiny { font-size: 0.8rem; margin-top: 0.5rem; }
   .more { margin-top: 1.2rem; }
   .err { color: var(--ophq-danger); font-size: 0.9rem; }
   @media (max-width: 820px) { .two { grid-template-columns: 1fr; } }
