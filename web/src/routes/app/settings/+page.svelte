@@ -13,6 +13,11 @@
   let rateMsg = $state(null);
   const currencySymbol = $derived(({ USD: '$', EUR: '€', GBP: '£', CAD: '$', AUD: '$', JPY: '¥' })[currency] || (currency + ' '));
 
+  // power circuits (for temperature-staggered batch printing)
+  let circPrinters = $state([]);   // [{id, name, circuit}]
+  let circSaving = $state(false);
+  let circMsg = $state(null);
+
   onMount(async () => {
     try {
       me = await api.me();
@@ -22,8 +27,33 @@
         rate = (s.energy_cost_per_kwh ?? '').toString();
         currency = s.currency || 'USD';
       }
+      await loadCircuits();
     } catch (e) { err = e.message; }
   });
+
+  async function loadCircuits() {
+    try {
+      const [pl, map] = await Promise.all([api.printers().catch(() => []), api.circuits().catch(() => ({}))]);
+      const arr = Array.isArray(pl) ? pl : (pl?.printers || pl?.items || []);
+      circPrinters = arr.map((p) => ({
+        id: p.id ?? p.printer_id,
+        name: p.name || p.model || ('Printer ' + (p.id ?? '')),
+        circuit: map[p.id ?? p.printer_id] || ''
+      }));
+    } catch { /* no instance yet */ }
+  }
+
+  async function saveCircuits() {
+    circSaving = true; circMsg = null;
+    try {
+      const map = {};
+      for (const p of circPrinters) map[p.id] = (p.circuit || '').trim();
+      await api.saveCircuits(map);
+      circMsg = { kind: 'ok', text: 'Circuits saved.' };
+    } catch (e) {
+      circMsg = { kind: 'err', text: e.message || 'could not save' };
+    } finally { circSaving = false; }
+  }
 
   async function saveRate() {
     const v = parseFloat(rate);
@@ -90,6 +120,30 @@
   {#if rateMsg}<p class={rateMsg.kind === 'ok' ? 'ok-msg' : 'err'}>{rateMsg.text}</p>{/if}
 </div>
 
+<div class="card card-pad circ-card">
+  <span class="eyebrow">Power circuits</span>
+  <p class="muted">Group printers by the breaker circuit they're plugged into. <a href="/app/queue">Temperature-staggered batch printing</a> serialises heat-up within a circuit so machines on the same breaker never surge together — printers on different circuits preheat in parallel. Leave blank for a printer that shares no circuit.</p>
+  {#if circPrinters.length === 0}
+    <p class="muted">No printers yet — add printers to assign circuits.</p>
+  {:else}
+    <div class="circ-list">
+      {#each circPrinters as p (p.id)}
+        <div class="circ-row">
+          <span class="cn">{p.name}</span>
+          <input class="input circ-in" type="text" placeholder="e.g. Circuit A" bind:value={p.circuit} list="circuit-suggest" />
+        </div>
+      {/each}
+    </div>
+    <datalist id="circuit-suggest">
+      {#each [...new Set(circPrinters.map((p) => p.circuit).filter(Boolean))] as c}<option value={c}></option>{/each}
+    </datalist>
+    <div class="flex gap center circ-actions">
+      <button class="btn btn-primary btn-sm" onclick={saveCircuits} disabled={circSaving}>{circSaving ? 'Saving…' : 'Save circuits'}</button>
+      {#if circMsg}<span class={circMsg.kind === 'ok' ? 'ok-msg' : 'err'}>{circMsg.text}</span>{/if}
+    </div>
+  {/if}
+</div>
+
 <div class="card card-pad more">
   <span class="eyebrow">Coming soon</span>
   <p class="muted">Instance controls (restart, backup/restore), notification channels, API keys &amp; webhooks, and SSO session management.</p>
@@ -110,7 +164,14 @@
   .rate-in { max-width: 130px; }
   .rate-row .per { font-size: 0.88rem; }
   .ok-msg { color: var(--ophq-success); font-size: 0.9rem; margin: 0.6rem 0 0; }
+  .circ-card { margin-top: 1.2rem; }
+  .circ-card p { margin: 0.3rem 0 1rem; font-size: 0.9rem; max-width: 70ch; }
+  .circ-list { display: flex; flex-direction: column; gap: 0.5rem; }
+  .circ-row { display: flex; align-items: center; gap: 1rem; }
+  .circ-row .cn { flex: 1; font-size: 0.92rem; }
+  .circ-in { max-width: 200px; }
+  .circ-actions { margin-top: 1rem; }
   .more { margin-top: 1.2rem; }
-  .err { color: var(--ophq-danger); }
+  .err { color: var(--ophq-danger); font-size: 0.9rem; }
   @media (max-width: 820px) { .two { grid-template-columns: 1fr; } }
 </style>

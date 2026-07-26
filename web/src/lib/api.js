@@ -92,6 +92,14 @@ export const api = {
   compatiblePresets: (printer) => req('/slicer/compatible?printer=' + encodeURIComponent(printer)),
   // Bambu HMS error dictionary (short_code -> description) for decoding alerts.
   hmsDescriptions: () => req('/hms/descriptions'),
+  // Power circuits (printer_id -> circuit label) for staggered batch printing.
+  circuits: () => req('/printer-circuits'),
+  saveCircuits: (map) => req('/printer-circuits', { method: 'PUT', body: JSON.stringify(map) }),
+  // Temperature-staggered batch printing.
+  batchStart: (body) => req('/batch', { method: 'POST', body: JSON.stringify(body) }),
+  batchActive: () => req('/batch/active'),
+  batchAdvance: (id) => req('/batch/' + id + '/advance', { method: 'POST' }),
+  batchCancel: (id) => req('/batch/' + id + '/cancel', { method: 'POST' }),
   slice: (fileId, body) =>
     req('/engine/api/v1/library/files/' + fileId + '/slice', { method: 'POST', body: JSON.stringify(body) }),
   sliceJob: (jobId) => req('/engine/api/v1/slice-jobs/' + jobId),

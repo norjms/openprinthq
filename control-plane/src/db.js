@@ -60,7 +60,103 @@ export async function migrate() {
     );
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_slicer_compat_printer ON slicer_compat (printer_name, kind);`);
+
+  // Power circuits: which physical breaker circuit each printer sits on, so a
+  // temperature-staggered batch only serialises heat-up within a circuit and
+  // lets printers on different circuits preheat in parallel. Keyed by
+  // (user, engine printer id). A printer with no row is its own circuit.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS printer_circuits (
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      printer_id INTEGER NOT NULL,
+      circuit    TEXT NOT NULL,
+      PRIMARY KEY (user_id, printer_id)
+    );
+  `);
+
+  // Temperature-staggered batch runs. The orchestrator holds each printer's
+  // queue item (manual_start) and releases the next on a circuit only once a
+  // preheating slot frees (previous printer reached bed+chamber target) or the
+  // per-printer timeout fires. Persisted so a control-plane restart resumes.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS batch_runs (
+      id            SERIAL PRIMARY KEY,
+      user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      file_id       INTEGER,
+      file_name     TEXT,
+      staggered     BOOLEAN NOT NULL DEFAULT true,
+      max_preheat   INTEGER NOT NULL DEFAULT 1,
+      tolerance     REAL NOT NULL DEFAULT 3.0,
+      max_wait_secs INTEGER NOT NULL DEFAULT 900,
+      steps         JSONB NOT NULL DEFAULT '[]'::jsonb,
+      status        TEXT NOT NULL DEFAULT 'running',
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_batch_runs_status ON batch_runs (status);`);
+
   await seedSlicerCompat();
+}
+
+// ---- power circuits -----------------------------------------------------
+export async function getCircuits(userId) {
+  const { rows } = await pool.query(
+    'SELECT printer_id, circuit FROM printer_circuits WHERE user_id = $1', [userId]);
+  const out = {};
+  for (const r of rows) out[r.printer_id] = r.circuit;
+  return out;
+}
+
+export async function setCircuit(userId, printerId, circuit) {
+  const c = (circuit || '').toString().trim();
+  if (!c) {
+    await pool.query('DELETE FROM printer_circuits WHERE user_id = $1 AND printer_id = $2', [userId, printerId]);
+    return;
+  }
+  await pool.query(
+    `INSERT INTO printer_circuits (user_id, printer_id, circuit) VALUES ($1, $2, $3)
+     ON CONFLICT (user_id, printer_id) DO UPDATE SET circuit = EXCLUDED.circuit`,
+    [userId, printerId, c]);
+}
+
+// ---- batch runs ---------------------------------------------------------
+export async function createBatchRun(userId, b) {
+  const { rows } = await pool.query(
+    `INSERT INTO batch_runs (user_id, file_id, file_name, staggered, max_preheat, tolerance, max_wait_secs, steps)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb) RETURNING *`,
+    [userId, b.fileId ?? null, b.fileName ?? null, b.staggered !== false,
+     b.maxPreheat ?? 1, b.tolerance ?? 3.0, b.maxWaitSecs ?? 900, JSON.stringify(b.steps || [])]);
+  return rows[0];
+}
+
+export async function getBatchById(id) {
+  const { rows } = await pool.query('SELECT * FROM batch_runs WHERE id = $1', [id]);
+  return rows[0] || null;
+}
+
+export async function getActiveBatchForUser(userId) {
+  const { rows } = await pool.query(
+    `SELECT * FROM batch_runs WHERE user_id = $1 AND status = 'running'
+     ORDER BY created_at DESC LIMIT 1`, [userId]);
+  return rows[0] || null;
+}
+
+export async function listRunningBatches() {
+  const { rows } = await pool.query(`SELECT * FROM batch_runs WHERE status = 'running' ORDER BY id`);
+  return rows;
+}
+
+export async function updateBatchRun(id, { steps, status }) {
+  const sets = ['updated_at = now()'];
+  const params = [];
+  let i = 1;
+  if (steps !== undefined) { sets.push(`steps = $${i++}::jsonb`); params.push(JSON.stringify(steps)); }
+  if (status !== undefined) { sets.push(`status = $${i++}`); params.push(status); }
+  params.push(id);
+  const { rows } = await pool.query(
+    `UPDATE batch_runs SET ${sets.join(', ')} WHERE id = $${i} RETURNING *`, params);
+  return rows[0] || null;
 }
 
 async function seedSlicerCompat() {
