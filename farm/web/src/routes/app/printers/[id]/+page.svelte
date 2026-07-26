@@ -9,7 +9,7 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { api } from '$lib/api';
-  import CameraImg from '$lib/components/CameraImg.svelte';
+  import CameraStream from '$lib/components/CameraStream.svelte';
   import PowerPanel from '$lib/components/PowerPanel.svelte';
   import ControlPanel from '$lib/components/ControlPanel.svelte';
   import AmsPanel from '$lib/components/AmsPanel.svelte';
@@ -479,7 +479,7 @@
   {#if camAvailable}
     <div class="card card-pad cover">
       <h3>Camera</h3>
-      <CameraImg printerId={id} tick={camTick} alt="{meta?.name || 'printer'} camera live view" mode="detail"
+      <CameraStream printerId={id} tick={camTick} alt="{meta?.name || 'printer'} camera live view" mode="detail"
            onerror={() => (camAvailable = false)} onclick={() => (camZoom = true)} title="Click to expand" />
     </div>
   {:else if st?.cover_url}
@@ -493,7 +493,7 @@
 {#if camZoom && camAvailable}
   <div class="lightbox" role="presentation" onclick={() => (camZoom = false)}>
     <button class="lb-close" onclick={() => (camZoom = false)} aria-label="Close">✕</button>
-    <CameraImg printerId={id} tick={camTick} alt="{meta?.name || 'printer'} camera live view" mode="contain" onclick={(e) => e.stopPropagation()} />
+    <CameraStream printerId={id} tick={camTick} alt="{meta?.name || 'printer'} camera live view" mode="contain" onclick={(e) => e.stopPropagation()} />
     <div class="lb-cap mono">{meta?.name || 'Printer'} · live</div>
   </div>
 {/if}

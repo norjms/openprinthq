@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
   import PageTitle from '$lib/components/PageTitle.svelte';
-  import CameraImg from '$lib/components/CameraImg.svelte';
+  import CameraStream from '$lib/components/CameraStream.svelte';
 
   let loading = $state(true);
   let error = $state(null);
@@ -72,7 +72,7 @@
         </div>
         <div class="feed">
           {#if p.connected && !camErr[p.id]}
-            <CameraImg printerId={p.id} tick={camTick} alt="{p.name} camera" mode="fill"
+            <CameraStream printerId={p.id} tick={camTick} alt="{p.name} camera" mode="fill"
                  onerror={() => (camErr = { ...camErr, [p.id]: true })} onclick={() => (zoomId = p.id)} title="Click to expand" />
             {#if /run|print/.test(p.state) && p.progress != null}<span class="cam-prog mono">{Math.round(p.progress)}%</span>{/if}
           {:else}
@@ -88,7 +88,7 @@
 {#if zoomPrinter}
   <div class="lightbox" role="presentation" onclick={() => (zoomId = null)}>
     <button class="lb-close" onclick={() => (zoomId = null)} aria-label="Close">✕</button>
-    <CameraImg printerId={zoomPrinter.id} tick={camTick} alt="{zoomPrinter.name} camera" mode="contain" onclick={(e) => e.stopPropagation()} />
+    <CameraStream printerId={zoomPrinter.id} tick={camTick} alt="{zoomPrinter.name} camera" mode="contain" onclick={(e) => e.stopPropagation()} />
     <div class="lb-cap mono">{zoomPrinter.name} · live</div>
   </div>
 {/if}

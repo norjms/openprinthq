@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
   import PageTitle from '$lib/components/PageTitle.svelte';
-  import CameraImg from '$lib/components/CameraImg.svelte';
+  import CameraStream from '$lib/components/CameraStream.svelte';
 
   let loading = $state(true);
   let error = $state(null);
@@ -120,7 +120,7 @@
         </div>
         {#if p.live?.connected && !camErr[p.id]}
           <div class="cam">
-            <CameraImg printerId={p.id} tick={camTick} alt={`${p.name || 'Printer'} live camera view`} mode="fill" onerror={() => (camErr = { ...camErr, [p.id]: true })} />
+            <CameraStream printerId={p.id} tick={camTick} alt={`${p.name || 'Printer'} live camera view`} mode="fill" onerror={() => (camErr = { ...camErr, [p.id]: true })} />
             {#if /run|print/.test(st) && p.live.progress != null}
               <span class="cam-prog mono">{Math.round(p.live.progress)}%</span>
             {/if}
