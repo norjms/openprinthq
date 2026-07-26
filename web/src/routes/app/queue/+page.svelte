@@ -68,12 +68,14 @@
       qty: q.quantity ?? q.amount ?? 1,
       position: q.position ?? 0,
       filament: q.filament_type ?? '',
-      timeSec: q.print_time_seconds ?? null
+      timeSec: q.print_time_seconds ?? null,
+      targetModel: q.target_model ?? null,
+      reqMaterials: Array.isArray(q.required_filament_types) ? q.required_filament_types.map((m) => String(m).toUpperCase()) : []
     }));
   }
   function normPrinters(d) {
     const arr = Array.isArray(d) ? d : (d?.printers || d?.items || d?.results || []);
-    return arr.map((p) => ({ id: p.id ?? p.printer_id, name: p.name ?? p.model ?? ('Printer ' + (p.id ?? '')) }));
+    return arr.map((p) => ({ id: p.id ?? p.printer_id, name: p.name ?? p.model ?? ('Printer ' + (p.id ?? '')), model: (p.model ?? '').toString() }));
   }
 
   async function load() {
@@ -132,6 +134,74 @@
       printer_id ? 'Assigned to printer.' : 'Set to unassigned.');
   }
 
+  // ---- smart routing (#18): auto-assign unassigned jobs to the best printer ----
+  let routing = $state(false);
+  const unassignedCount = $derived(items.filter((q) => q.printerId == null && isPending(q.status)).length);
+
+  function modelMatch(a, b) {
+    const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    a = norm(a); b = norm(b);
+    return !!a && !!b && (a === b || a.includes(b) || b.includes(a));
+  }
+
+  async function smartRoute() {
+    if (routing) return;
+    routing = true;
+    try {
+      // 1) Build each printer's capability profile from live status.
+      const caps = await Promise.all(printers.map(async (p) => {
+        let st = null; try { st = await api.printerStatus(p.id); } catch { /* offline */ }
+        const connected = !!st?.connected;
+        const state = String(st?.state || (connected ? 'idle' : 'offline')).toLowerCase();
+        const busy = /print|run|pause/.test(state);
+        const materials = new Set();
+        for (const unit of (st?.ams || [])) for (const tray of (unit.tray || unit.trays || [])) {
+          const m = String(tray.material || tray.tray_type || tray.type || '').toUpperCase(); if (m) materials.add(m);
+        }
+        const vt = String(st?.vt_tray?.material || st?.vt_tray?.tray_type || '').toUpperCase(); if (vt) materials.add(vt);
+        return { id: p.id, name: p.name, model: p.model, connected, busy, materials };
+      }));
+
+      // 2) Current load per printer (assigned, not-yet-done work) for balancing.
+      const load = {};
+      for (const it of items) if (it.printerId != null && isPending(it.status)) load[it.printerId] = (load[it.printerId] || 0) + (it.timeSec || 1800) + 1;
+
+      // 3) Route each unassigned pending item.
+      const targets = items.filter((q) => q.printerId == null && isPending(q.status)).sort((a, b) => a.position - b.position);
+      const assignments = [];
+      const skipped = [];
+      for (const it of targets) {
+        let pool = caps.filter((c) => c.connected);
+        if (it.targetModel) { const m = pool.filter((c) => modelMatch(c.model, it.targetModel)); if (m.length) pool = m; }
+        if (it.reqMaterials.length) {
+          const m = pool.filter((c) => it.reqMaterials.every((rm) => [...c.materials].some((cm) => cm.includes(rm) || rm.includes(cm))));
+          if (m.length) pool = m;   // strong preference; fall back to model/connected pool if none loaded
+        }
+        if (pool.length === 0) { skipped.push(it); continue; }
+        // Pick least-loaded; tie-break idle over busy.
+        pool.sort((a, b) => (load[a.id] || 0) - (load[b.id] || 0) || (a.busy - b.busy));
+        const chosen = pool[0];
+        assignments.push({ it, printerId: chosen.id });
+        load[chosen.id] = (load[chosen.id] || 0) + (it.timeSec || 1800) + 1;
+      }
+
+      if (assignments.length === 0) {
+        showToast('err', skipped.length ? 'No connected printer matches the queued jobs.' : 'Nothing to route.');
+        return;
+      }
+      for (const a of assignments) {
+        try { await api.queueUpdate(a.it.id, { printer_id: a.printerId }); } catch { /* keep going */ }
+      }
+      await load2();
+      const msg = `Routed ${assignments.length} job${assignments.length > 1 ? 's' : ''}` + (skipped.length ? `, ${skipped.length} left unassigned (no match).` : '.');
+      showToast('ok', msg);
+    } catch (e) {
+      showToast('err', e.message || 'routing failed');
+    } finally { routing = false; }
+  }
+  // load() is defined above; alias for clarity in async flows.
+  const load2 = () => load();
+
   // Move an item up/down by swapping with its neighbor, then send the full order.
   async function move(idx, dir) {
     const j = idx + dir;
@@ -154,6 +224,11 @@
         <option value="unassigned">Unassigned</option>
         {#each printers as p}<option value={String(p.id)}>{p.name}</option>{/each}
       </select>
+    {/if}
+    {#if !loading && !error && unassignedCount > 0}
+      <button class="btn btn-primary btn-sm" onclick={smartRoute} disabled={routing} title="Assign unassigned jobs to the best-matched printer (material, model, load)">
+        {routing ? 'Routing…' : `⚡ Auto-assign (${unassignedCount})`}
+      </button>
     {/if}
     <button class="btn btn-ghost btn-sm" onclick={load}>Refresh</button>
   </div>
