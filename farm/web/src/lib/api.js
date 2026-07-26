@@ -83,6 +83,12 @@ export const api = {
   // ---- integrations (Home Assistant / Homepage / Prometheus) ----
   integrationToken: () => req('/integration-token'),
   regenIntegrationToken: () => req('/integration-token/regenerate', { method: 'POST' }),
+  // ---- notification channels ----
+  notifProviders: () => req('/engine/api/v1/notifications/'),
+  notifCreate: (body) => req('/engine/api/v1/notifications/', { method: 'POST', body: JSON.stringify(body) }),
+  notifUpdate: (id, body) => req('/engine/api/v1/notifications/' + id, { method: 'PATCH', body: JSON.stringify(body) }),
+  notifDelete: (id) => req('/engine/api/v1/notifications/' + id, { method: 'DELETE' }),
+  notifTest: (id) => req('/engine/api/v1/notifications/' + id + '/test', { method: 'POST' }),
   // ---- smart plugs / power control + energy metering ----
   plugByPrinter: (pid) => req('/engine/api/v1/smart-plugs/by-printer/' + pid),
   plugStatus: (id) => req('/engine/api/v1/smart-plugs/' + id + '/status'),
