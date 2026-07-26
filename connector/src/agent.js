@@ -46,16 +46,18 @@ const CONFIG = {
   // command it receives is signed by the control-plane's matching private key.
   signPubKeyPem: readPubKey(),
   maxClockSkewMs: Number(process.env.OPHQ_MAX_CLOCK_SKEW_MS || 120000),
+  // Keep-alive: if no bytes (control-plane sends a ':ping' comment ~every 20s)
+  // arrive within this window, treat the tunnel as dead and reconnect. Catches
+  // silent drop-outs (half-open TCP, NAT timeouts) that never send a FIN.
+  streamTimeoutMs: Number(process.env.OPHQ_STREAM_TIMEOUT_MS || 60000),
   reconnectMinMs: 2000,
   reconnectMaxMs: 30000,
   requestTimeoutMs: Number(process.env.OPHQ_REQUEST_TIMEOUT_MS || 20000)
 };
 
-function log(...a) { console.log(new Date().toISOString(), '[connector]', ...a); }
+// Logs go to stderr so stdout stays clean (e.g. for `--pubkey`).
+function log(...a) { console.error(new Date().toISOString(), '[connector]', ...a); }
 function fail(msg) { console.error('FATAL:', msg); process.exit(1); }
-
-if (!CONFIG.controlUrl) fail('OPHQ_CONTROL_URL is required (e.g. https://openprinthq.example.org)');
-if (!CONFIG.token) fail('OPHQ_CONNECTOR_TOKEN is required (create one in Settings → Connectors)');
 
 // ---- command signature verification (optional but recommended) -----------
 const PSS = { padding: crypto.constants.RSA_PKCS1_PSS_PADDING, saltLength: crypto.constants.RSA_PSS_SALTLEN_DIGEST };
@@ -90,6 +92,46 @@ function verifyCommand(job) {
   if (!ok) { log('rejected bad-signature command', job.id); return false; }
   rememberId(job.id);
   return true;
+}
+
+// ---- mutual auth: this connector's own key pair --------------------------
+// The connector proves itself to the control-plane (SSH-style): it holds a
+// private key and you register its public key in Settings → Connectors. On
+// every connect it signs `${token}.${ts}` so a leaked bearer token alone can't
+// impersonate it. The key is persisted (OPHQ_CLIENT_KEY_FILE) so the public key
+// stays stable across restarts.
+function loadOrCreateClientKey() {
+  const inline = process.env.OPHQ_CLIENT_PRIVKEY;
+  if (inline && inline.trim()) return crypto.createPrivateKey(inline.trim());
+  const file = process.env.OPHQ_CLIENT_KEY_FILE;
+  if (!file) return null;
+  try {
+    if (fs.existsSync(file)) return crypto.createPrivateKey(fs.readFileSync(file, 'utf8'));
+    const { privateKey } = crypto.generateKeyPairSync('rsa', {
+      modulusLength: 2048,
+      privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+      publicKeyEncoding: { type: 'spki', format: 'pem' }
+    });
+    fs.writeFileSync(file, privateKey, { mode: 0o600 });
+    log(`generated a new connector key at ${file}`);
+    return crypto.createPrivateKey(privateKey);
+  } catch (e) { log('client key error:', e.message); return null; }
+}
+const clientKey = loadOrCreateClientKey();
+const clientPubPem = clientKey ? crypto.createPublicKey(clientKey).export({ type: 'spki', format: 'pem' }).toString() : null;
+
+// `node src/agent.js --pubkey` prints the public key to register, then exits.
+if (process.argv.includes('--pubkey')) {
+  if (!clientPubPem) fail('set OPHQ_CLIENT_KEY_FILE (or OPHQ_CLIENT_PRIVKEY) first, then re-run with --pubkey');
+  process.stdout.write(clientPubPem);
+  process.exit(0);
+}
+
+function clientAuthHeaders() {
+  if (!clientKey) return {};
+  const ts = String(Date.now());
+  const sig = crypto.sign('sha256', Buffer.from(`${CONFIG.token}.${ts}`), { key: clientKey, ...PSS }).toString('base64');
+  return { 'x-ophq-client-ts': ts, 'x-ophq-client-sig': sig };
 }
 
 // ---- allow-list ----------------------------------------------------------
@@ -198,35 +240,48 @@ async function handleJob(job) {
 // ---- SSE stream consumer -------------------------------------------------
 async function connectOnce() {
   const url = `${CONFIG.controlUrl}/api/connector/stream?name=${encodeURIComponent(CONFIG.name)}`;
-  const res = await fetch(url, {
-    headers: { authorization: `Bearer ${CONFIG.token}`, accept: 'text/event-stream' }
-  });
-  if (res.status === 401 || res.status === 403) fail(`control-plane rejected the connector token (${res.status})`);
-  if (!res.ok || !res.body) throw new Error(`stream failed: HTTP ${res.status}`);
-  log(`connected to ${CONFIG.controlUrl} as "${CONFIG.name}" — waiting for jobs`);
+  const ac = new AbortController();
+  let idle = setTimeout(() => ac.abort(), CONFIG.streamTimeoutMs);
+  const bump = () => { clearTimeout(idle); idle = setTimeout(() => ac.abort(), CONFIG.streamTimeoutMs); };
+  let res;
+  try {
+    res = await fetch(url, {
+      headers: { authorization: `Bearer ${CONFIG.token}`, accept: 'text/event-stream', ...clientAuthHeaders() },
+      signal: ac.signal
+    });
+  } catch (e) { clearTimeout(idle); throw e; }
+  if (res.status === 401 || res.status === 403) { clearTimeout(idle); fail(`control-plane rejected the connector (${res.status}). If mutual auth is enabled, register this connector's public key (run with --pubkey to print it).`); }
+  if (!res.ok || !res.body) { clearTimeout(idle); throw new Error(`stream failed: HTTP ${res.status}`); }
+  log(`connected to ${CONFIG.controlUrl} as "${CONFIG.name}" — waiting for jobs (keep-alive ${Math.round(CONFIG.streamTimeoutMs / 1000)}s)`);
 
   const reader = res.body.getReader();
   const dec = new TextDecoder();
   let buf = '';
-  for (;;) {
-    const { value, done } = await reader.read();
-    if (done) throw new Error('stream closed by server');
-    buf += dec.decode(value, { stream: true });
-    let idx;
-    while ((idx = buf.indexOf('\n\n')) !== -1) {
-      const raw = buf.slice(0, idx); buf = buf.slice(idx + 2);
-      const line = raw.split('\n').find((l) => l.startsWith('data:'));
-      if (!line) continue;                                   // heartbeat comment ": ping"
-      const payload = line.slice(5).trim();
-      if (!payload) continue;
-      let job; try { job = JSON.parse(payload); } catch { continue; }
-      if (job && job.id && (job.host || job.kind)) handleJob(job);  // fire-and-forget
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) throw new Error('stream closed by server');
+      bump();                                                // any byte (incl. ':ping') resets the watchdog
+      buf += dec.decode(value, { stream: true });
+      let idx;
+      while ((idx = buf.indexOf('\n\n')) !== -1) {
+        const raw = buf.slice(0, idx); buf = buf.slice(idx + 2);
+        const line = raw.split('\n').find((l) => l.startsWith('data:'));
+        if (!line) continue;                                 // heartbeat comment ": ping"
+        const payload = line.slice(5).trim();
+        if (!payload) continue;
+        let job; try { job = JSON.parse(payload); } catch { continue; }
+        if (job && job.id && (job.host || job.kind)) handleJob(job);  // fire-and-forget
+      }
     }
-  }
+  } finally { clearTimeout(idle); }
 }
 
 async function main() {
-  log(`starting — control=${CONFIG.controlUrl} allow=[${CONFIG.allow.join(',')}] ports=[${CONFIG.allowPorts.join(',')}] signature-verification=${signPubKey ? 'ENFORCED' : 'off'}`);
+  if (!CONFIG.controlUrl) fail('OPHQ_CONTROL_URL is required (e.g. https://openprinthq.example.org)');
+  if (!CONFIG.token) fail('OPHQ_CONNECTOR_TOKEN is required (create one in Settings → Connectors)');
+  log(`starting — control=${CONFIG.controlUrl} allow=[${CONFIG.allow.join(',')}] ports=[${CONFIG.allowPorts.join(',')}] signature-verification=${signPubKey ? 'ENFORCED' : 'off'} client-key=${clientKey ? 'on' : 'off'}`);
+  if (clientPubPem) log(`this connector's public key (register it in Settings → Connectors):\n${clientPubPem.trim()}`);
   let backoff = CONFIG.reconnectMinMs;
   for (;;) {
     try {
