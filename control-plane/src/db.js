@@ -33,6 +33,9 @@ export async function migrate() {
       created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
     );
   `);
+  // Owner/admin flag. The first-ever account is always owner (bootstrapped
+  // below), plus anyone in the Authentik owner group at request time.
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_owner BOOLEAN NOT NULL DEFAULT false;`);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS instances (
       id             SERIAL PRIMARY KEY,
@@ -151,6 +154,31 @@ export async function migrate() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
   `);
+
+  // Invite codes: an owner mints single-use codes (2-day TTL). Redeeming a code
+  // on the public signup page creates the login user in Authentik and provisions
+  // that person their own instance. created_by / used_by reference users(id) but
+  // are nullable + ON DELETE SET NULL so account cleanup never wipes the audit row.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS invite_codes (
+      code       TEXT PRIMARY KEY,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      email      TEXT,
+      note       TEXT,
+      expires_at TIMESTAMPTZ NOT NULL,
+      used_by    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      used_at    TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_invite_codes_expires ON invite_codes (expires_at);`);
+
+  // Bootstrap: if no owner exists yet, promote the earliest account (covers DBs
+  // created before the is_owner column existed).
+  await pool.query(`
+    UPDATE users SET is_owner = true
+    WHERE id = (SELECT id FROM users ORDER BY id LIMIT 1)
+      AND NOT EXISTS (SELECT 1 FROM users WHERE is_owner)`);
 
   await seedSlicerCompat();
 }
@@ -376,11 +404,13 @@ export async function getCompatiblePresets(printerName) {
 }
 
 export async function upsertUser(email, displayName) {
+  // The first-ever account is bootstrapped as owner/admin.
+  const first = (await pool.query('SELECT 1 FROM users LIMIT 1')).rowCount === 0;
   const { rows } = await pool.query(
-    `INSERT INTO users (email, display_name) VALUES ($1, $2)
+    `INSERT INTO users (email, display_name, is_owner) VALUES ($1, $2, $3)
      ON CONFLICT (email) DO UPDATE SET display_name = COALESCE(EXCLUDED.display_name, users.display_name)
      RETURNING *`,
-    [email, displayName || null]
+    [email, displayName || null, first]
   );
   return rows[0];
 }
@@ -390,7 +420,74 @@ export async function getUserByEmail(email) {
   return rows[0] || null;
 }
 
+export async function countUsers() {
+  const { rows } = await pool.query('SELECT COUNT(*)::int AS n FROM users');
+  return rows[0].n;
+}
+
 export async function getInstanceForUser(userId) {
   const { rows } = await pool.query('SELECT * FROM instances WHERE user_id = $1', [userId]);
   return rows[0] || null;
+}
+
+// ---- invite codes -------------------------------------------------------
+export async function createInvite(createdBy, { email, note, ttlDays = 2 } = {}) {
+  const code = 'ophq-' + crypto.randomBytes(9).toString('base64url'); // ~12 url-safe chars
+  const { rows } = await pool.query(
+    `INSERT INTO invite_codes (code, created_by, email, note, expires_at)
+     VALUES ($1, $2, $3, $4, now() + ($5 || ' days')::interval) RETURNING *`,
+    [code, createdBy || null, (email || '').trim().toLowerCase() || null, (note || '').slice(0, 200) || null, String(ttlDays)]
+  );
+  return rows[0];
+}
+// A code is redeemable only if it exists, is unused, and hasn't expired.
+export async function getValidInvite(code) {
+  if (!code) return null;
+  const { rows } = await pool.query(
+    `SELECT * FROM invite_codes WHERE code = $1 AND used_at IS NULL AND expires_at > now()`,
+    [String(code).trim()]
+  );
+  return rows[0] || null;
+}
+// Mark used; the WHERE guard makes redemption atomic (no double-spend race).
+export async function consumeInvite(code, usedBy) {
+  const { rows } = await pool.query(
+    `UPDATE invite_codes SET used_by = $2, used_at = now()
+     WHERE code = $1 AND used_at IS NULL AND expires_at > now() RETURNING *`,
+    [String(code).trim(), usedBy]
+  );
+  return rows[0] || null;
+}
+export async function listInvites() {
+  const { rows } = await pool.query(
+    `SELECT c.code, c.email, c.note, c.expires_at, c.used_at, c.created_at,
+            cu.email AS created_by_email, uu.email AS used_by_email,
+            CASE WHEN c.used_at IS NOT NULL THEN 'used'
+                 WHEN c.expires_at <= now() THEN 'expired' ELSE 'active' END AS status
+     FROM invite_codes c
+     LEFT JOIN users cu ON cu.id = c.created_by
+     LEFT JOIN users uu ON uu.id = c.used_by
+     ORDER BY c.created_at DESC`);
+  return rows;
+}
+export async function revokeInvite(code) {
+  await pool.query('DELETE FROM invite_codes WHERE code = $1 AND used_at IS NULL', [String(code).trim()]);
+}
+
+// ---- admin: users + instances (owner-only reads) ------------------------
+export async function listUsers() {
+  const { rows } = await pool.query(
+    `SELECT u.id, u.email, u.display_name, u.created_at,
+            i.subdomain, i.status AS instance_status, i.port
+     FROM users u LEFT JOIN instances i ON i.user_id = u.id
+     ORDER BY u.id`);
+  return rows;
+}
+export async function listAllInstances() {
+  const { rows } = await pool.query(
+    `SELECT i.id, i.user_id, i.subdomain, i.status, i.port, i.engine_version, i.created_at,
+            u.email AS user_email
+     FROM instances i JOIN users u ON u.id = i.user_id
+     ORDER BY i.id`);
+  return rows;
 }

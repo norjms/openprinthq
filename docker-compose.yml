@@ -41,8 +41,15 @@ services:
       - OPHQ_GATEWAY_SECRET=${OPHQ_GATEWAY_SECRET:-}
       - OPHQ_ALLOW_DEV_LOGIN=${OPHQ_ALLOW_DEV_LOGIN:-}
       - OPHQ_ENGINE_HOST=${OPHQ_ENGINE_HOST:-10.10.10.109}
-      - OPHQ_SLICER_URL=${OPHQ_SLICER_URL:-http://10.10.10.109:3003}
+      # Slicing ships with the app (bundled orca-slicer-api service below).
+      - OPHQ_SLICER_URL=${OPHQ_SLICER_URL:-http://orca-slicer-api:3000}
       - OPHQ_DOCKER_NETWORK=${OPHQ_DOCKER_NETWORK:-openprinthq_default}
+      # Authentik admin API (signup creates the login user); owner/user groups.
+      # dev/test = homelab Authentik; prod = bundled. Blank -> signup disabled.
+      - OPHQ_AUTHENTIK_URL=${OPHQ_AUTHENTIK_URL:-}
+      - OPHQ_AUTHENTIK_TOKEN=${OPHQ_AUTHENTIK_TOKEN:-}
+      - OPHQ_OWNER_GROUP=${OPHQ_OWNER_GROUP:-openprinthq-owners}
+      - OPHQ_USER_GROUP=${OPHQ_USER_GROUP:-openprinthq-users}
       # Cloudflare TURN (remote/CGNAT camera relay); STUN-only if unset.
       - OPHQ_CF_TURN_KEY_ID=${OPHQ_CF_TURN_KEY_ID:-}
       - OPHQ_CF_TURN_API_TOKEN=${OPHQ_CF_TURN_API_TOKEN:-}
@@ -51,6 +58,19 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     expose:
       - "8080"
+
+  # OrcaSlicer HTTP API — bundled with the app so slicing works out of the box
+  # (no separate hand-run slicer). Tenant engines reach it by name on the shared
+  # network via OPHQ_SLICER_URL (http://orca-slicer-api:3000).
+  orca-slicer-api:
+    image: ghcr.io/maziggy/orca-slicer-api:latest
+    restart: unless-stopped
+    environment:
+      - PORT=3000
+    volumes:
+      - orca_data:/app/data
+    expose:
+      - "3000"
 
   # WebRTC camera media server, co-located with the printers. Ingests each
   # printer's RTSP camera and streams it peer-to-peer to browsers; the
@@ -66,3 +86,6 @@ services:
       - "8555:8555/udp"
     volumes:
       - ./infra/go2rtc/go2rtc.yaml:/config/go2rtc.yaml
+
+volumes:
+  orca_data:

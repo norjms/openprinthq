@@ -16,7 +16,7 @@ const exec = promisify(execFile);
 const BASE_PORT = Number(process.env.OPHQ_BASE_PORT || 39000);
 const ENGINE_IMAGE = process.env.OPHQ_ENGINE_IMAGE || ''; // e.g. internal.example.com/openprinthq/openprinthq-engine:dev
 const ENGINE_HOST = process.env.OPHQ_ENGINE_HOST || '10.10.10.109';
-const SLICER_URL = process.env.OPHQ_SLICER_URL || 'http://10.10.10.109:3003'; // shared OrcaSlicer sidecar
+const SLICER_URL = process.env.OPHQ_SLICER_URL || 'http://orca-slicer-api:3000'; // bundled OrcaSlicer API service
 // Tenant engines join this internal Docker network (same as the control-plane)
 // and are NOT published to the host — reachable only by container name from
 // inside the network, never from the LAN.
