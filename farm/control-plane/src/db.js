@@ -106,6 +106,16 @@ export async function migrate() {
     );
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS printer_automation (
+      user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      printer_id  INTEGER NOT NULL,
+      auto_eject  BOOLEAN NOT NULL DEFAULT false,
+      eject_gcode TEXT NOT NULL DEFAULT '',
+      PRIMARY KEY (user_id, printer_id)
+    );
+  `);
+
   await seedSlicerCompat();
 }
 
@@ -147,6 +157,21 @@ export async function setCircuit(userId, printerId, circuit) {
     `INSERT INTO printer_circuits (user_id, printer_id, circuit) VALUES ($1, $2, $3)
      ON CONFLICT (user_id, printer_id) DO UPDATE SET circuit = EXCLUDED.circuit`,
     [userId, printerId, c]);
+}
+
+// ---- printer automation (bed ejection / continuous printing, #20) -------
+export async function getAutomation(userId) {
+  const { rows } = await pool.query(
+    'SELECT printer_id, auto_eject, eject_gcode FROM printer_automation WHERE user_id = $1', [userId]);
+  const out = {};
+  for (const r of rows) out[r.printer_id] = { auto_eject: r.auto_eject, eject_gcode: r.eject_gcode || '' };
+  return out;
+}
+export async function setAutomation(userId, printerId, { auto_eject, eject_gcode }) {
+  await pool.query(
+    `INSERT INTO printer_automation (user_id, printer_id, auto_eject, eject_gcode) VALUES ($1, $2, $3, $4)
+     ON CONFLICT (user_id, printer_id) DO UPDATE SET auto_eject = EXCLUDED.auto_eject, eject_gcode = EXCLUDED.eject_gcode`,
+    [userId, printerId, !!auto_eject, (eject_gcode || '').toString()]);
 }
 
 // ---- batch runs ---------------------------------------------------------
