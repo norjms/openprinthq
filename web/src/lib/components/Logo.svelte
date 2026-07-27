@@ -4,12 +4,12 @@
   // If the user uploaded a custom logo it replaces the mark + wordmark; otherwise
   // the built-in SVG mark shows with the (optionally renamed) wordmark text. The
   // mark now uses theme variables so it recolours with the active theme.
-  import { branding } from '$lib/stores/appearance';
+  import { branding, activeLogo } from '$lib/stores/appearance';
 
   let { size = 30, wordmark = true } = $props();
 
   const text = $derived($branding?.wordmark || $branding?.siteName || 'OpenPrintHQ');
-  const custom = $derived($branding?.logo || '');
+  const custom = $derived($activeLogo || '');
   const isDefault = $derived(text === 'OpenPrintHQ');
 </script>
 

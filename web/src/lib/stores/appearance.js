@@ -11,11 +11,13 @@ import { writable, derived, get } from 'svelte/store';
 import { api } from '$lib/api';
 import {
   DEFAULT_CONFIG, DEFAULT_BRANDING, normalizeConfig,
-  applyAppearance, writeAppearanceCookie
+  applyAppearance, writeAppearanceCookie, resolveLogo
 } from '$lib/theme';
 
 export const appearance = writable(normalizeConfig(DEFAULT_CONFIG));
 export const branding = derived(appearance, ($a) => $a.branding || { ...DEFAULT_BRANDING });
+// The logo that matches the active theme mode (light / dark / accessible / custom).
+export const activeLogo = derived(appearance, ($a) => resolveLogo($a.branding, $a.mode));
 
 let loaded = false;
 
