@@ -17,6 +17,7 @@
   import KlipperTuning from '$lib/components/KlipperTuning.svelte';
   import GcodeConsole from '$lib/components/GcodeConsole.svelte';
   import EjectPanel from '$lib/components/EjectPanel.svelte';
+  import BambuDashboard from '$lib/components/BambuDashboard.svelte';
   import PageTitle from '$lib/components/PageTitle.svelte';
 
   const id = $derived($page.params.id);
@@ -221,6 +222,8 @@
   // ---- AMS filament backup (Bambu; auto-switch to backup spool on runout) ----
   const hasAms = $derived((st?.ams || []).length > 0);
   const isKlipper = $derived((meta?.connection_type || '').toLowerCase() === 'klipper');
+  // Bambu printers get the full skinned dashboard; others keep the classic layout.
+  const isBambu = $derived((meta?.connection_type || 'bambu').toLowerCase() === 'bambu');
   let amsBackupBusy = $state(false);
   async function toggleAmsBackup() {
     amsBackupBusy = true;
@@ -342,6 +345,12 @@
 {:else}
   {#if error}<p class="err banner">{error}</p>{/if}
 
+  {#if isBambu}
+    <BambuDashboard printerId={id} status={st} meta={meta} refresh={() => loadStatus(false)}
+      oncamera={() => { camAvailable = true; camZoom = true; }} />
+  {/if}
+
+  {#if !isBambu}
   <div class="title">
     <div>
       <h1>{st?.name || meta?.name || 'Printer'}</h1>
@@ -358,6 +367,7 @@
       </button>
     </div>
   </div>
+  {/if}
 
   {#if alerts.length}
     <div class="alerts">
@@ -376,6 +386,7 @@
     </div>
   {/if}
 
+  {#if !isBambu}
   <div class="cols">
     <!-- Current job -->
     <div class="card card-pad job">
@@ -448,9 +459,13 @@
     </div>
   </div>
 
+  {/if}
+
+  <div id="move"><span id="temps"></span>
   {#if st?.connected}
     <ControlPanel printerId={id} status={st} refresh={() => loadStatus(false)} />
   {/if}
+  </div>
 
   {#if hasAms || (st?.vt_tray)}
     <AmsPanel printerId={id} status={st} refresh={() => loadStatus(false)} />
@@ -477,7 +492,7 @@
   {/if}
 
   {#if camAvailable}
-    <div class="card card-pad cover">
+    <div class="card card-pad cover" id="camera">
       <h3>Camera</h3>
       <CameraStream printerId={id} tick={camTick} alt="{meta?.name || 'printer'} camera live view" mode="detail"
            onerror={() => (camAvailable = false)} onclick={() => (camZoom = true)} title="Click to expand" />
