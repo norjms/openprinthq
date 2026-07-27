@@ -38,7 +38,11 @@
   // ---- live camera (polled snapshot through the engine gateway) ----
   let camTick = $state(0);
   let camAvailable = $state(true);
-  let camZoom = $state(false);   // fullscreen lightbox
+  // The camera view always opens in its own tab (via window.open so that tab's ✕
+  // can close itself). The tab that launched it is never affected.
+  function openCamera() {
+    window.open(`/app/printers/${id}/camera`, '_blank');
+  }
 
   // ---- per-printer settings (popup) — persisted on the printer record (DB) ----
   let settingsOpen = $state(false);
@@ -400,7 +404,7 @@
 
   {#if isBambu}
     <BambuDashboard printerId={id} status={st} meta={meta} refresh={() => loadStatus(false)}
-      oncamera={() => { camAvailable = true; camZoom = true; }} />
+      oncamera={openCamera} />
   {/if}
 
   {#if !isBambu}
@@ -552,7 +556,7 @@
     <div class="card card-pad cover" id="camera">
       <h3>Camera</h3>
       <CameraStream printerId={id} tick={camTick} alt="{meta?.name || 'printer'} camera live view" mode="detail"
-           onerror={() => (camAvailable = false)} onclick={() => (camZoom = true)} title="Click to expand" />
+           onerror={() => (camAvailable = false)} onclick={openCamera} title="Open camera in a new tab" />
     </div>
   {:else if st?.cover_url}
     <div class="card card-pad cover">
@@ -572,16 +576,6 @@
     onclose={() => (settingsOpen = false)}
     onsave={(cfg) => { meta = { ...meta, ...cfg }; }} />
 {/if}
-
-{#if camZoom && camAvailable}
-  <div class="lightbox" role="presentation" onclick={() => (camZoom = false)}>
-    <button class="lb-close" onclick={() => (camZoom = false)} aria-label="Close">✕</button>
-    <CameraStream printerId={id} tick={camTick} alt="{meta?.name || 'printer'} camera live view" mode="contain" onclick={(e) => e.stopPropagation()} />
-    <div class="lb-cap mono">{meta?.name || 'Printer'} · live</div>
-  </div>
-{/if}
-
-<svelte:window onkeydown={(e) => { if (e.key === 'Escape') camZoom = false; }} />
 
 <style>
   .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
@@ -657,10 +651,5 @@
   .cover img { width: 100%; max-width: 640px; border-radius: var(--radius-sm); border: 1px solid var(--ophq-border); display: block; }
   .cover img.cam { background: var(--ophq-bg-2); aspect-ratio: 16 / 9; object-fit: contain; }
   .cover img.zoomable { cursor: zoom-in; }
-  .lightbox { position: fixed; inset: 0; z-index: 200; background: rgba(3,5,8,0.9); backdrop-filter: blur(6px); display: grid; place-items: center; padding: 2rem; cursor: zoom-out; }
-  .lightbox img { max-width: 96vw; max-height: 92vh; border-radius: var(--radius-sm); border: 1px solid var(--ophq-border); box-shadow: var(--shadow-glow); cursor: default; }
-  .lb-close { position: fixed; top: 1.1rem; right: 1.3rem; width: 40px; height: 40px; border-radius: 50%; background: var(--ophq-surface); border: 1px solid var(--ophq-border); color: var(--ophq-text); font-size: 1.1rem; cursor: pointer; }
-  .lb-close:hover { border-color: var(--ophq-primary); }
-  .lb-cap { position: fixed; bottom: 1.3rem; left: 50%; transform: translateX(-50%); color: var(--ophq-text-2); font-size: 0.85rem; }
   .err { color: var(--ophq-danger); font-size: 0.9rem; }
 </style>
