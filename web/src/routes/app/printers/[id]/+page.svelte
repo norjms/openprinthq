@@ -16,6 +16,7 @@
   import MaintenancePanel from '$lib/components/MaintenancePanel.svelte';
   import KlipperTuning from '$lib/components/KlipperTuning.svelte';
   import GcodeConsole from '$lib/components/GcodeConsole.svelte';
+  import KlipperConsole from '$lib/components/KlipperConsole.svelte';
   import EjectPanel from '$lib/components/EjectPanel.svelte';
   import BambuDashboard from '$lib/components/BambuDashboard.svelte';
   import PrinterSettingsModal from '$lib/components/PrinterSettingsModal.svelte';
@@ -34,6 +35,9 @@
   let confirmStop = $state(false);
   let targets = $state({});       // editable temperature targets, keyed by kind
   let timer = null;
+  // Klipper toolhead homed_axes (from the console poll) → drives the Move &
+  // control "not homed" prompt so jogs don't fail with a cryptic error.
+  let klipperHomed = $state(null);
 
   // ---- live camera (polled snapshot through the engine gateway) ----
   let camTick = $state(0);
@@ -385,8 +389,8 @@
 <PageTitle page={st?.name || meta?.name || 'Printer'} />
 
 <div class="head">
-  <a href="/app/printers" class="btn btn-ghost btn-sm">← Printers</a>
-  <button class="btn btn-ghost btn-sm" onclick={() => control('refresh-status', 'refresh')} disabled={!!acting}>
+  <a href="/app/printers" class="btn btn-ghost btn-sm" data-tip="Back to all printers" aria-label="Back to all printers">← Printers</a>
+  <button class="btn btn-ghost btn-sm" data-tip="Refresh live status now" aria-label="Refresh live status" onclick={() => control('refresh-status', 'refresh')} disabled={!!acting}>
     {acting === 'refresh' ? 'Refreshing…' : 'Refresh'}
   </button>
 </div>
@@ -438,15 +442,15 @@
     <div class="actions">
       <div class="flex gap center">
         <span class="chip {tone(stateStr)}">{stateStr}</span>
-        <button class="btn btn-ghost btn-sm" onclick={toggleConnection} disabled={!!acting}>
+        <button class="btn btn-ghost btn-sm" data-tip={st?.connected ? 'Disconnect from the printer' : 'Connect to the printer'} aria-label={st?.connected ? 'Disconnect from the printer' : 'Connect to the printer'} onclick={toggleConnection} disabled={!!acting}>
           {st?.connected ? 'Disconnect' : 'Connect'}
         </button>
         <button class="estop" type="button" onclick={emergencyStop} disabled={!st?.connected || acting === 'estop'}
-                title="Emergency stop (immediate — no confirmation)" aria-label="Emergency stop">
+                data-tip="Emergency stop — immediate, no confirmation" data-tip-pos="below" aria-label="Emergency stop — immediate, no confirmation">
           <span class="estop-oct"><span class="estop-txt">{acting === 'estop' ? '…' : 'STOP'}</span></span>
         </button>
       </div>
-      <button class="btn btn-ghost btn-sm gear" onclick={() => (settingsOpen = true)}>
+      <button class="btn btn-ghost btn-sm gear" data-tip="Printer settings" aria-label="Printer settings" onclick={() => (settingsOpen = true)}>
         <span aria-hidden="true">⚙</span> Settings
       </button>
     </div>
@@ -529,10 +533,10 @@
               <div class="tset">
                 <input class="input" type="number" min="0" placeholder="target °C"
                        bind:value={targets[c.key]} />
-                <button class="btn btn-ghost btn-sm" onclick={() => setTemp(c.kind, c.key, c.nozzle)}
+                <button class="btn btn-ghost btn-sm" data-tip={`Set ${c.label.toLowerCase()} target`} aria-label={`Set ${c.label} target temperature`} onclick={() => setTemp(c.kind, c.key, c.nozzle)}
                         disabled={acting === `set-${c.key}`}>Set</button>
                 {#if c.target}
-                  <button class="btn btn-ghost btn-sm" onclick={() => { targets[c.key] = 0; setTemp(c.kind, c.key, c.nozzle); }}
+                  <button class="btn btn-ghost btn-sm" data-tip={`Turn ${c.label.toLowerCase()} heater off`} aria-label={`Turn ${c.label} heater off`} onclick={() => { targets[c.key] = 0; setTemp(c.kind, c.key, c.nozzle); }}
                           disabled={acting === `set-${c.key}`}>Off</button>
                 {/if}
               </div>
@@ -547,7 +551,14 @@
 
   <div id="move"><span id="temps"></span>
   {#if st?.connected}
-    <ControlPanel printerId={id} status={st} refresh={() => loadStatus(false)} kind={meta?.connection_type} />
+    {#if isKlipper}
+      <div class="move-console">
+        <ControlPanel printerId={id} status={st} refresh={() => loadStatus(false)} kind={meta?.connection_type} homedAxes={klipperHomed} />
+        <KlipperConsole printerId={id} connected={st?.connected} printing={isPrinting} onhomed={(h) => (klipperHomed = h)} />
+      </div>
+    {:else}
+      <ControlPanel printerId={id} status={st} refresh={() => loadStatus(false)} kind={meta?.connection_type} />
+    {/if}
   {/if}
   </div>
 
@@ -571,7 +582,7 @@
 
   <EjectPanel printerId={id} connected={st?.connected} kind={meta?.connection_type} status={st} />
 
-  {#if st?.connected}
+  {#if st?.connected && !isKlipper}
     <GcodeConsole printerId={id} kind={meta?.connection_type} printing={isPrinting} />
   {/if}
 
@@ -612,13 +623,34 @@
   .gear { align-self: flex-end; }
   /* Emergency stop — octagon "stop sign", immediate (no confirmation). */
   .estop { background: none; border: 0; padding: 0; cursor: pointer; }
-  .estop-oct { display: grid; place-items: center; width: 46px; height: 46px; background: var(--ophq-danger, #e5342f);
-    clip-path: polygon(30% 0, 70% 0, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0 70%, 0 30%);
-    border: 2px solid #ffffff33; box-shadow: 0 2px 8px rgba(229,52,47,0.4); transition: transform 0.1s, filter 0.1s; }
-  .estop:hover:not(:disabled) .estop-oct { filter: brightness(1.08); transform: scale(1.04); }
-  .estop:active:not(:disabled) .estop-oct { transform: scale(0.96); }
+  .estop-oct {
+    --oct: polygon(30% 0, 70% 0, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0 70%, 0 30%);
+    position: relative; display: grid; place-items: center; width: 50px; height: 50px;
+    background: #fff;                         /* white stop-sign ring */
+    clip-path: var(--oct);
+    filter: drop-shadow(0 3px 8px rgba(229,52,47,0.5));
+    transition: transform 0.12s ease, filter 0.12s ease;
+    animation: estopPulse 2.6s ease-in-out infinite;
+  }
+  .estop-oct::before {
+    content: ''; position: absolute; inset: 3px; clip-path: var(--oct);
+    background: radial-gradient(circle at 50% 33%, #ff6a5f 0%, #e5342f 52%, #b81c17 100%);
+  }
+  .estop-txt { position: relative; z-index: 1; color: #fff; font-weight: 900; font-size: 0.62rem;
+    letter-spacing: 0.04em; text-shadow: 0 1px 2px rgba(0,0,0,0.4); }
+  .estop:hover:not(:disabled) .estop-oct { transform: scale(1.06); filter: drop-shadow(0 4px 12px rgba(229,52,47,0.78)); animation: none; }
+  .estop:active:not(:disabled) .estop-oct { transform: scale(0.95); }
+  .estop:focus-visible .estop-oct { outline: 2px solid var(--ophq-primary); outline-offset: 3px; }
   .estop:disabled { cursor: default; opacity: 0.4; }
-  .estop-txt { color: #fff; font-weight: 800; font-size: 0.6rem; letter-spacing: 0.02em; }
+  .estop:disabled .estop-oct { animation: none; }
+  @keyframes estopPulse {
+    0%, 100% { filter: drop-shadow(0 3px 8px rgba(229,52,47,0.4)); }
+    50% { filter: drop-shadow(0 3px 14px rgba(229,52,47,0.85)); }
+  }
+  /* Klipper Move & control + realtime console side by side. */
+  .move-console { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.2rem; align-items: stretch; }
+  .move-console > :global(.control) { margin-top: 1.2rem; }
+  @media (max-width: 1024px) { .move-console { grid-template-columns: 1fr; } }
   .offline-locate { margin: 0 0 1.2rem; padding: 0.9rem 1rem; border: 1px solid rgba(255,176,32,0.35); background: rgba(255,176,32,0.06); border-radius: var(--radius-sm); display: flex; flex-direction: column; gap: 0.7rem; }
   .ol-head { display: flex; flex-direction: column; gap: 0.15rem; }
   .ol-title { font-weight: 600; color: var(--ophq-warn); }
