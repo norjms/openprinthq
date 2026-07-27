@@ -47,6 +47,21 @@ export function printerLabel(connectionType, model) {
   return [mfr, m].filter(Boolean).join(' ').trim();
 }
 
+// Bambu H2-series nozzle hardware codes → readable material + flow. The code is
+// <material><flow><rev>: 1st char material (H=Hardened Steel, S=Stainless Steel),
+// 2nd char flow (H=High-Flow, S=Standard). e.g. HS01 = Hardened Steel,
+// HH01 = Hardened Steel High-Flow (confirmed by the engine's own notes).
+const NOZZLE_MAT = { H: 'Hardened Steel', S: 'Stainless Steel' };
+export function nozzleType(code) {
+  const c = String(code || '').trim().toUpperCase();
+  if (!c) return { full: '', short: '', hf: false, material: '' };
+  const material = NOZZLE_MAT[c[0]] || '';
+  const hf = c[1] === 'H';
+  const full = material ? material + (hf ? ' · High-Flow' : '') : c;
+  const short = material ? (material.split(' ').map((w) => w[0]).join('') + (hf ? '·HF' : '')) : c;
+  return { full, short, hf, material };
+}
+
 /** Return the printer's common model name for display. */
 export function prettyModel(raw) {
   if (!raw) return raw || '';

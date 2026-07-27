@@ -6,7 +6,7 @@
   // theme variables so it follows Light / Dark / Accessible.
   // SPDX-License-Identifier: AGPL-3.0-or-later
   import { api } from '$lib/api';
-  import { printerLabel } from '$lib/models.js';
+  import { printerLabel, nozzleType } from '$lib/models.js';
   import { markSeen, recentlyOnline } from '$lib/online.js';
 
   let { printerId, status = null, meta = null, refresh = () => {}, oncamera = () => {} } = $props();
@@ -158,8 +158,20 @@
     catch (e) { /* */ } finally { acting = null; }
   }
 
-  // ---- nozzle rack (H2C tool-changer) ----------------------------------
-  const rack = $derived(st?.nozzle_rack || []);
+  // ---- nozzles: toolhead + rack (H2C/H2D tool-changer) -----------------
+  // The engine's nozzle_rack carries ALL nozzle hardware: the hotend/toolhead
+  // nozzles (ids 0,1) and the physical rack slots (ids 16-21 on H2C). Split them
+  // so we can show what's currently in the toolhead separately from the rack.
+  const nozzleInfo = $derived(st?.nozzle_rack || []);
+  const rack = $derived(nozzleInfo); // (kept: presence of any nozzle info)
+  const isRealNozzle = (n) => !!(n && n.serial_number && n.serial_number !== 'N/A' && (Number(n.max_temp) > 0 || n.nozzle_type));
+  const toolheadNozzles = $derived(nozzleInfo.filter((n) => Number(n.id) < 16 && isRealNozzle(n)));
+  const rackSlots = $derived.by(() => {
+    const r = nozzleInfo.filter((n) => Number(n.id) >= 16);
+    if (!r.length) return [];
+    const base = Math.min(...r.map((n) => Number(n.id)));   // rack ids start at 16 on H2C
+    return r.map((n) => ({ ...n, pos: Number(n.id) - base + 1 }));
+  });
 
   // ---- AMS / filaments --------------------------------------------------
   const hex = (c) => (c && String(c).replace(/0+$/, '') ? '#' + String(c).slice(0, 6) : '');
@@ -301,16 +313,7 @@
         {/if}
       </div>
     {/each}
-    {#if rack.length}
-      <div class="rack">
-        <div class="rack-t">Nozzle Rack</div>
-        <div class="rack-slots">
-          {#each rack as r}
-            <span class="rslot" class:mounted={r.stat === 1 || r.stat === 2}>{r.nozzle_diameter || '—'}</span>
-          {/each}
-        </div>
-      </div>
-    {:else if diaL || diaR}
+    {#if !nozzleInfo.length && (diaL || diaR)}
       <div class="tcard nz">
         <div class="tc-hd"><span class="tico" aria-hidden="true">⬇</span><span class="tk">Nozzle</span></div>
         <span class="tv mono nzv">{diaL ? `L ${diaL}` : ''}{diaR ? ` · R ${diaR}` : ''}</span>
@@ -330,6 +333,41 @@
                  disabled={!online} aria-label="{f.label} fan speed percent" />
         </div>
       {/each}
+    </div>
+  {/if}
+
+  {#if nozzleInfo.length}
+    <!-- ============ NOZZLES (toolhead + rack) ============ -->
+    <div class="pd-label">NOZZLES</div>
+    <div class="nzpanel">
+      <div class="nz-head">
+        <span class="nz-cap">In toolhead</span>
+        {#if toolheadNozzles.length}
+          {#each toolheadNozzles as n}
+            <span class="nz-inhead" title={nozzleType(n.nozzle_type).full || n.nozzle_type}>
+              <b class="mono">{n.nozzle_diameter} mm</b>
+              <span class="nz-mat">{nozzleType(n.nozzle_type).full || n.nozzle_type || '—'}</span>
+            </span>
+          {/each}
+        {:else}
+          <span class="muted">— no nozzle installed</span>
+        {/if}
+      </div>
+      {#if rackSlots.length}
+        <div class="nz-rack">
+          <span class="nz-cap">Rack</span>
+          <div class="nz-slots">
+            {#each rackSlots as s (s.id)}
+              <span class="nz-slot"
+                    title={`Position ${s.pos} · ${s.nozzle_diameter} mm · ${nozzleType(s.nozzle_type).full || s.nozzle_type || 'nozzle'}`}>
+                <span class="nz-pos">P{s.pos}</span>
+                <span class="nz-dia mono">{s.nozzle_diameter}</span>
+                <span class="nz-ty">{nozzleType(s.nozzle_type).short || s.nozzle_type}</span>
+              </span>
+            {/each}
+          </div>
+        </div>
+      {/if}
     </div>
   {/if}
 
@@ -462,11 +500,19 @@
   .tsetbtn.off:hover:not(:disabled) { border-color: var(--ophq-danger); color: var(--ophq-danger); }
   .tcard.nz { align-items: center; text-align: center; justify-content: center; }
   .tcard.nz .nzv { color: var(--ophq-accent); }
-  .rack { background: var(--ophq-bg-2); border: 1px solid var(--ophq-border); border-radius: var(--radius-sm); padding: 0.6rem 0.8rem; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.4rem; }
-  .rack-t { font-size: 0.78rem; color: var(--ophq-muted); }
-  .rack-slots { display: flex; gap: 0.3rem; flex-wrap: wrap; justify-content: center; }
-  .rslot { min-width: 2.2rem; text-align: center; padding: 0.28rem 0.4rem; border-radius: calc(var(--radius-sm) - 3px); font-size: 0.82rem; font-weight: 600; font-family: var(--font-mono); background: var(--ophq-surface); border: 1px solid var(--ophq-border); color: var(--ophq-text-2); }
-  .rslot.mounted { background: var(--ophq-accent); color: #1a1205; border-color: var(--ophq-accent); }
+  /* nozzles (toolhead + rack) */
+  .nzpanel { display: flex; flex-direction: column; gap: 0.6rem; margin-top: 0.6rem; }
+  .nz-head, .nz-rack { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+  .nz-cap { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ophq-muted); min-width: 5.5rem; }
+  .nz-inhead { display: inline-flex; align-items: baseline; gap: 0.4rem; padding: 0.3rem 0.6rem; border-radius: var(--radius-sm); background: var(--ophq-primary-dim); border: 1px solid var(--ophq-primary); color: var(--ophq-primary-2); font-size: 0.85rem; }
+  .nz-inhead b { color: var(--ophq-text); }
+  .nz-mat { color: var(--ophq-primary-2); }
+  .nz-slots { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+  .nz-slot { display: inline-flex; flex-direction: column; align-items: center; gap: 0.05rem; min-width: 3rem; padding: 0.35rem 0.45rem; border-radius: calc(var(--radius-sm) - 2px); background: var(--ophq-surface); border: 1px solid var(--ophq-border); cursor: default; }
+  .nz-slot:hover { border-color: var(--ophq-primary); }
+  .nz-pos { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.03em; color: var(--ophq-muted); }
+  .nz-dia { font-size: 0.92rem; font-weight: 700; color: var(--ophq-text); line-height: 1.1; }
+  .nz-ty { font-size: 0.64rem; color: var(--ophq-text-2); }
 
   /* fans (slider-adjustable) */
   .pd-fans { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.6rem; margin-top: 0.6rem; }
