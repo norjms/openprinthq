@@ -1,0 +1,387 @@
+vendor,model_or_profile_name,gcode_flavor,nozzle_count,has_chamber_heater,notes
+Afinia,Afinia H+1(HS),klipper,1,false,
+Anker,Anker M5,marlin2,1,false,
+Anker,Anker M5 All-Metal Hot End,marlin2,1,false,
+Anker,Anker M5C,marlin2,1,false,
+Anycubic,Anycubic 4Max Pro,marlin,1,false,
+Anycubic,Anycubic 4Max Pro 2,marlin,1,false,
+Anycubic,Anycubic Chiron,marlin,1,false,
+Anycubic,Anycubic Kobra,marlin,1,false,
+Anycubic,Anycubic Kobra 2,marlin,1,false,
+Anycubic,Anycubic Kobra 2 Max,klipper,1,false,
+Anycubic,Anycubic Kobra 2 Neo,marlin2,1,true,
+Anycubic,Anycubic Kobra 2 Plus,klipper,1,false,
+Anycubic,Anycubic Kobra 2 Pro,klipper,1,false,
+Anycubic,Anycubic Kobra 3,klipper,1,true,
+Anycubic,Anycubic Kobra 3 Max,klipper,1,true,
+Anycubic,Anycubic Kobra Max,marlin,1,false,
+Anycubic,Anycubic Kobra Neo,marlin2,1,true,
+Anycubic,Anycubic Kobra Plus,marlin,1,false,
+Anycubic,Anycubic Kobra S1,klipper,1,false,aux-fan
+Anycubic,Anycubic Kobra S1 Max,klipper,1,true,aux-fan
+Anycubic,Anycubic Kobra X,klipper,1,false,
+Anycubic,Anycubic Predator,marlin,1,false,
+Anycubic,Anycubic Vyper,marlin,1,false,
+Anycubic,Anycubic i3 Mega S,marlin,1,false,
+Artillery,Artillery Genius,marlin,1,false,
+Artillery,Artillery Genius Pro,marlin,1,false,
+Artillery,Artillery Hornet,marlin,1,false,
+Artillery,Artillery M1 Pro,klipper,1,true,aux-fan
+Artillery,Artillery Sidewinder X1,marlin,1,false,
+Artillery,Artillery Sidewinder X2,marlin,1,false,
+Artillery,Artillery Sidewinder X3 Plus,marlin,1,true,
+Artillery,Artillery Sidewinder X3 Pro,marlin2,1,true,
+Artillery,Artillery Sidewinder X4 Plus,klipper,1,true,
+Artillery,Artillery Sidewinder X4 Pro,klipper,1,true,
+BBL,Bambu Lab A1,marlin,1,false,MQTT(gcode_flavor=marlin nominal)
+BBL,Bambu Lab A1 mini,marlin,1,false,MQTT(gcode_flavor=marlin nominal)
+BBL,Bambu Lab A2L,marlin,1,false,MQTT(gcode_flavor=marlin nominal)
+BBL,Bambu Lab H2C,marlin,2,true,multi-nozzle(2); aux-fan; MQTT(gcode_flavor=marlin nominal)
+BBL,Bambu Lab H2D,marlin,2,true,multi-nozzle(2); aux-fan; MQTT(gcode_flavor=marlin nominal)
+BBL,Bambu Lab H2D Pro,marlin,2,true,multi-nozzle(2); aux-fan; MQTT(gcode_flavor=marlin nominal)
+BBL,Bambu Lab H2S,marlin,1,true,aux-fan; MQTT(gcode_flavor=marlin nominal)
+BBL,Bambu Lab P1P,marlin,1,false,MQTT(gcode_flavor=marlin nominal)
+BBL,Bambu Lab P1S,marlin,1,false,aux-fan; MQTT(gcode_flavor=marlin nominal)
+BBL,Bambu Lab P2S,marlin,1,false,MQTT(gcode_flavor=marlin nominal)
+BBL,Bambu Lab X1,marlin,1,false,MQTT(gcode_flavor=marlin nominal)
+BBL,Bambu Lab X1 Carbon,marlin,1,false,aux-fan; MQTT(gcode_flavor=marlin nominal)
+BBL,Bambu Lab X1E,marlin,1,true,aux-fan; MQTT(gcode_flavor=marlin nominal)
+BBL,Bambu Lab X2D,marlin,2,true,multi-nozzle(2); aux-fan; MQTT(gcode_flavor=marlin nominal)
+BIQU,BIQU B1,marlin,1,false,
+BIQU,BIQU BX,marlin,1,false,
+BIQU,BIQU Hurakan,klipper,1,false,
+Blocks,BLOCKS Pro S100,klipper,1,false,
+Blocks,BLOCKS RD50 V2,klipper,1,false,
+Blocks,BLOCKS RF50,klipper,1,false,aux-fan
+CONSTRUCT3D,Construct 1,reprapfirmware,1,false,
+CONSTRUCT3D,Construct 1 XL,reprapfirmware,1,false,
+Chuanying,Chuanying X1,klipper,1,false,aux-fan
+Co Print,Co Print ChromaSet,klipper,1,false,
+CoLiDo,CoLiDo 160 V2,marlin2,1,true,
+CoLiDo,CoLiDo DIY 4.0,klipper,1,true,
+CoLiDo,CoLiDo DIY 4.0 V2,klipper,1,false,aux-fan
+CoLiDo,CoLiDo SR1,klipper,1,false,aux-fan
+CoLiDo,CoLiDo X16,marlin2,1,true,
+Comgrow,Comgrow T300,klipper,1,false,
+Comgrow,Comgrow T500,klipper,1,false,
+Creality,Creality CR-10 Max,marlin,1,false,
+Creality,Creality CR-10 SE,klipper,1,true,
+Creality,Creality CR-10 V2,marlin,1,false,
+Creality,Creality CR-10 V3,marlin,1,false,
+Creality,Creality CR-6 Max,marlin,1,false,
+Creality,Creality CR-6 SE,marlin,1,false,
+Creality,Creality CR-M4,marlin,1,false,
+Creality,Creality Ender-3,marlin,1,false,
+Creality,Creality Ender-3 Pro,marlin,1,false,
+Creality,Creality Ender-3 S1,marlin,1,false,
+Creality,Creality Ender-3 S1 Plus,marlin,1,false,
+Creality,Creality Ender-3 S1 Pro,marlin,1,false,
+Creality,Creality Ender-3 V2,marlin,1,false,
+Creality,Creality Ender-3 V2 Neo,marlin,1,false,
+Creality,Creality Ender-3 V3,klipper,1,false,aux-fan
+Creality,Creality Ender-3 V3 KE,klipper,1,false,
+Creality,Creality Ender-3 V3 Plus,klipper,1,false,aux-fan
+Creality,Creality Ender-3 V3 SE,marlin2,1,false,
+Creality,Creality Ender-3 V4,klipper,1,false,
+Creality,Creality Ender-5,marlin,1,false,
+Creality,Creality Ender-5 Max,klipper,1,false,
+Creality,Creality Ender-5 Plus,marlin,1,false,
+Creality,Creality Ender-5 Pro (2019),marlin,1,false,
+Creality,Creality Ender-5 S1,marlin,1,false,
+Creality,Creality Ender-5S,marlin,1,false,
+Creality,Creality Ender-6,marlin,1,false,
+Creality,Creality Hi,klipper,1,true,
+Creality,Creality K1,klipper,1,false,aux-fan
+Creality,Creality K1 Max,klipper,1,false,aux-fan
+Creality,Creality K1 Max_CFS-C,klipper,1,false,aux-fan
+Creality,Creality K1 SE,klipper,1,false,
+Creality,Creality K1 SE_CFS-C,klipper,1,false,
+Creality,Creality K1C,klipper,1,false,aux-fan
+Creality,Creality K1C_CFS-C,klipper,1,false,aux-fan
+Creality,Creality K1_CFS-C,klipper,1,false,aux-fan
+Creality,Creality K2,klipper,1,true,aux-fan
+Creality,Creality K2 Plus,klipper,1,true,aux-fan
+Creality,Creality K2 Pro,klipper,1,true,aux-fan
+Creality,Creality K2 SE,klipper,1,false,
+Creality,Creality SPARKX i7,klipper,1,false,
+Creality,Creality Sermoon V1,marlin,1,false,aux-fan
+Cubicon,Cubicon xCeler-I,klipper,1,false,aux-fan
+Cubicon,Cubicon xCeler-Mini,klipper,1,false,aux-fan
+Cubicon,Cubicon xCeler-Plus,klipper,1,false,aux-fan
+Custom,Generic Klipper Printer,klipper,1,false,
+Custom,Generic Marlin Printer,marlin,1,false,
+Custom,Generic RRF Printer,reprapfirmware,1,false,
+Custom,Generic Repetier Printer,repetier,1,false,
+Custom,Generic ToolChanger Printer,klipper,5,false,multi-nozzle(5)
+DeltaMaker,DeltaMaker 2,klipper,1,false,
+DeltaMaker,DeltaMaker 2T,klipper,1,false,
+DeltaMaker,DeltaMaker 2XT,klipper,1,false,
+Dremel,Dremel 3D20,marlin,1,false,
+Dremel,Dremel 3D40,marlin,1,false,
+Dremel,Dremel 3D45,marlin,1,false,
+Elegoo,Elegoo Centauri,klipper,1,false,aux-fan
+Elegoo,Elegoo Centauri 2,klipper,1,false,aux-fan
+Elegoo,Elegoo Centauri Carbon,klipper,1,false,aux-fan
+Elegoo,Elegoo Centauri Carbon 2,klipper,1,false,aux-fan
+Elegoo,Elegoo Neptune,marlin,1,false,
+Elegoo,Elegoo Neptune 2,marlin,1,false,
+Elegoo,Elegoo Neptune 2D,marlin,2,false,multi-nozzle(2)
+Elegoo,Elegoo Neptune 2S,marlin,1,false,
+Elegoo,Elegoo Neptune 3,marlin,1,false,
+Elegoo,Elegoo Neptune 3 Max,marlin,1,false,
+Elegoo,Elegoo Neptune 3 Plus,marlin,1,false,
+Elegoo,Elegoo Neptune 3 Pro,marlin,1,false,
+Elegoo,Elegoo Neptune 4,klipper,1,false,
+Elegoo,Elegoo Neptune 4 Max,klipper,1,false,
+Elegoo,Elegoo Neptune 4 Plus,klipper,1,false,
+Elegoo,Elegoo Neptune 4 Pro,klipper,1,true,
+Elegoo,Elegoo Neptune X,marlin,1,false,
+Elegoo,Elegoo OrangeStorm Giga,klipper,1,false,
+Eryone,Eryone ER20,marlin2,1,false,
+Eryone,Eryone ER20 Klipper,klipper,1,false,
+Eryone,Thinker X400,klipper,1,true,
+FLSun,FLSun Q5,marlin,1,false,
+FLSun,FLSun QQ-S Pro,marlin,1,false,
+FLSun,FLSun S1,klipper,1,false,
+FLSun,FLSun Super Racer (SR),marlin,1,false,
+FLSun,FLSun T1,klipper,1,false,
+FLSun,FLSun V400,klipper,1,false,
+Flashforge,Flashforge AD5X,klipper,1,true,aux-fan
+Flashforge,Flashforge Adventurer 3 Series,marlin,2,false,multi-nozzle(2); aux-fan
+Flashforge,Flashforge Adventurer 4 Series,marlin,1,false,aux-fan
+Flashforge,Flashforge Adventurer 5M,klipper,1,false,aux-fan
+Flashforge,Flashforge Adventurer 5M Pro,klipper,1,false,aux-fan
+Flashforge,Flashforge Artemis,marlin,1,false,
+Flashforge,Flashforge Creator 5,klipper,4,false,multi-nozzle(4); aux-fan
+Flashforge,Flashforge Creator 5 Pro,klipper,4,true,multi-nozzle(4); aux-fan
+Flashforge,Flashforge Guider 2s,marlin,1,false,aux-fan
+Flashforge,Flashforge Guider 3 Ultra,klipper,1,true,aux-fan
+Flashforge,Flashforge Guider4,klipper,1,true,aux-fan
+Flashforge,Flashforge Guider4 Pro,klipper,1,true,aux-fan
+FlyingBear,FlyingBear Ghost 6,marlin2,1,false,aux-fan
+FlyingBear,FlyingBear Ghost7,klipper,1,false,aux-fan
+FlyingBear,FlyingBear Reborn3,klipper,1,false,
+FlyingBear,FlyingBear S1,klipper,1,false,aux-fan
+Folgertech,Folgertech FT-5,marlin,1,false,
+Folgertech,Folgertech FT-6,marlin,1,false,
+Folgertech,Folgertech i3,marlin,1,false,
+Geeetech,Geeetech A10 M,marlin,1,false,
+Geeetech,Geeetech A10 Pro,marlin,1,false,
+Geeetech,Geeetech A10 T,marlin,1,false,
+Geeetech,Geeetech A20,marlin,1,false,
+Geeetech,Geeetech A20 M,marlin,1,false,
+Geeetech,Geeetech A20 T,marlin,1,false,
+Geeetech,Geeetech A30 M,marlin,1,false,
+Geeetech,Geeetech A30 Pro,marlin,1,false,
+Geeetech,Geeetech A30 T,marlin,1,false,
+Geeetech,Geeetech M1,marlin,1,false,
+Geeetech,Geeetech Mizar,marlin,1,false,
+Geeetech,Geeetech Mizar M,marlin,1,false,
+Geeetech,Geeetech Mizar Max,marlin,1,false,
+Geeetech,Geeetech Mizar Pro,marlin,1,false,
+Geeetech,Geeetech Mizar S,marlin,1,false,
+Geeetech,Geeetech Thunder,marlin,1,false,aux-fan
+Ginger Additive,Ginger G1,klipper,1,false,
+InfiMech,InfiMech EX,klipper,1,false,aux-fan
+InfiMech,InfiMech EX+APS,klipper,1,false,aux-fan
+InfiMech,InfiMech TX,klipper,1,false,aux-fan
+InfiMech,InfiMech TX Hardened Steel Nozzle,klipper,1,false,aux-fan
+Kingroon,Kingroon KLP1,klipper,1,false,
+Kingroon,Kingroon KP3S 3.0,marlin,1,false,
+Kingroon,Kingroon KP3S PRO S1,marlin,1,false,
+Kingroon,Kingroon KP3S PRO V2,klipper,1,false,
+Kingroon,Kingroon KP3S V1,klipper,1,true,
+LH,LH Stinger,klipper,1,false,aux-fan
+LH,LH Stinger MMU,klipper,1,false,aux-fan
+LONGER,LONGER LK10,klipper,1,false,
+LONGER,LONGER LK10 Plus,klipper,1,false,
+Lulzbot,Lulzbot Taz 4 or 5,marlin2,1,false,
+Lulzbot,Lulzbot Taz 6,marlin2,1,false,
+Lulzbot,Lulzbot Taz Pro Dual,marlin2,2,false,multi-nozzle(2)
+Lulzbot,Lulzbot Taz Pro S,marlin2,1,false,
+M3D,M3D Enabler D8500 MM Model,unknown,2,false,multi-nozzle(2); aux-fan
+MagicMaker,MM BoneKing,klipper,1,false,
+MagicMaker,MM hj SK,klipper,1,false,
+MagicMaker,MM hqs SF,marlin2,1,false,
+MagicMaker,MM hqs hj,marlin,1,false,
+MagicMaker,MM slb,marlin,1,false,
+Mellow,M1,klipper,1,false,
+OpenEYE,OpenEYE Peacock V2,klipper,1,false,
+OrcaArena,Orca Arena X1 Carbon,klipper,1,false,
+Peopoly,Peopoly Magneto X,klipper,1,false,
+Phrozen,Phrozen Arco,klipper,1,false,aux-fan
+Positron3D,The Positron,klipper,1,false,
+Prusa,Prusa CORE One,marlin2,1,true,
+Prusa,Prusa CORE One HF,marlin2,1,true,
+Prusa,Prusa CORE One L,marlin2,1,true,
+Prusa,Prusa CORE One L HF,marlin2,1,true,
+Prusa,Prusa MINI,marlin2,1,false,
+Prusa,Prusa MINI IS,marlin2,1,false,
+Prusa,Prusa MK3.5,marlin2,1,false,
+Prusa,Prusa MK3S,marlin,1,false,
+Prusa,Prusa MK4,marlin2,1,false,
+Prusa,Prusa MK4S,marlin2,1,false,
+Prusa,Prusa MK4S HF,marlin2,1,false,
+Prusa,Prusa XL,marlin2,1,false,
+Prusa,Prusa XL 5T,marlin2,5,false,multi-nozzle(5)
+Qidi,Qidi Q1 Pro,klipper,1,true,aux-fan
+Qidi,Qidi Q2,klipper,1,true,aux-fan
+Qidi,Qidi Q2C,klipper,1,true,aux-fan
+Qidi,Qidi X-CF Pro,marlin,1,true,
+Qidi,Qidi X-Max,marlin,1,true,
+Qidi,Qidi X-Max 3,klipper,1,true,aux-fan
+Qidi,Qidi X-Max 4,klipper,1,true,aux-fan
+Qidi,Qidi X-Plus,marlin,1,true,
+Qidi,Qidi X-Plus 3,klipper,1,true,aux-fan
+Qidi,Qidi X-Plus 4,klipper,1,true,aux-fan
+Qidi,Qidi X-Smart 3,klipper,1,true,aux-fan
+RH3D,E3NG v1.2S,klipper,1,false,
+Raise3D,Raise3D Pro3,marlin,2,false,multi-nozzle(2)
+Raise3D,Raise3D Pro3 Plus,marlin,2,false,multi-nozzle(2)
+Ratrig,RatRig V-Cast,klipper,1,false,
+Ratrig,RatRig V-Core 3 200,klipper,1,false,
+Ratrig,RatRig V-Core 3 300,klipper,1,false,
+Ratrig,RatRig V-Core 3 400,klipper,1,false,
+Ratrig,RatRig V-Core 3 500,klipper,1,false,
+Ratrig,RatRig V-Core 4 300,klipper,1,false,
+Ratrig,RatRig V-Core 4 400,klipper,1,false,
+Ratrig,RatRig V-Core 4 500,klipper,1,false,
+Ratrig,RatRig V-Core 4 HYBRID 300,klipper,1,false,
+Ratrig,RatRig V-Core 4 HYBRID 400,klipper,1,false,
+Ratrig,RatRig V-Core 4 HYBRID 500,klipper,1,false,
+Ratrig,RatRig V-Core 4 IDEX 300,klipper,2,false,multi-nozzle(2)
+Ratrig,RatRig V-Core 4 IDEX 300 COPY MODE,klipper,2,false,multi-nozzle(2)
+Ratrig,RatRig V-Core 4 IDEX 300 MIRROR MODE,klipper,2,false,multi-nozzle(2)
+Ratrig,RatRig V-Core 4 IDEX 400,klipper,2,false,multi-nozzle(2)
+Ratrig,RatRig V-Core 4 IDEX 400 COPY MODE,klipper,2,false,multi-nozzle(2)
+Ratrig,RatRig V-Core 4 IDEX 400 MIRROR MODE,klipper,2,false,multi-nozzle(2)
+Ratrig,RatRig V-Core 4 IDEX 500,klipper,2,false,multi-nozzle(2)
+Ratrig,RatRig V-Core 4 IDEX 500 COPY MODE,klipper,2,false,multi-nozzle(2)
+Ratrig,RatRig V-Core 4 IDEX 500 MIRROR MODE,klipper,2,false,multi-nozzle(2)
+Ratrig,RatRig V-Minion,klipper,1,false,
+RolohaunDesign,Rolohaun Delta Flyer Refit,klipper,1,false,
+RolohaunDesign,Rook MK1 LDO,klipper,1,false,
+SecKit,SecKit SK-Tank,klipper,1,false,
+SecKit,Seckit Go3,klipper,1,false,
+SeeMeCNC,SeeMeCNC Artemis 300,reprapfirmware,1,true,
+SeeMeCNC,SeeMeCNC BOSSdelta 300,reprapfirmware,1,true,
+SeeMeCNC,SeeMeCNC BOSSdelta 500 0505,reprapfirmware,1,true,
+SeeMeCNC,SeeMeCNC BOSSdelta 500 0510,reprapfirmware,1,true,
+SeeMeCNC,SeeMeCNC BOSSdelta 500 0521,reprapfirmware,1,true,
+SeeMeCNC,SeeMeCNC RostockMAX v3.2,reprapfirmware,1,true,
+SeeMeCNC,SeeMeCNC RostockMAX v4,reprapfirmware,1,true,
+Snapmaker,Snapmaker A250,marlin2,1,false,
+Snapmaker,Snapmaker A250 BKit,marlin2,1,false,
+Snapmaker,Snapmaker A250 Dual,marlin2,2,false,multi-nozzle(2)
+Snapmaker,Snapmaker A250 Dual BKit,marlin2,2,false,multi-nozzle(2)
+Snapmaker,Snapmaker A250 Dual QS+B Kit,marlin2,2,false,multi-nozzle(2)
+Snapmaker,Snapmaker A250 Dual QSKit,marlin2,2,false,multi-nozzle(2)
+Snapmaker,Snapmaker A250 QS+B Kit,marlin2,1,false,
+Snapmaker,Snapmaker A250 QSKit,marlin2,1,false,
+Snapmaker,Snapmaker A350,marlin2,1,false,
+Snapmaker,Snapmaker A350 BKit,marlin2,1,false,
+Snapmaker,Snapmaker A350 Dual,marlin2,2,false,multi-nozzle(2)
+Snapmaker,Snapmaker A350 Dual BKit,marlin2,2,false,multi-nozzle(2)
+Snapmaker,Snapmaker A350 Dual QS+B Kit,marlin2,2,false,multi-nozzle(2)
+Snapmaker,Snapmaker A350 Dual QSKit,marlin2,2,false,multi-nozzle(2)
+Snapmaker,Snapmaker A350 QS+B Kit,marlin2,1,false,
+Snapmaker,Snapmaker A350 QSKit,marlin2,1,false,
+Snapmaker,Snapmaker Artisan,marlin2,2,false,multi-nozzle(2)
+Snapmaker,Snapmaker J1,marlin2,2,false,multi-nozzle(2)
+Snapmaker,Snapmaker U1,klipper,4,false,multi-nozzle(4); aux-fan
+Sovol,Sovol SV01,marlin,1,false,
+Sovol,Sovol SV01 Pro,marlin,1,false,
+Sovol,Sovol SV02,marlin,2,false,multi-nozzle(2)
+Sovol,Sovol SV05,marlin,1,false,
+Sovol,Sovol SV06,marlin,1,false,
+Sovol,Sovol SV06 ACE,klipper,1,false,
+Sovol,Sovol SV06 Plus,marlin,1,false,
+Sovol,Sovol SV06 Plus ACE,klipper,1,false,
+Sovol,Sovol SV07,marlin,1,false,
+Sovol,Sovol SV07 Plus,klipper,1,false,
+Sovol,Sovol SV08,klipper,1,false,
+Sovol,Sovol SV08 MAX,klipper,1,false,
+Sovol,Sovol Zero,klipper,1,false,aux-fan
+Tiertime,Tiertime UP300 HS,klipper,1,false,
+Tiertime,Tiertime UP310 Pro,klipper,1,false,
+Tiertime,Tiertime UP400 Pro,klipper,1,false,
+Tiertime,Tiertime UP600 HS,klipper,1,false,
+Tronxy,Tronxy X5SA 400 Marlin Firmware,marlin,1,false,
+TwoTrees,TwoTrees SK1,klipper,1,false,
+TwoTrees,TwoTrees SP-5 Klipper,klipper,1,false,
+UltiMaker,UltiMaker 2,marlin,1,false,
+Vivedino,Troodon 2.0 - Klipper,klipper,1,false,
+Vivedino,Troodon 2.0 - RRF,reprapfirmware,1,false,
+Volumic,EXO42,marlin,1,false,
+Volumic,EXO42 IDRE,klipper,2,false,multi-nozzle(2)
+Volumic,EXO42 Performance,klipper,1,false,
+Volumic,EXO42 Stage 2,klipper,1,false,
+Volumic,EXO65,marlin,1,false,
+Volumic,EXO65 IDRE,klipper,2,false,multi-nozzle(2)
+Volumic,EXO65 Performance,klipper,1,false,
+Volumic,EXO65 Stage 2,klipper,1,false,
+Volumic,SH65,marlin,1,false,
+Volumic,SH65 IDRE,klipper,2,false,multi-nozzle(2)
+Volumic,SH65 Performance,klipper,1,false,
+Volumic,SH65 Stage 2,klipper,1,false,
+Volumic,VS20MK2,marlin,1,false,
+Volumic,VS30MK2,marlin,1,false,
+Volumic,VS30MK3,marlin,1,false,
+Volumic,VS30MK3 Stage 2,klipper,1,false,
+Volumic,VS30SC,marlin,1,false,
+Volumic,VS30SC2,marlin,1,false,
+Volumic,VS30SC2 Performance,klipper,1,false,
+Volumic,VS30SC2 Stage 2,klipper,1,false,
+Volumic,VS30ULTRA,marlin,1,false,
+Voron,Voron 0.1,klipper,1,false,
+Voron,Voron 2.4 250,klipper,1,false,
+Voron,Voron 2.4 300,klipper,1,false,
+Voron,Voron 2.4 350,klipper,1,false,
+Voron,Voron Switchwire 250,klipper,1,false,
+Voron,Voron Trident 250,klipper,1,false,
+Voron,Voron Trident 300,klipper,1,false,
+Voron,Voron Trident 350,klipper,1,false,
+Voxelab,Voxelab Aquila X2,marlin,1,false,
+Vzbot,Vzbot 235 AWD,klipper,1,false,
+Vzbot,Vzbot 330 AWD,klipper,1,false,
+WEMAKE3D,WEMAKE3D PhoenixProV1,marlin2,1,false,
+WEMAKE3D,WEMAKE3D TinyBotV1,marlin2,1,false,
+Wanhao,Wanhao D12-300,marlin,1,false,
+Wanhao France,D12 230 PRO M2 DIRECT,marlin2,1,false,
+Wanhao France,D12 230 PRO M2 MONO DUAL,marlin2,1,false,
+Wanhao France,D12 230 PRO M2 MONO DUAL PoopTool,marlin2,1,false,
+Wanhao France,D12 230 PRO SMARTPAD DIRECT,klipper,1,false,
+Wanhao France,D12 230 PRO SMARTPAD MONO DUAL,klipper,1,false,
+Wanhao France,D12 230 PRO SMARTPAD MONO DUAL PoopTool,klipper,1,false,
+Wanhao France,D12 300 PRO M2 DIRECT,marlin2,1,false,
+Wanhao France,D12 300 PRO M2 MONO DUAL,marlin2,1,false,
+Wanhao France,D12 300 PRO M2 MONO DUAL PoopTool,marlin2,1,false,
+Wanhao France,D12 300 PRO SMARTPAD DIRECT,klipper,1,false,
+Wanhao France,D12 300 PRO SMARTPAD MONO DUAL,klipper,1,false,
+Wanhao France,D12 300 PRO SMARTPAD MONO DUAL PoopTool,klipper,1,false,
+Wanhao France,D12 500 PRO M2 DIRECT,unknown,1,false,
+Wanhao France,D12 500 PRO M2 MONO DUAL,marlin2,1,false,
+Wanhao France,D12 500 PRO M2 MONO DUAL PoopTool,marlin2,1,false,
+Wanhao France,D12 500 PRO SMARTPAD DIRECT,klipper|marlin2,1,false,
+Wanhao France,D12 500 PRO SMARTPAD MONO DUAL,klipper,1,false,
+Wanhao France,D12 500 PRO SMARTPAD MONO DUAL PoopTool,klipper,1,false,
+WonderMaker,WonderMaker ZR,klipper,1,false,aux-fan
+WonderMaker,WonderMaker ZR Ultra,klipper,4,false,multi-nozzle(4); aux-fan
+WonderMaker,WonderMaker ZR Ultra S,klipper,4,true,multi-nozzle(4); aux-fan
+Z-Bolt,Z-Bolt S1000,klipper,1,true,
+Z-Bolt,Z-Bolt S1000 Dual,klipper,2,true,multi-nozzle(2)
+Z-Bolt,Z-Bolt S300,klipper,1,true,
+Z-Bolt,Z-Bolt S300 Dual,klipper,2,true,multi-nozzle(2)
+Z-Bolt,Z-Bolt S400,klipper,1,true,
+Z-Bolt,Z-Bolt S400 Dual,klipper,2,true,multi-nozzle(2)
+Z-Bolt,Z-Bolt S600,klipper,1,false,
+Z-Bolt,Z-Bolt S600 Dual,klipper,2,false,multi-nozzle(2)
+Z-Bolt,Z-Bolt S800 Dual,klipper,2,true,multi-nozzle(2)
+iQ,TiQ2,marlin,2,true,multi-nozzle(2)
+iQ,TiQ8,marlin,2,true,multi-nozzle(2)
+re3D,re3D Gigabot 4,klipper,2,false,multi-nozzle(2)
+re3D,re3D Gigabot 4 XLT,klipper,2,false,multi-nozzle(2)
+re3D,re3D GigabotX 2,klipper,1,false,
+re3D,re3D GigabotX 2 XLT,klipper,1,false,
+re3D,re3D Terabot 4,klipper,2,false,multi-nozzle(2)
+re3D,re3D TerabotX 2,klipper,1,false,
