@@ -4,11 +4,14 @@
   // All actions move real hardware; the whole panel is disabled while printing.
   import { api } from '$lib/api';
 
-  let { printerId, status, refresh } = $props();
+  let { printerId, status, refresh, kind = '' } = $props();
 
   const printing = $derived(/run|print/i.test(String(status?.state || '')));
   const t = $derived(status?.temperatures || {});
   const dual = $derived(t.nozzle_2 !== undefined && t.nozzle_2 !== null);
+  // Klipper/Moonraker printers have no Bambu-style speed presets; they use live
+  // factor overrides (M220/M221), babystep Z, and pressure advance instead.
+  const isKlipper = $derived(String(kind || '').toLowerCase() === 'klipper');
 
   let step = $state(10);          // XY/Z step mm
   const steps = [0.1, 1, 10, 50];
@@ -16,6 +19,38 @@
   let ext = $state(0);            // active extruder 0=right,1=left
   let busy = $state(null);
   let msg = $state(null);
+
+  // ---- Klipper runtime controls (standard g-code, works on any Moonraker) ----
+  let zOffset = $state(0);          // live babystep total (SET_GCODE_OFFSET)
+  let speedFactor = $state(100);    // M220 speed override %
+  let flowFactor = $state(100);     // M221 extrusion/flow override %
+  let paValue = $state(0.040);      // pressure advance (s)
+  let smoothTime = $state(0.040);   // PA smooth time (s)
+  let feedAmt = $state(25);         // filament length for manual extrude (mm)
+  let feedRate = $state(5);         // manual extrude feedrate (mm/s)
+  const Z_STEPS = [0.05, 0.025, 0.01, 0.005];
+  const LEN_PRESETS = [50, 25, 10, 5, 1];
+  const RATE_PRESETS = [10, 5, 2, 1];
+
+  const round3 = (n) => (Math.round(n * 1000) / 1000).toFixed(3);
+  async function babyZ(delta) {
+    await act('z-off', () => api.sendGcode(printerId, `SET_GCODE_OFFSET Z_ADJUST=${delta} MOVE=1`));
+    zOffset = Math.round((zOffset + delta) * 1000) / 1000;
+  }
+  async function zeroZ() {
+    await act('z-off', () => api.sendGcode(printerId, 'SET_GCODE_OFFSET Z=0 MOVE=1'));
+    zOffset = 0;
+  }
+  const applySpeed = () => act('spd', () => api.sendGcode(printerId, `M220 S${Math.max(1, Number(speedFactor) || 100)}`), 'Speed factor set.');
+  const applyFlow = () => act('flow', () => api.sendGcode(printerId, `M221 S${Math.max(1, Number(flowFactor) || 100)}`), 'Flow set.');
+  const applyPA = () => act('pa', () => api.sendGcode(printerId, `SET_PRESSURE_ADVANCE ADVANCE=${Number(paValue) || 0} SMOOTH_TIME=${Number(smoothTime) || 0}`), 'Pressure advance set.');
+  // Relative extrude at a chosen feedrate (mm/s → mm/min for G1 F).
+  const kExtrude = (dir) => act('ke', async () => {
+    const len = (Number(feedAmt) || 0) * dir;
+    const f = Math.max(1, Number(feedRate) || 5) * 60;
+    await api.sendGcode(printerId, 'M83');
+    await api.sendGcode(printerId, `G1 E${len} F${f}`);
+  });
 
   const light = $derived(!!status?.chamber_light);
   const partFan = $derived(Math.round(((status?.cooling_fan_speed ?? 0) / 255) * 100) || pctFan(status?.cooling_fan_speed));
@@ -91,13 +126,26 @@
           <button class:on={ext === 0} onclick={() => pickExtruder(0)} disabled={printing || busy === 'ext'}>Right</button>
         </div>
       {/if}
-      <div class="erow">
-        <input class="input xs" type="number" min="1" max="100" bind:value={extrudeAmt} /><span class="muted">mm</span>
-      </div>
-      <div class="ebtns">
-        <button class="jb" onclick={() => extrude(1)} disabled={printing || busy === 'e'}>Extrude ↓</button>
-        <button class="jb" onclick={() => extrude(-1)} disabled={printing || busy === 'e'}>Retract ↑</button>
-      </div>
+      {#if isKlipper}
+        <div class="erow"><span class="fl">Length</span>
+          <input class="input xs" type="number" min="1" bind:value={feedAmt} /><span class="muted">mm</span></div>
+        <div class="preset">{#each LEN_PRESETS as p}<button class="mini" class:on={feedAmt === p} onclick={() => (feedAmt = p)}>{p}</button>{/each}</div>
+        <div class="erow"><span class="fl">Rate</span>
+          <input class="input xs" type="number" min="1" bind:value={feedRate} /><span class="muted">mm/s</span></div>
+        <div class="preset">{#each RATE_PRESETS as p}<button class="mini" class:on={feedRate === p} onclick={() => (feedRate = p)}>{p}</button>{/each}</div>
+        <div class="ebtns">
+          <button class="jb" onclick={() => kExtrude(1)} disabled={printing || busy === 'ke'}>Extrude ↓</button>
+          <button class="jb" onclick={() => kExtrude(-1)} disabled={printing || busy === 'ke'}>Retract ↑</button>
+        </div>
+      {:else}
+        <div class="erow">
+          <input class="input xs" type="number" min="1" max="100" bind:value={extrudeAmt} /><span class="muted">mm</span>
+        </div>
+        <div class="ebtns">
+          <button class="jb" onclick={() => extrude(1)} disabled={printing || busy === 'e'}>Extrude ↓</button>
+          <button class="jb" onclick={() => extrude(-1)} disabled={printing || busy === 'e'}>Retract ↑</button>
+        </div>
+      {/if}
     </div>
 
     <!-- Fans — start right of the extruder, each fan stacked vertically. -->
@@ -114,17 +162,74 @@
     </div>
   </div>
 
-  <div class="speed">
-    <span class="blabel">Print speed</span>
-    <div class="segl wide">
-      {#each SPEEDS as [m, label]}
-        <button class:on={speedLevel === m} onclick={() => setSpeed(m)} disabled={busy === 'speed'}>{label}</button>
-      {/each}
+  {#if isKlipper}
+    <!-- Klipper has no speed presets: live factor overrides + babystep Z instead. -->
+    <div class="ktune">
+      <!-- Z-offset babystep -->
+      <div class="krow">
+        <span class="blabel">Z-offset <span class="zval mono">{round3(zOffset)} mm</span></span>
+        <div class="zbtns">
+          {#each Z_STEPS as z}<button class="mini" onclick={() => babyZ(-z)} disabled={busy === 'z-off'}>−{z}</button>{/each}
+          <span class="sep"></span>
+          {#each [...Z_STEPS].reverse() as z}<button class="mini" onclick={() => babyZ(z)} disabled={busy === 'z-off'}>+{z}</button>{/each}
+          <button class="mini" onclick={zeroZ} disabled={busy === 'z-off'} title="Reset offset to 0">Reset</button>
+        </div>
+      </div>
+
+      <!-- Speed factor (M220) -->
+      <div class="krow">
+        <span class="blabel">Speed factor</span>
+        <div class="factor">
+          <button class="mini" onclick={() => { speedFactor = Math.max(1, (Number(speedFactor) || 100) - 5); applySpeed(); }} disabled={busy === 'spd'}>−</button>
+          <input class="input xs" type="number" min="1" max="300" bind:value={speedFactor} />
+          <span class="muted">%</span>
+          <button class="mini" onclick={() => { speedFactor = (Number(speedFactor) || 100) + 5; applySpeed(); }} disabled={busy === 'spd'}>+</button>
+          <button class="btn btn-ghost btn-sm" onclick={applySpeed} disabled={busy === 'spd'}>Set</button>
+        </div>
+      </div>
+
+      <!-- Extrusion / flow factor (M221) -->
+      <div class="krow">
+        <span class="blabel">Flow factor</span>
+        <div class="factor">
+          <button class="mini" onclick={() => { flowFactor = Math.max(1, (Number(flowFactor) || 100) - 5); applyFlow(); }} disabled={busy === 'flow'}>−</button>
+          <input class="input xs" type="number" min="1" max="200" bind:value={flowFactor} />
+          <span class="muted">%</span>
+          <button class="mini" onclick={() => { flowFactor = (Number(flowFactor) || 100) + 5; applyFlow(); }} disabled={busy === 'flow'}>+</button>
+          <button class="btn btn-ghost btn-sm" onclick={applyFlow} disabled={busy === 'flow'}>Set</button>
+        </div>
+      </div>
+
+      <!-- Pressure advance + smooth time -->
+      <div class="krow">
+        <span class="blabel">Pressure advance</span>
+        <div class="factor">
+          <input class="input xs" type="number" min="0" max="1" step="0.001" bind:value={paValue} /><span class="muted">s</span>
+          <span class="fl sm">smooth</span>
+          <input class="input xs" type="number" min="0" max="0.2" step="0.005" bind:value={smoothTime} /><span class="muted">s</span>
+          <button class="btn btn-ghost btn-sm" onclick={applyPA} disabled={busy === 'pa'}>Set</button>
+        </div>
+      </div>
+
+      <div class="krow">
+        <button class="btn btn-ghost btn-sm light {light ? 'on' : ''}" onclick={toggleLight} disabled={busy === 'light'}>
+          {light ? '💡 Light on' : 'Light off'}
+        </button>
+      </div>
     </div>
-    <button class="btn btn-ghost btn-sm light {light ? 'on' : ''}" onclick={toggleLight} disabled={busy === 'light'}>
-      {light ? '💡 Light on' : 'Light off'}
-    </button>
-  </div>
+  {:else}
+    <div class="speed">
+      <span class="blabel">Print speed</span>
+      <div class="segl wide">
+        {#each SPEEDS as [m, label]}
+          <button class:on={speedLevel === m} onclick={() => setSpeed(m)} disabled={busy === 'speed'}>{label}</button>
+        {/each}
+      </div>
+      <button class="btn btn-ghost btn-sm light {light ? 'on' : ''}" onclick={toggleLight} disabled={busy === 'light'}>
+        {light ? '💡 Light on' : 'Light off'}
+      </button>
+    </div>
+  {/if}
   {#if msg}<p class={msg.kind === 'ok' ? 'ok-msg' : 'err'}>{msg.text}</p>{/if}
 </div>
 
@@ -167,6 +272,17 @@
   .speed { margin-top: 1.2rem; padding-top: 1rem; border-top: 1px solid var(--ophq-border-soft); display: flex; align-items: center; gap: 0.8rem; }
   .speed .light { margin-left: auto; }
   .segl.wide button { padding: 0.35rem 0.9rem; }
+  .preset { display: flex; gap: 0.25rem; margin-top: 0.35rem; }
+  .preset .mini.on { border-color: var(--ophq-primary); color: var(--ophq-primary-2); background: var(--ophq-primary-dim); }
+  /* Klipper runtime controls (replace Bambu speed presets) */
+  .ktune { margin-top: 1.2rem; padding-top: 1rem; border-top: 1px solid var(--ophq-border-soft); display: flex; flex-direction: column; gap: 0.7rem; }
+  .krow { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; }
+  .krow .blabel { min-width: 8.5rem; }
+  .zval { color: var(--ophq-text); text-transform: none; letter-spacing: 0; margin-left: 0.3rem; }
+  .zbtns { display: flex; align-items: center; gap: 0.25rem; flex-wrap: wrap; }
+  .zbtns .sep { width: 1px; height: 18px; background: var(--ophq-border); margin: 0 0.25rem; }
+  .factor { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
+  .fl.sm { margin-left: 0.4rem; }
   .ok-msg { color: var(--ophq-success); font-size: 0.88rem; margin: 0.7rem 0 0; }
   .err { color: var(--ophq-danger); font-size: 0.88rem; margin: 0.7rem 0 0; }
   @media (max-width: 700px) { .ctl { grid-template-columns: 1fr; } }
