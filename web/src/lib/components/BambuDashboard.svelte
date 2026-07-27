@@ -9,7 +9,7 @@
   import { printerLabel, nozzleType, printerImage } from '$lib/models.js';
   import { markSeen, recentlyOnline } from '$lib/online.js';
 
-  let { printerId, status = null, meta = null, refresh = () => {}, oncamera = () => {} } = $props();
+  let { printerId, status = null, meta = null, refresh = () => {}, oncamera = () => {}, onsettings = () => {} } = $props();
 
   const st = $derived(status || {});
 
@@ -442,6 +442,7 @@
     <a class="ctl" href="#temps" data-tip="Temperatures & preheat" aria-label="Temperatures and preheat">🔥</a>
     <a class="ctl" href="#move" data-tip="Move / jog controls" aria-label="Move and jog controls">✥</a>
     <a class="ctl" href="#camera" data-tip="Open camera" aria-label="Open camera" onclick={oncamera}>📷</a>
+    <button class="ctl" type="button" data-tip="Printer settings" aria-label="Printer settings" onclick={onsettings}>⚙</button>
     <span class="ctl-sp"></span>
     <button class="btn btn-ghost" data-tip={isPaused ? 'Resume the print' : 'Pause the print'}
             aria-label={isPaused ? 'Resume the print' : 'Pause the print'}
