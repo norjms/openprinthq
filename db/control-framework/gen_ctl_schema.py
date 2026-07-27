@@ -358,7 +358,9 @@ with open("/home/claude/orca_models.csv") as fh:
         chamber = r["has_chamber_heater"].strip().lower()=="true"
         notes=r.get("notes","").strip()
         aux = "aux-fan" in notes.lower() or vendor=="BBL" and "aux" in notes.lower()
-        dk=dialect_for(flavor); mk=mech_for(vendor,flavor)
+        # Bambu speaks MQTT structured commands, NOT its nominal marlin gcode_flavor.
+        dk = "bambu_mqtt" if vendor=="BBL" else dialect_for(flavor)
+        mk=mech_for(vendor,flavor)
         rows.append((vendor,model,dk,mk,flavor,nz,chamber,aux,nz>1,VENDOR_POP.get(vendor,50),difficulty_for(mk),notes))
 
 w("\n-- printer types")
