@@ -10,7 +10,30 @@
 
   // Owner-only nav (the Instances admin tab) is hidden entirely for non-owners.
   let isOwner = $state(false);
-  onMount(() => { api.me().then((m) => { isOwner = !!m?.isOwner; }).catch(() => {}); });
+  onMount(() => {
+    api.me().then((m) => { isOwner = !!m?.isOwner; }).catch(() => {});
+    // Session keep-alive: every 15 min, re-run Authentik forward-auth in a hidden
+    // iframe so the proxy cookie is refreshed (via the still-valid SSO session)
+    // before it expires. Background fetch/XHR can't follow the auth-refresh
+    // redirect (cross-origin), but an iframe navigation can — this stops /api
+    // (engine) calls from silently dying after the token TTL ("engine unreachable").
+    let ka;
+    try {
+      ka = setInterval(() => {
+        let f = document.getElementById('ophq-keepalive');
+        if (!f) {
+          f = document.createElement('iframe');
+          f.id = 'ophq-keepalive';
+          f.setAttribute('aria-hidden', 'true');
+          f.tabIndex = -1;
+          f.style.cssText = 'position:absolute;left:-9999px;width:0;height:0;border:0';
+          document.body.appendChild(f);
+        }
+        f.src = '/api/me?ka=' + Date.now();
+      }, 15 * 60 * 1000);
+    } catch { /* */ }
+    return () => { if (ka) clearInterval(ka); };
+  });
 
   // On phones the sidebar collapses to a top bar with a slide-down menu.
   let menuOpen = $state(false);
