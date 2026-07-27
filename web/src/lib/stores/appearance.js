@@ -24,8 +24,11 @@ export async function loadAppearance() {
   if (loaded) return get(appearance);
   loaded = true;
   try {
-    const saved = await api.appearance();
-    const cfg = normalizeConfig(saved);
+    // GET /api/appearance returns { config: <saved-or-null> }. Unwrap it — passing
+    // the wrapper straight to normalizeConfig would find no `.mode` and silently
+    // fall back to light, reverting the user's saved theme on every refresh.
+    const resp = await api.appearance();
+    const cfg = normalizeConfig(resp?.config ?? resp);
     appearance.set(cfg);
     applyAppearance(cfg);
     writeAppearanceCookie(cfg);
