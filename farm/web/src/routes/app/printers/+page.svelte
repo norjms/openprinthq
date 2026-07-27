@@ -3,6 +3,7 @@
   import { api } from '$lib/api';
   import PageTitle from '$lib/components/PageTitle.svelte';
   import CameraStream from '$lib/components/CameraStream.svelte';
+  import { prettyModel } from '$lib/models.js';
 
   let loading = $state(true);
   let error = $state(null);
@@ -143,7 +144,7 @@
         </div>
         <div class="meta mono">
           {#if p.vendor}<span>{p.vendor}</span>{/if}
-          {#if p.model}<span>{p.model}</span>{/if}
+          {#if p.model}<span>{prettyModel(p.model)}</span>{/if}
         </div>
         {#if p.live?.connected && !camErr[p.id]}
           <div class="cam">
@@ -180,7 +181,7 @@
       <div class="fwlist">
         {#each fw.updates as u (u.printer_id)}
           <div class="fwrow">
-            <span class="fwn">{u.printer_name}{#if u.model}<span class="muted mono"> · {u.model}</span>{/if}</span>
+            <span class="fwn">{u.printer_name}{#if u.model}<span class="muted mono"> · {prettyModel(u.model)}</span>{/if}</span>
             <span class="mono muted fwcur">{u.current_version || 'unknown'}</span>
             {#if u.update_available}
               <span class="chip accent" title={u.latest_version || ''}>update{#if u.latest_version} → {u.latest_version}{/if}</span>
