@@ -630,8 +630,8 @@ app.post('/api/integration-token/regenerate', async (req, reply) => {
 // ---- appearance (Look & Feel) ------------------------------------------
 // Per-user theme + branding. Stored as one JSON blob; never shared between
 // users, so one account's theme can't affect another's.
-const MAX_IMG = 512 * 1024;            // per image (logo / favicon) data-URI cap
-const MAX_APPEARANCE = 1.5 * 1024 * 1024; // whole-config cap
+const MAX_IMG = 512 * 1024;            // per image (each logo / favicon) data-URI cap
+const MAX_APPEARANCE = 4 * 1024 * 1024; // whole-config cap (3 logos + favicon + colours)
 function validImageDataUri(s) {
   return typeof s === 'string' && (s === '' || (/^data:image\/(png|jpeg|jpg|svg\+xml|webp|gif|x-icon|vnd\.microsoft\.icon);base64,/.test(s) && s.length <= MAX_IMG));
 }
@@ -649,6 +649,10 @@ app.put('/api/appearance', async (req, reply) => {
   const b = config.branding || {};
   if (!validImageDataUri(b.logo || '')) return reply.code(400).send({ error: 'logo must be an image data-URI under 512 KB' });
   if (!validImageDataUri(b.favicon || '')) return reply.code(400).send({ error: 'favicon must be an image data-URI under 512 KB' });
+  const logos = (b.logos && typeof b.logos === 'object') ? b.logos : {};
+  for (const slot of ['light', 'dark', 'accessible']) {
+    if (!validImageDataUri(logos[slot] || '')) return reply.code(400).send({ error: `${slot} logo must be an image data-URI under 512 KB` });
+  }
   if (JSON.stringify(config).length > MAX_APPEARANCE) return reply.code(413).send({ error: 'appearance config too large' });
   await setAppearance(user.id, config);
   return { ok: true };
