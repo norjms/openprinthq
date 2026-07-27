@@ -46,6 +46,24 @@
   let scanned = $state(false);
   let scanErr = $state(null);
   let pickedIp = $state(null);
+  let existing = $state([]);      // printers already added, to filter out of discovery
+  let hiddenCount = $state(0);    // how many discovered were hidden as already-added
+
+  // A discovered printer counts as already-added if its serial matches an existing
+  // one (strong key for Bambu), or its IP matches an existing printer of the same
+  // platform (Klipper/Moonraker has no serial and is keyed by IP + port).
+  function alreadyAdded(p) {
+    const serial = String(p.serial || '').trim().toUpperCase();
+    const ip = String(p.ip_address || '').trim();
+    const ct = selected?.ct;
+    return existing.some((e) => {
+      const eSerial = String(e.serial_number || '').trim().toUpperCase();
+      const eIp = String(e.ip_address || '').trim();
+      if (serial && eSerial && serial === eSerial) return true;
+      if (ip && eIp && ip === eIp && e.connection_type === ct) return true;
+      return false;
+    });
+  }
 
   function pick(v) {
     selected = v; err = null; values = {};
@@ -62,9 +80,11 @@
 
   async function scan() {
     const klip = isKlipper;
-    scanning = true; scanErr = null; discovered = []; scanned = false;
+    scanning = true; scanErr = null; discovered = []; scanned = false; hiddenCount = 0;
     scanProgress = { scanned: 0, total: 0 };
     try {
+      // Refresh the list of already-added printers so discovery can hide them.
+      try { existing = await api.printers() || []; } catch { /* keep prior list */ }
       await (klip ? api.discoverKlipperScan(subnet, 1.5) : api.discoverScan(subnet, 1.5));
       for (let i = 0; i < 40; i++) {
         await sleep(1500);
@@ -72,7 +92,10 @@
         scanProgress = { scanned: s.scanned || 0, total: s.total || 0 };
         if (!s.running) break;
       }
-      discovered = await (klip ? api.discoveredKlipperPrinters() : api.discoveredPrinters());
+      const raw = await (klip ? api.discoveredKlipperPrinters() : api.discoveredPrinters());
+      const fresh = (raw || []).filter((p) => !alreadyAdded(p));
+      hiddenCount = (raw || []).length - fresh.length;
+      discovered = fresh;
     } catch (e) {
       scanErr = e.message || 'scan failed';
     } finally {
@@ -165,13 +188,16 @@
               </button>
             {/each}
           </div>
+          {#if hiddenCount}<p class="muted tiny">{hiddenCount} already-added printer{hiddenCount > 1 ? 's' : ''} hidden.</p>{/if}
           {#if isKlipper}
             <p class="muted tiny">Selected the printer? Give it a <b>display name</b> below. Add an API key only if your Moonraker requires one.</p>
           {:else}
             <p class="muted tiny">Selected the printer? Enter its <b>access code</b> below (Settings → LAN-only mode on the printer's screen).</p>
           {/if}
         {:else if scanned && !scanning}
-          {#if isKlipper}
+          {#if hiddenCount}
+            <p class="muted tiny">All {hiddenCount} discovered printer{hiddenCount > 1 ? 's are' : ' is'} already added. Nothing new to add on this subnet.</p>
+          {:else if isKlipper}
             <p class="muted tiny">No Klipper printers found. Confirm Moonraker is reachable on port 7125 and the subnet is right, or enter the details manually below.</p>
           {:else}
             <p class="muted tiny">No printers found. Confirm LAN-only mode is on and the subnet is right, or enter the details manually below.</p>
