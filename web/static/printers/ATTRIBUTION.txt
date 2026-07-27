@@ -1,0 +1,3 @@
+Printer cover images in this directory are sourced from the OrcaSlicer project
+(https://github.com/SoftFever/OrcaSlicer), resources/profiles/<Vendor>/*_cover.png,
+and are used under the GNU AGPL-3.0 license (the same license as OpenPrintHQ).

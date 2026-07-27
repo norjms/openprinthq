@@ -6,7 +6,7 @@
   // theme variables so it follows Light / Dark / Accessible.
   // SPDX-License-Identifier: AGPL-3.0-or-later
   import { api } from '$lib/api';
-  import { printerLabel, nozzleType } from '$lib/models.js';
+  import { printerLabel, nozzleType, printerImage } from '$lib/models.js';
   import { markSeen, recentlyOnline } from '$lib/online.js';
 
   let { printerId, status = null, meta = null, refresh = () => {}, oncamera = () => {} } = $props();
@@ -22,6 +22,7 @@
   // ---- identity / header ------------------------------------------------
   const name = $derived(st?.name || meta?.name || 'Printer');
   const model = $derived(printerLabel(meta?.connection_type || 'bambu', meta?.model || st?.model || ''));
+  const modelImg = $derived(printerImage(meta?.connection_type || 'bambu', meta?.model || st?.model || ''));
   const nozzleDia = $derived(st?.nozzles?.[0]?.nozzle_diameter || '');
   const printHours = $derived(meta?.print_hours_offset ? Math.round(meta.print_hours_offset) : null);
 
@@ -255,12 +256,16 @@
   <!-- ============ HEADER ============ -->
   <div class="pd-head">
     <div class="pd-thumb" title="{model || 'Printer'}">
-      <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" aria-hidden="true">
-        <rect x="8" y="8" width="48" height="48" rx="5" />
-        <line x1="8" y1="21" x2="56" y2="21" />
-        <rect x="25" y="21" width="14" height="8" rx="1.5" fill="currentColor" stroke="none" />
-        <line x1="14" y1="47" x2="50" y2="47" />
-      </svg>
+      {#if modelImg}
+        <img src={modelImg} alt="{model || 'printer'}" />
+      {:else}
+        <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" aria-hidden="true">
+          <rect x="8" y="8" width="48" height="48" rx="5" />
+          <line x1="8" y1="21" x2="56" y2="21" />
+          <rect x="25" y="21" width="14" height="8" rx="1.5" fill="currentColor" stroke="none" />
+          <line x1="14" y1="47" x2="50" y2="47" />
+        </svg>
+      {/if}
     </div>
     <div class="pd-idbox">
       <h1 class="pd-name">{name}</h1>
@@ -472,7 +477,7 @@
   /* header */
   .pd-head { display: flex; gap: 1rem; align-items: flex-start; position: relative; }
   .pd-thumb { width: 74px; height: 74px; flex: 0 0 auto; border-radius: var(--radius-sm); overflow: hidden; background: var(--ophq-bg-2); border: 1px solid var(--ophq-border); display: grid; place-items: center; color: var(--ophq-text-2); }
-  .pd-thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .pd-thumb img { width: 100%; height: 100%; object-fit: contain; padding: 3px; }
   .pd-thumb svg { width: 60%; height: 60%; opacity: 0.85; }
   /* Emergency stop — octagon "stop sign", top-right of the header. Immediate. */
   .estop { position: absolute; top: 0; right: 0; background: none; border: 0; padding: 0; cursor: pointer; }
