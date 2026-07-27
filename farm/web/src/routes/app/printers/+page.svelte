@@ -73,6 +73,27 @@
     if (l?.awaiting_plate_clear) return { label: 'clear plate', tone: 'accent', clear: true };
     return { label: 'ready', tone: 'ok' };
   }
+  // ---- per-card print controls ----
+  let acting = $state({});        // `${id}:${key}` -> true (in-flight)
+  let confirmStop = $state({});   // id -> true (awaiting stop confirmation)
+  async function pAction(p, action, key) {
+    acting = { ...acting, [`${p.id}:${key}`]: true };
+    try {
+      await api.printerAction(p.id, action);
+      await api.printerAction(p.id, 'refresh-status').catch(() => {});
+      await load(false);
+    } catch (e) { /* surfaced on next poll */ }
+    finally {
+      acting = { ...acting, [`${p.id}:${key}`]: false };
+      confirmStop = { ...confirmStop, [p.id]: false };
+    }
+  }
+  const startPrint = (p) => pAction(p, 'print/resume', 'start');
+  const pausePrint = (p) => pAction(p, 'print/pause', 'pause');
+  const stopPrint = (p) => pAction(p, 'print/stop', 'stop');
+  const askStop = (p) => (confirmStop = { ...confirmStop, [p.id]: true });
+  const cancelStop = (p) => (confirmStop = { ...confirmStop, [p.id]: false });
+
   let clearing = $state({});
   async function clearPlate(p, e) {
     e.preventDefault(); e.stopPropagation();
@@ -141,9 +162,9 @@
     {#each printers as p (p.id)}
       {@const st = statusOf(p)}
       {@const d = dispOf(p)}
-      <a class="card card-pad printer" href="/app/printers/{p.id}">
+      <div class="card card-pad printer">
         <div class="flex between center">
-          <h3>{p.name}</h3>
+          <a class="cardlink" href="/app/printers/{p.id}"><h3>{p.name}</h3></a>
           {#if d.clear}
             <button class="chip accent clearchip" onclick={(e) => clearPlate(p, e)} disabled={clearing[p.id]}>
               {clearing[p.id] ? 'Clearing…' : '✓ Clear plate'}
@@ -152,30 +173,48 @@
             <span class="chip {d.tone}">{d.label}</span>
           {/if}
         </div>
-        <div class="meta mono">
-          {#if printerLabel(p.vendor, p.model)}<span>{printerLabel(p.vendor, p.model)}</span>{/if}
-        </div>
-        {#if p.live?.connected || recentlyOnline(p.id)}
-          <div class="cam">
-            <CameraImg printerId={p.id} tick={camTick} alt={`${p.name || 'Printer'} camera`} mode="fill" />
-            {#if /run|print/.test(st) && p.live.progress != null}
-              <span class="cam-prog mono">{Math.round(p.live.progress)}%</span>
-            {/if}
+        <a class="cardlink body" href="/app/printers/{p.id}">
+          <div class="meta mono">
+            {#if printerLabel(p.vendor, p.model)}<span>{printerLabel(p.vendor, p.model)}</span>{/if}
           </div>
-        {:else}
-          <div class="offhint muted tiny">Offline — open to locate it on the network in case its IP changed.</div>
-        {/if}
-        {#if p.live?.connected}
-          <div class="temps mono">
-            {#if t1(p.live.temperatures?.nozzle) != null}<span>◦ {t1(p.live.temperatures.nozzle)}°</span>{/if}
-            {#if t1(p.live.temperatures?.bed) != null}<span>▱ {t1(p.live.temperatures.bed)}°</span>{/if}
-            {#if /run|print/.test(st) && p.live.progress != null}<span class="prog">{Math.round(p.live.progress)}%</span>{/if}
-          </div>
-          {#if /run|print/.test(st) && p.live.progress != null}
+          {#if p.live?.connected || recentlyOnline(p.id)}
+            <div class="cam">
+              <CameraImg printerId={p.id} tick={camTick} alt={`${p.name || 'Printer'} camera`} mode="fill" />
+              {#if /run|print/.test(st) && p.live.progress != null}
+                <span class="cam-prog mono">{Math.round(p.live.progress)}%</span>
+              {/if}
+            </div>
+          {:else}
+            <div class="offhint muted tiny">Offline — open to locate it on the network in case its IP changed.</div>
+          {/if}
+          {#if p.live?.connected && /run|print/.test(st) && p.live.progress != null}
             <div class="bar"><div class="fill" style="width:{Math.min(100, Math.max(0, p.live.progress))}%"></div></div>
           {/if}
+        </a>
+
+        <!-- Quick actions -->
+        {#if confirmStop[p.id]}
+          <div class="cardbtns confirm">
+            <span class="cf-q">Stop the print?</span>
+            <button class="cbtn danger" onclick={() => stopPrint(p)} disabled={acting[`${p.id}:stop`]}>
+              {acting[`${p.id}:stop`] ? 'Stopping…' : 'Confirm stop'}
+            </button>
+            <button class="cbtn" onclick={() => cancelStop(p)} disabled={acting[`${p.id}:stop`]}>Cancel</button>
+          </div>
+        {:else}
+          <div class="cardbtns">
+            <button class="cbtn" title="Start print" aria-label="Start print"
+                    onclick={() => startPrint(p)} disabled={!p.live?.connected || acting[`${p.id}:start`]}>▶</button>
+            <button class="cbtn" title="Pause printer" aria-label="Pause printer"
+                    onclick={() => pausePrint(p)} disabled={!p.live?.connected || acting[`${p.id}:pause`]}>❙❙</button>
+            <button class="cbtn danger" title="Stop print" aria-label="Stop print"
+                    onclick={() => askStop(p)} disabled={!p.live?.connected}>■</button>
+            <a class="cbtn" href="/app/queue?printer={p.id}" title="Print queue" aria-label="Open print queue">≣</a>
+            <button class="cbtn" title="Camera (new tab)" aria-label="Open camera fullscreen in a new tab"
+                    onclick={() => window.open(`/app/printers/${p.id}/camera`, '_blank')}>⛶</button>
+          </div>
         {/if}
-      </a>
+      </div>
     {/each}
   </div>
 
@@ -225,9 +264,20 @@
   .offhint { margin-top: 0.6rem; line-height: 1.45; }
   .cam img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .cam-prog { position: absolute; bottom: 6px; right: 7px; font-size: 0.75rem; padding: 0.1rem 0.4rem; border-radius: 999px; background: rgba(0,0,0,0.55); color: #fff; backdrop-filter: blur(2px); }
-  .temps { display: flex; gap: 0.9rem; margin-top: 0.6rem; color: var(--ophq-text-2); font-size: 0.85rem; }
-  .temps .prog { color: var(--ophq-primary-2); margin-left: auto; }
   .bar { height: 6px; background: var(--ophq-bg-2); border: 1px solid var(--ophq-border); border-radius: 999px; overflow: hidden; margin-top: 0.5rem; }
+  /* card links (title + body navigate to the printer; buttons sit outside) */
+  .cardlink { color: var(--ophq-text); text-decoration: none; }
+  .cardlink.body { display: block; }
+  /* quick-action buttons */
+  .cardbtns { display: flex; gap: 0.35rem; margin-top: 0.7rem; padding-top: 0.7rem; border-top: 1px solid var(--ophq-border-soft); }
+  .cbtn { flex: 1; display: inline-flex; align-items: center; justify-content: center; min-height: 34px; padding: 0.3rem 0.4rem; background: var(--ophq-surface); border: 1px solid var(--ophq-border); color: var(--ophq-text-2); border-radius: var(--radius-sm); font-size: 0.9rem; cursor: pointer; text-decoration: none; }
+  .cbtn:hover:not(:disabled) { border-color: var(--ophq-primary); color: var(--ophq-text); }
+  .cbtn.danger:hover:not(:disabled) { border-color: var(--ophq-danger); color: var(--ophq-danger); }
+  .cbtn:disabled { opacity: 0.4; cursor: default; }
+  .cardbtns.confirm { align-items: center; gap: 0.5rem; }
+  .cardbtns.confirm .cf-q { flex: 1; font-size: 0.85rem; color: var(--ophq-text-2); }
+  .cardbtns.confirm .cbtn { flex: 0 0 auto; padding: 0.3rem 0.7rem; font-size: 0.82rem; }
+  .cbtn.danger { color: var(--ophq-danger); }
   .fill { height: 100%; background: linear-gradient(90deg, var(--ophq-primary), var(--ophq-primary-2)); transition: width 0.4s ease; }
   .chip.danger { color: var(--ophq-danger); border-color: rgba(255,92,108,0.3); background: rgba(255,92,108,0.08); }
   .chip.accent { color: var(--ophq-accent); border-color: rgba(255,176,32,0.3); background: rgba(255,176,32,0.08); }

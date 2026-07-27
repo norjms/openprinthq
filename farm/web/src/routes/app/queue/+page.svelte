@@ -12,6 +12,14 @@
   let toast = $state(null);
   let toastTimer = null;
   let filterPrinter = $state('all');   // 'all' | 'unassigned' | printer id
+  // Deep-link: /app/queue?printer=<id> pre-selects that printer's queue (used by
+  // the per-printer "queue" quick action on the printers list).
+  onMount(() => {
+    try {
+      const pid = new URLSearchParams(location.search).get('printer');
+      if (pid) filterPrinter = pid;
+    } catch { /* */ }
+  });
 
   // ---- active temperature-staggered batch ----
   let batch = $state(null);
