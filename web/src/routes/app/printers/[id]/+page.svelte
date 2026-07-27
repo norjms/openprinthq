@@ -20,7 +20,7 @@
   import BambuDashboard from '$lib/components/BambuDashboard.svelte';
   import PrinterSettingsModal from '$lib/components/PrinterSettingsModal.svelte';
   import LocatePrinter from '$lib/components/LocatePrinter.svelte';
-  import { printerLabel } from '$lib/models.js';
+  import { printerLabel, printerImage } from '$lib/models.js';
   import { recentlyOnline } from '$lib/online.js';
   import PageTitle from '$lib/components/PageTitle.svelte';
 
@@ -423,11 +423,16 @@
 
   {#if !isBambu}
   <div class="title">
-    <div>
-      <h1>{st?.name || meta?.name || 'Printer'}</h1>
-      <div class="meta mono">
-        {#if printerLabel(meta?.connection_type, meta?.model)}<span>{printerLabel(meta?.connection_type, meta?.model)}</span>{/if}
-        <span>#{id}</span>
+    <div class="title-id">
+      {#if printerImage(meta?.connection_type, meta?.model)}
+        <div class="pthumb"><img src={printerImage(meta?.connection_type, meta?.model)} alt="{printerLabel(meta?.connection_type, meta?.model) || 'printer'}" /></div>
+      {/if}
+      <div>
+        <h1>{st?.name || meta?.name || 'Printer'}</h1>
+        <div class="meta mono">
+          {#if printerLabel(meta?.connection_type, meta?.model)}<span>{printerLabel(meta?.connection_type, meta?.model)}</span>{/if}
+          <span>#{id}</span>
+        </div>
       </div>
     </div>
     <div class="actions">
@@ -600,6 +605,9 @@
   .banner { margin: 0 0 1rem; }
   .title { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 1.4rem; }
   .title h1 { margin: 0 0 0.3rem; }
+  .title-id { display: flex; align-items: flex-start; gap: 0.9rem; }
+  .pthumb { width: 64px; height: 64px; flex: 0 0 auto; border-radius: var(--radius-sm); background: var(--ophq-bg-2); border: 1px solid var(--ophq-border); display: grid; place-items: center; overflow: hidden; }
+  .pthumb img { width: 100%; height: 100%; object-fit: contain; padding: 3px; }
   .actions { display: flex; flex-direction: column; align-items: flex-end; gap: 0.5rem; }
   .gear { align-self: flex-end; }
   /* Emergency stop — octagon "stop sign", immediate (no confirmation). */
