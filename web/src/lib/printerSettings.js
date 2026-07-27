@@ -11,7 +11,8 @@
 const KEY = (id) => `ophq_printer_cfg_${id}`;
 
 export const DEFAULT_SETTINGS = {
-  chamberHeater: false // this printer has a controllable chamber heater
+  chamberHeater: false,     // this printer has a controllable chamber heater
+  showFilamentPanel: true   // show the multi-material (AMS/CFS/MMU) panel when a unit is present
 };
 
 export function getPrinterSettings(id) {
