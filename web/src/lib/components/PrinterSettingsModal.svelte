@@ -6,7 +6,7 @@
   let { printerId, name = 'Printer', isKlipper = false, onclose, onsave } = $props();
 
   // Local editable copy — seeded from storage once when the modal mounts.
-  let cfg = $state({ chamberHeater: false });
+  let cfg = $state({ chamberHeater: false, showFilamentPanel: true });
   let seeded = false;
   $effect(() => {
     const _id = printerId;
@@ -42,6 +42,20 @@
               Turn on if this printer has a controllable chamber heater. A chamber
               temperature control appears below Bed on the Temperatures panel.
               {#if isKlipper}Klipper: exposed as a <span class="mono">heater_generic</span> named <span class="mono">chamber</span>.{/if}
+            </span>
+          </span>
+        </label>
+      </section>
+
+      <section>
+        <h4>Panels</h4>
+        <label class="opt">
+          <input type="checkbox" bind:checked={cfg.showFilamentPanel} />
+          <span>
+            Multi-material unit panel
+            <span class="muted tiny block">
+              Show the multi-material filament panel (Bambu AMS, Creality CFS, Prusa
+              MMU…) when a unit is connected. Hidden automatically if none is detected.
             </span>
           </span>
         </label>
