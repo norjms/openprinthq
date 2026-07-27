@@ -61,3 +61,21 @@ export async function createAuthentikUser(email, name, password, { owner = false
   await ak(`/core/users/${user.pk}/set_password/`, { method: 'POST', body: { password } });
   return user.pk;
 }
+
+// Link an EXISTING Authentik identity (e.g. one already used by other
+// Authentik-backed services) to OpenPrintHQ — WITHOUT creating a new user or
+// touching their password. We only ensure membership of the owner/user group
+// (non-destructively, via the group's add_user endpoint, so their other group
+// memberships / other-service access are preserved). Returns the user pk.
+export async function linkAuthentikUser(email, { owner = false } = {}) {
+  if (!authentikConfigured()) throw new Error('authentik not configured');
+  const res = await ak(`/core/users/?email=${encodeURIComponent(email)}`);
+  const list = res?.results || [];
+  const u = list.find((x) => (x.email || '').toLowerCase() === email.toLowerCase()) || list[0];
+  if (!u) throw new Error('authentik user not found for linking');
+  const gp = await groupPk(owner ? OWNER_GROUP : USER_GROUP);
+  if (gp && !((u.groups || []).includes(gp))) {
+    await ak(`/core/groups/${gp}/add_user/`, { method: 'POST', body: { pk: u.pk } });
+  }
+  return u.pk;
+}
