@@ -495,7 +495,7 @@
 
   <div id="move"><span id="temps"></span>
   {#if st?.connected}
-    <ControlPanel printerId={id} status={st} refresh={() => loadStatus(false)} />
+    <ControlPanel printerId={id} status={st} refresh={() => loadStatus(false)} kind={meta?.connection_type} />
   {/if}
   </div>
 
