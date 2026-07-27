@@ -2,17 +2,19 @@
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
   import PageTitle from '$lib/components/PageTitle.svelte';
-  import CameraStream from '$lib/components/CameraStream.svelte';
+  import CameraImg from '$lib/components/CameraImg.svelte';
   import { prettyModel } from '$lib/models.js';
+  import { markSeen, recentlyOnline } from '$lib/online.js';
 
   let loading = $state(true);
   let error = $state(null);
   let printers = $state([]);
   let timer = null;
-  // Live camera thumbnails: bump a tick each poll to refresh the snapshot URLs,
-  // and remember which printers have no reachable camera so we stop trying.
+  // Camera thumbnails: a slow 60s snapshot poll (bump camTick) keeps resource
+  // use low, independent of the 5s status poll. CameraImg shows the cached last
+  // frame instantly on load, then swaps in the live one.
   let camTick = $state(0);
-  let camErr = $state({});
+  let camTimer = null;
 
   function base(data) {
     const arr = Array.isArray(data) ? data : (data?.printers || data?.items || data?.results || []);
@@ -31,7 +33,8 @@
       // Live state comes from the per-printer status endpoint, not the list.
       const live = await Promise.all(list.map((p) => api.printerStatus(p.id).catch(() => null)));
       printers = list.map((p, i) => ({ ...p, live: live[i] }));
-      camTick++;
+      // Remember the last time each printer reported connected (drives hysteresis).
+      printers.forEach((p) => markSeen(p.id, p.live?.connected));
       error = null;
     } catch (e) {
       error = e.status === 409 ? 'no-instance' : (e.message || 'engine unreachable');
@@ -43,7 +46,10 @@
   onMount(() => {
     load(true);
     timer = setInterval(() => load(false), 5000);
-    return () => clearInterval(timer);
+    // Camera snapshots refresh on a slow 60s cadence (independent of the 5s
+    // status poll) to keep resource use low. CameraImg keeps the last frame.
+    camTimer = setInterval(() => camTick++, 60000);
+    return () => { clearInterval(timer); clearInterval(camTimer); };
   });
 
   function statusOf(p) {
@@ -55,12 +61,16 @@
   // last job's failed/finished). After a print it prompts to clear the plate.
   function dispOf(p) {
     const l = p.live;
-    if (!l) return { label: 'unknown', tone: '' };
-    if (!l.connected) return { label: 'offline', tone: 'danger' };
-    const s = (l.state || '').toString().toLowerCase();
+    // Online with hysteresis first: a momentary connected=false (MQTT flap) still
+    // reads online if the printer was connected within the grace window; a cached
+    // last-online makes a fresh reload show the true state instead of "offline".
+    const online = l ? (l.connected || recentlyOnline(p.id)) : recentlyOnline(p.id);
+    if (!l && !online) return { label: 'checking', tone: '' };
+    if (!online) return { label: 'offline', tone: 'danger' };
+    const s = (l?.state || '').toString().toLowerCase();
     if (/run|print/.test(s)) return { label: 'printing', tone: 'primary' };
     if (/pause/.test(s)) return { label: 'paused', tone: 'accent' };
-    if (l.awaiting_plate_clear) return { label: 'clear plate', tone: 'accent', clear: true };
+    if (l?.awaiting_plate_clear) return { label: 'clear plate', tone: 'accent', clear: true };
     return { label: 'ready', tone: 'ok' };
   }
   let clearing = $state({});
@@ -146,9 +156,9 @@
           {#if p.vendor}<span>{p.vendor}</span>{/if}
           {#if p.model}<span>{prettyModel(p.model)}</span>{/if}
         </div>
-        {#if p.live?.connected && !camErr[p.id]}
+        {#if p.live?.connected || recentlyOnline(p.id)}
           <div class="cam">
-            <CameraStream printerId={p.id} tick={camTick} alt={`${p.name || 'Printer'} live camera view`} mode="fill" onerror={() => (camErr = { ...camErr, [p.id]: true })} />
+            <CameraImg printerId={p.id} tick={camTick} alt={`${p.name || 'Printer'} camera`} mode="fill" />
             {#if /run|print/.test(st) && p.live.progress != null}
               <span class="cam-prog mono">{Math.round(p.live.progress)}%</span>
             {/if}

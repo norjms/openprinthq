@@ -7,10 +7,17 @@
   // SPDX-License-Identifier: AGPL-3.0-or-later
   import { api } from '$lib/api';
   import { prettyModel } from '$lib/models.js';
+  import { markSeen, recentlyOnline } from '$lib/online.js';
 
   let { printerId, status = null, meta = null, refresh = () => {}, oncamera = () => {} } = $props();
 
   const st = $derived(status || {});
+
+  // Online with hysteresis — the engine's connected flag can flap on transient
+  // MQTT reconnects; a recent connection still reads online (and stops the
+  // header/state from bouncing to "Offline").
+  $effect(() => { markSeen(printerId, st?.connected); });
+  const online = $derived(!!st?.connected || recentlyOnline(printerId));
 
   // ---- identity / header ------------------------------------------------
   const name = $derived(st?.name || meta?.name || 'Printer');
@@ -60,21 +67,21 @@
   // Headline status: idle (and plate already clear) reads "Ready", never the last
   // job's Failed/Finished — that outcome only shows while awaiting a plate clear.
   const dispState = $derived(
-    !st?.connected ? 'Offline' :
+    !online ? 'Offline' :
     isPrinting ? 'Printing' :
     isPaused ? 'Paused' :
     awaitingClear ? stateLabel(stateStr) :
     'Ready'
   );
   const dispTone = $derived(
-    !st?.connected ? 'danger' :
+    !online ? 'danger' :
     isPrinting ? 'primary' :
     isPaused ? 'accent' :
     awaitingClear ? 'accent' :
     'ok'
   );
   const readyLine = $derived(
-    !st?.connected ? 'Printer offline' :
+    !online ? 'Printer offline' :
     isPrinting ? 'Printing…' :
     isPaused ? 'Paused' :
     awaitingClear ? 'Print done — clear the build plate, then mark it clear' :
@@ -189,7 +196,7 @@
         {#if printHours != null}<span>· ⏱ {printHours}h</span>{/if}
       </div>
       <div class="pd-chips">
-        <span class="pchip {st?.connected ? 'ok' : 'danger'}">🔗 {st?.connected ? 'Connected' : 'Offline'}</span>
+        <span class="pchip {online ? 'ok' : 'danger'}">🔗 {online ? 'Connected' : 'Offline'}</span>
         {#if wifi != null}<span class="pchip ok">▂▄▆ {wifi}dBm</span>{/if}
         <span class="pchip {faultCount ? 'warn' : 'ok'}">{faultCount ? '⚠' : '✓'} {faultCount ? faultCount : 'OK'}</span>
         {#if faultCount}<span class="pchip danger">🔧 {faultCount}</span>{/if}
