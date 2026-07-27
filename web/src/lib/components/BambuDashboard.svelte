@@ -167,14 +167,43 @@
   // nozzles (ids 0,1) and the physical rack slots (ids 16-21 on H2C). Split them
   // so we can show what's currently in the toolhead separately from the rack.
   const nozzleInfo = $derived(st?.nozzle_rack || []);
-  const rack = $derived(nozzleInfo); // (kept: presence of any nozzle info)
-  const isRealNozzle = (n) => !!(n && n.serial_number && n.serial_number !== 'N/A' && (Number(n.max_temp) > 0 || n.nozzle_type));
-  const toolheadNozzles = $derived(nozzleInfo.filter((n) => Number(n.id) < 16 && isRealNozzle(n)));
+  // A physically-docked/racked nozzle with its own hardware identity: a real
+  // serial + max temp. This is how a tool-changer (H2C) marks the nozzle that's
+  // actually sitting in a slot (or the one currently in the toolhead).
+  const hasSerial = (n) => !!(n && n.serial_number && String(n.serial_number).toUpperCase() !== 'N/A' && Number(n.max_temp) > 0);
+  // Any entry that actually describes a nozzle (a type, or a real diameter).
+  // Fixed dual-nozzle machines (H2D / H2D Pro) report their two toolhead nozzles
+  // this way — valid nozzle_type + diameter but NO per-nozzle serial (serial
+  // "N/A", max_temp 0). Requiring a serial wrongly read those as "not installed".
+  const hasNozzleData = (n) => {
+    if (!n) return false;
+    const ty = String(n.nozzle_type || '').trim().toUpperCase();
+    return (ty && ty !== 'N/A') || Number(n.nozzle_diameter) > 0;
+  };
+  // Physical rack slots (tool-changer dock positions), ids >= 16 (H2C).
   const rackSlots = $derived.by(() => {
-    const r = nozzleInfo.filter((n) => Number(n.id) >= 16);
+    const r = nozzleInfo.filter((n) => Number(n.id) >= 16 && hasNozzleData(n));
     if (!r.length) return [];
     const base = Math.min(...r.map((n) => Number(n.id)));   // rack ids start at 16 on H2C
     return r.map((n) => ({ ...n, pos: Number(n.id) - base + 1 }));
+  });
+  const hasRack = $derived(rackSlots.length > 0);
+  // What's actually in the toolhead. A tool-changer (has a rack) shows only the
+  // nozzle(s) currently DOCKED — id<16 entries carrying a real serial. A fixed
+  // machine (no rack: H2D's two nozzles, or a single-nozzle Bambu) shows every
+  // populated id<16 entry: those nozzles are permanently installed and report no
+  // per-nozzle serial, so they must not be gated behind one.
+  const toolheadNozzles = $derived.by(() => {
+    const head = nozzleInfo.filter((n) => Number(n.id) < 16);
+    let list = hasRack ? head.filter(hasSerial) : head.filter(hasNozzleData);
+    // Fallback: a fixed machine whose rack head entries are missing but whose
+    // nozzle hardware is known from the temperature/diameter channel.
+    if (!hasRack && !list.length && st?.nozzles?.length) {
+      list = st.nozzles.map((n, i) => ({ id: i, nozzle_type: n.nozzle_type, nozzle_diameter: n.nozzle_diameter }));
+    }
+    const dual = list.length > 1;
+    // id 0 = Left, id 1 = Right — matches the Left/Right nozzle temp cards above.
+    return list.map((n) => ({ ...n, side: dual ? (Number(n.id) === 1 ? 'Right' : 'Left') : '' }));
   });
 
   // ---- AMS / filaments --------------------------------------------------
@@ -284,7 +313,7 @@
       </div>
     </div>
     <button class="estop" type="button" onclick={emergencyStop} disabled={!online || acting === 'estop'}
-            title="Emergency stop (immediate — no confirmation)" aria-label="Emergency stop">
+            data-tip="Emergency stop — immediate, no confirmation" data-tip-pos="below" aria-label="Emergency stop — immediate, no confirmation">
       <span class="estop-oct"><span class="estop-txt">{acting === 'estop' ? '…' : 'STOP'}</span></span>
     </button>
   </div>
@@ -301,7 +330,7 @@
       <div class="pd-status-hd">
         <span class="pd-state {dispTone}">{dispState}</span>
         {#if awaitingClear}
-          <button class="btn btn-primary btn-sm clearbtn" onclick={clearPlate} disabled={acting === 'clear' || !st?.connected}>
+          <button class="btn btn-primary btn-sm clearbtn" data-tip="Mark the build plate as cleared" aria-label="Mark the build plate as cleared" onclick={clearPlate} disabled={acting === 'clear' || !st?.connected}>
             {acting === 'clear' ? 'Clearing…' : '✓ Clear plate'}
           </button>
         {/if}
@@ -335,8 +364,8 @@
                    bind:value={tset[c.key]}
                    onkeydown={(e) => { if (e.key === 'Enter') setTempCard(c); }}
                    disabled={!online} aria-label="{c.label} target temperature" />
-            <button class="tsetbtn" onclick={() => setTempCard(c)} disabled={!online || acting === 'temp-' + c.key}>Set</button>
-            {#if c.target > 0}<button class="tsetbtn off" onclick={() => tempOff(c)} disabled={!online || acting === 'temp-' + c.key}>Off</button>{/if}
+            <button class="tsetbtn" data-tip={`Set ${c.label.toLowerCase()} target`} aria-label={`Set ${c.label} target temperature`} onclick={() => setTempCard(c)} disabled={!online || acting === 'temp-' + c.key}>Set</button>
+            {#if c.target > 0}<button class="tsetbtn off" data-tip={`Turn ${c.label.toLowerCase()} heater off`} aria-label={`Turn ${c.label} heater off`} onclick={() => tempOff(c)} disabled={!online || acting === 'temp-' + c.key}>Off</button>{/if}
           </div>
         {/if}
       </div>
@@ -372,7 +401,8 @@
         <span class="nz-cap">In toolhead</span>
         {#if toolheadNozzles.length}
           {#each toolheadNozzles as n}
-            <span class="nz-inhead" title={nozzleType(n.nozzle_type).full || n.nozzle_type}>
+            <span class="nz-inhead" data-tip={`${n.side ? n.side + ' nozzle · ' : ''}${n.nozzle_diameter} mm · ${nozzleType(n.nozzle_type).full || n.nozzle_type || 'nozzle'}`}>
+              {#if n.side}<span class="nz-side">{n.side}</span>{/if}
               <b class="mono">{n.nozzle_diameter} mm</b>
               <span class="nz-mat">{nozzleType(n.nozzle_type).full || n.nozzle_type || '—'}</span>
             </span>
@@ -387,7 +417,7 @@
           <div class="nz-slots">
             {#each rackSlots as s (s.id)}
               <span class="nz-slot"
-                    title={`Position ${s.pos} · ${s.nozzle_diameter} mm · ${nozzleType(s.nozzle_type).full || s.nozzle_type || 'nozzle'}`}>
+                    data-tip={`Rack position ${s.pos} · ${s.nozzle_diameter} mm · ${nozzleType(s.nozzle_type).full || s.nozzle_type || 'nozzle'}`}>
                 <span class="nz-pos">P{s.pos}</span>
                 <span class="nz-dia mono">{s.nozzle_diameter}</span>
                 <span class="nz-ty">{nozzleType(s.nozzle_type).short || s.nozzle_type}</span>
@@ -402,21 +432,24 @@
   <!-- ============ CONTROLS ============ -->
   <div class="pd-label">CONTROLS</div>
   <div class="pd-controls">
-    <button class="ctl" class:on={st?.chamber_light} title="Chamber light" aria-label="Toggle chamber light"
+    <button class="ctl" class:on={st?.chamber_light} data-tip="Toggle chamber light" aria-label="Toggle chamber light"
             onclick={toggleLight} disabled={acting === 'light' || !st?.connected}>💡</button>
-    <a class="ctl" href="#temps" title="Temperatures & preheat" aria-label="Temperatures">🔥</a>
-    <a class="ctl" href="#move" title="Move / jog" aria-label="Move">✥</a>
-    <a class="ctl" href="#camera" title="Camera" aria-label="Camera" onclick={oncamera}>📷</a>
+    <a class="ctl" href="#temps" data-tip="Temperatures & preheat" aria-label="Temperatures and preheat">🔥</a>
+    <a class="ctl" href="#move" data-tip="Move / jog controls" aria-label="Move and jog controls">✥</a>
+    <a class="ctl" href="#camera" data-tip="Open camera" aria-label="Open camera" onclick={oncamera}>📷</a>
     <span class="ctl-sp"></span>
-    <button class="btn btn-ghost" onclick={() => act(isPaused ? 'print/resume' : 'print/pause', 'pp')}
+    <button class="btn btn-ghost" data-tip={isPaused ? 'Resume the print' : 'Pause the print'}
+            aria-label={isPaused ? 'Resume the print' : 'Pause the print'}
+            onclick={() => act(isPaused ? 'print/resume' : 'print/pause', 'pp')}
             disabled={!!acting || (!isPrinting && !isPaused)}>
       {isPaused ? '▶ Resume' : '❙❙ Pause'}
     </button>
     {#if confirmStop}
-      <button class="btn btn-danger" onclick={() => act('print/stop', 'stop')} disabled={!!acting}>Confirm stop</button>
-      <button class="btn btn-ghost" onclick={() => (confirmStop = false)} disabled={!!acting}>Cancel</button>
+      <button class="btn btn-danger" data-tip="Confirm — stop the print" aria-label="Confirm stop the print" onclick={() => act('print/stop', 'stop')} disabled={!!acting}>Confirm stop</button>
+      <button class="btn btn-ghost" data-tip="Cancel — keep printing" aria-label="Cancel, keep printing" onclick={() => (confirmStop = false)} disabled={!!acting}>Cancel</button>
     {:else}
-      <button class="btn btn-ghost stopb" onclick={() => (confirmStop = true)}
+      <button class="btn btn-ghost stopb" data-tip="Stop the print (asks to confirm)" aria-label="Stop the print"
+              onclick={() => (confirmStop = true)}
               disabled={!isPrinting && !isPaused}>◻ Stop</button>
     {/if}
   </div>
@@ -465,9 +498,9 @@
   <!-- ============ FOOTER ============ -->
   <div class="pd-foot">
     <span class="foot-sp"></span>
-    <a class="footbtn" href="#camera" onclick={oncamera} aria-label="Camera">📷</a>
-    <a class="footbtn" href="/app/files" aria-label="Files">🗐</a>
-    <a class="footbtn print" href="/app/files">🖨 Print</a>
+    <a class="footbtn" href="#camera" onclick={oncamera} data-tip="Open camera" aria-label="Open camera">📷</a>
+    <a class="footbtn" href="/app/files" data-tip="Browse files to print" aria-label="Browse files to print">🗐</a>
+    <a class="footbtn print" href="/app/files" data-tip="Choose a file and start a print" aria-label="Start a print">🖨 Print</a>
   </div>
 </div>
 
@@ -481,13 +514,30 @@
   .pd-thumb svg { width: 60%; height: 60%; opacity: 0.85; }
   /* Emergency stop — octagon "stop sign", top-right of the header. Immediate. */
   .estop { position: absolute; top: 0; right: 0; background: none; border: 0; padding: 0; cursor: pointer; }
-  .estop-oct { display: grid; place-items: center; width: 62px; height: 62px; background: var(--ophq-danger, #e5342f);
-    clip-path: polygon(30% 0, 70% 0, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0 70%, 0 30%);
-    border: 3px solid #fff2; box-shadow: 0 2px 10px rgba(229,52,47,0.4); transition: transform 0.1s, filter 0.1s; }
-  .estop:hover:not(:disabled) .estop-oct { filter: brightness(1.08); transform: scale(1.04); }
-  .estop:active:not(:disabled) .estop-oct { transform: scale(0.96); }
+  .estop-oct {
+    --oct: polygon(30% 0, 70% 0, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0 70%, 0 30%);
+    position: relative; display: grid; place-items: center; width: 64px; height: 64px;
+    background: #fff;                         /* white stop-sign ring */
+    clip-path: var(--oct);
+    filter: drop-shadow(0 3px 9px rgba(229,52,47,0.5));
+    transition: transform 0.12s ease, filter 0.12s ease;
+    animation: estopPulse 2.6s ease-in-out infinite;
+  }
+  .estop-oct::before {
+    content: ''; position: absolute; inset: 4px; clip-path: var(--oct);
+    background: radial-gradient(circle at 50% 33%, #ff6a5f 0%, #e5342f 52%, #b81c17 100%);
+  }
+  .estop-txt { position: relative; z-index: 1; color: #fff; font-weight: 900; font-size: 0.86rem;
+    letter-spacing: 0.06em; text-shadow: 0 1px 2px rgba(0,0,0,0.4); }
+  .estop:hover:not(:disabled) .estop-oct { transform: scale(1.06); filter: drop-shadow(0 4px 14px rgba(229,52,47,0.78)); animation: none; }
+  .estop:active:not(:disabled) .estop-oct { transform: scale(0.95); }
+  .estop:focus-visible .estop-oct { outline: 2px solid var(--ophq-primary); outline-offset: 3px; }
   .estop:disabled { cursor: default; opacity: 0.4; }
-  .estop-txt { color: #fff; font-weight: 800; font-size: 0.82rem; letter-spacing: 0.02em; }
+  .estop:disabled .estop-oct { animation: none; }
+  @keyframes estopPulse {
+    0%, 100% { filter: drop-shadow(0 3px 9px rgba(229,52,47,0.4)); }
+    50% { filter: drop-shadow(0 3px 15px rgba(229,52,47,0.85)); }
+  }
   .pd-name { margin: 0; font-size: 1.9rem; line-height: 1; }
   .pd-sub { display: flex; gap: 0.35rem; flex-wrap: wrap; color: var(--ophq-muted); font-size: 0.9rem; margin: 0.35rem 0 0.7rem; }
   .pd-chips { display: flex; gap: 0.45rem; flex-wrap: wrap; }
@@ -543,6 +593,7 @@
   .nz-cap { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ophq-muted); min-width: 5.5rem; }
   .nz-inhead { display: inline-flex; align-items: baseline; gap: 0.4rem; padding: 0.3rem 0.6rem; border-radius: var(--radius-sm); background: var(--ophq-primary-dim); border: 1px solid var(--ophq-primary); color: var(--ophq-primary-2); font-size: 0.85rem; }
   .nz-inhead b { color: var(--ophq-text); }
+  .nz-side { font-size: 0.6rem; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; padding: 0.08rem 0.34rem; border-radius: 4px; background: var(--ophq-primary); color: #fff; align-self: center; }
   .nz-mat { color: var(--ophq-primary-2); }
   .nz-slots { display: flex; gap: 0.4rem; flex-wrap: wrap; }
   .nz-slot { display: inline-flex; flex-direction: column; align-items: center; gap: 0.05rem; min-width: 3rem; padding: 0.35rem 0.45rem; border-radius: calc(var(--radius-sm) - 2px); background: var(--ophq-surface); border: 1px solid var(--ophq-border); cursor: default; }
