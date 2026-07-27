@@ -72,6 +72,16 @@ export const api = {
     req('/engine/api/v1/discovery/klipper/scan', { method: 'POST', body: JSON.stringify({ subnet, timeout }) }),
   discoverKlipperScanStatus: () => req('/engine/api/v1/discovery/klipper/scan/status'),
   discoveredKlipperPrinters: () => req('/engine/api/v1/discovery/klipper/printers'),
+  // ---- OrcaSlicer printer catalog (control-command framework import mechanism) ----
+  // Lets the add-printer flow offer every OrcaSlicer-supported model + its comm
+  // mechanism + capability flags. See db/control-framework/.
+  printerCatalog: (params = {}) => {
+    const q = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== null && v !== '') q.set(k, v);
+    return req('/engine/api/v1/printers/catalog' + (q.toString() ? '?' + q : ''));
+  },
+  printerCatalogMechanisms: () => req('/engine/api/v1/printers/catalog/mechanisms'),
+  printerCatalogCommands: (catalogId) => req('/engine/api/v1/printers/catalog/' + catalogId + '/commands'),
   printer: (id) => req('/engine/api/v1/printers/' + id),
   // Update a printer record (name, ip_address, mac_address, chamber_heater,
   // show_filament_panel, …). Changing ip_address re-links + reconnects engine-side.
