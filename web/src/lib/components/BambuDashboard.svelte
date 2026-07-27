@@ -113,8 +113,13 @@
     const heatingTo = (cur, tgt) => tgt > 0 && cur != null && cur < tgt - 1;
     const cards = [];
     if (dualNozzle) {
-      cards.push({ key: 'nzL', kind: 'nozzle', nozzle: 0, label: 'Left nozzle', cur: num(T.nozzle), target: num(T.nozzle_target) || 0, settable: true });
-      cards.push({ key: 'nzR', kind: 'nozzle', nozzle: 1, label: 'Right nozzle', cur: num(T.nozzle_2), target: num(T.nozzle_2_target) || 0, settable: true });
+      // Nozzle-index → physical side, verified on real H2C hardware: the engine
+      // sends `M104 T{index}`, and T0 = RIGHT nozzle, T1 = LEFT nozzle (matches the
+      // readback: extruder id 0 → nozzle_2/right, id 1 → nozzle/left). So the Left
+      // card (shows T.nozzle) must command index 1, and the Right card (T.nozzle_2)
+      // must command index 0 — otherwise each card heats/off's the opposite nozzle.
+      cards.push({ key: 'nzL', kind: 'nozzle', nozzle: 1, label: 'Left nozzle', cur: num(T.nozzle), target: num(T.nozzle_target) || 0, settable: true });
+      cards.push({ key: 'nzR', kind: 'nozzle', nozzle: 0, label: 'Right nozzle', cur: num(T.nozzle_2), target: num(T.nozzle_2_target) || 0, settable: true });
     } else {
       cards.push({ key: 'nz', kind: 'nozzle', nozzle: 0, label: 'Nozzle', cur: num(T.nozzle), target: num(T.nozzle_target) || 0, settable: true });
     }
