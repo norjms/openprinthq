@@ -3,7 +3,7 @@
   import { api } from '$lib/api';
   import PageTitle from '$lib/components/PageTitle.svelte';
   import CameraImg from '$lib/components/CameraImg.svelte';
-  import { prettyModel } from '$lib/models.js';
+  import { prettyModel, printerLabel } from '$lib/models.js';
   import { markSeen, recentlyOnline } from '$lib/online.js';
 
   let loading = $state(true);
@@ -153,8 +153,7 @@
           {/if}
         </div>
         <div class="meta mono">
-          {#if p.vendor}<span>{p.vendor}</span>{/if}
-          {#if p.model}<span>{prettyModel(p.model)}</span>{/if}
+          {#if printerLabel(p.vendor, p.model)}<span>{printerLabel(p.vendor, p.model)}</span>{/if}
         </div>
         {#if p.live?.connected || recentlyOnline(p.id)}
           <div class="cam">
