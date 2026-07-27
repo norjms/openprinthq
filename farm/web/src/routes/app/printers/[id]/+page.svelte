@@ -8,6 +8,7 @@
   // SPDX-License-Identifier: AGPL-3.0-or-later
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
+  import { goto } from '$app/navigation';
   import { api } from '$lib/api';
   import CameraStream from '$lib/components/CameraStream.svelte';
   import PowerPanel from '$lib/components/PowerPanel.svelte';
@@ -52,6 +53,8 @@
   let settingsOpen = $state(false);
   const chamberHeaterOn = $derived(!!meta?.chamber_heater);
   const showFilamentPanel = $derived(meta?.show_filament_panel !== false);
+  // Bed ejection & continuous printing is opt-in per printer (settings popup).
+  const showBedEjection = $derived(!!meta?.show_bed_ejection);
 
   // ---- offline relocate ----
   const isOffline = $derived(!!st && !st.connected && !recentlyOnline(id));
@@ -580,7 +583,9 @@
     <KlipperTuning printerId={id} connected={st?.connected} printing={isPrinting} />
   {/if}
 
-  <EjectPanel printerId={id} connected={st?.connected} kind={meta?.connection_type} status={st} />
+  {#if showBedEjection}
+    <EjectPanel printerId={id} connected={st?.connected} kind={meta?.connection_type} status={st} />
+  {/if}
 
   {#if st?.connected && !isKlipper}
     <GcodeConsole printerId={id} kind={meta?.connection_type} printing={isPrinting} />
@@ -607,8 +612,10 @@
     isKlipper={isKlipper}
     chamberHeater={!!meta?.chamber_heater}
     showFilamentPanel={meta?.show_filament_panel !== false}
+    showBedEjection={!!meta?.show_bed_ejection}
     onclose={() => (settingsOpen = false)}
-    onsave={(cfg) => { meta = { ...meta, ...cfg }; }} />
+    onsave={(cfg) => { meta = { ...meta, ...cfg }; }}
+    ondelete={() => goto('/app/printers')} />
 {/if}
 
 <style>
