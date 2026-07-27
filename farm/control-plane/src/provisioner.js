@@ -57,13 +57,27 @@ async function createTenantDb(dbName) {
   }
 }
 
-async function startEngineContainer({ subdomain, port }) {
+// Build the per-tenant engine DATABASE_URL. The engine is DB-agnostic and reads
+// DATABASE_URL (SQLAlchemy async → the `postgresql+asyncpg` scheme); with it set,
+// the engine keeps ALL state in its dedicated Postgres database instead of a local
+// SQLite file. Postgres is the single source of truth for every tenant.
+function engineDatabaseUrl(dbName) {
+  if (!PG_PASS) return null; // no PG password configured → cannot wire Postgres
+  const u = encodeURIComponent(PG_USER);
+  const p = encodeURIComponent(PG_PASS);
+  return `postgresql+asyncpg://${u}:${p}@${PG_HOST}:${PG_PORT}/${dbName}`;
+}
+
+async function startEngineContainer({ subdomain, port, dbName }) {
   if (!ENGINE_IMAGE) return { started: false, reason: 'no-engine-image' };
   const name = `ophq-${subdomain}`;
-  // The engine (Bambuddy-derived) listens on PORT (default 8000) and keeps its
-  // state in /app/data. Each tenant gets an isolated container + named volumes,
-  // bridged with a unique host port. (Host networking — needed for LAN printer
-  // discovery — is a per-tenant hardening follow-up; see issue #8.)
+  const databaseUrl = engineDatabaseUrl(dbName);
+  if (!databaseUrl) return { started: false, reason: 'no-pg-config' };
+  // The engine (Bambuddy-derived) listens on PORT (default 8000). Its database is
+  // the dedicated tenant Postgres (DATABASE_URL); /app/data holds only file state
+  // (uploads, thumbnails, gcode, logs). Each tenant gets an isolated container +
+  // named volumes, on the internal network only. (Host networking — needed for LAN
+  // printer discovery — is a per-tenant hardening follow-up; see issue #8.)
   try {
     await exec('docker', ['rm', '-f', name]).catch(() => {});
     await exec('docker', [
@@ -72,6 +86,7 @@ async function startEngineContainer({ subdomain, port }) {
       '-e', 'PORT=8000',
       '-e', `TZ=${process.env.OPHQ_TZ || 'America/Chicago'}`,
       '-e', `SLICER_API_URL=${SLICER_URL}`,
+      '-e', `DATABASE_URL=${databaseUrl}`,
       '-v', `ophq_${subdomain}_data:/app/data`,
       '-v', `ophq_${subdomain}_logs:/app/logs`,
       '--label', `openprinthq.tenant=${subdomain}`,
@@ -124,7 +139,7 @@ export async function provisionForUser(user) {
   const port = BASE_PORT + inst.id;
 
   await createTenantDb(dbName);
-  const engine = await startEngineContainer({ subdomain, port });
+  const engine = await startEngineContainer({ subdomain, port, dbName });
   if (engine.started) configureEngine(subdomain); // fire-and-forget slicer setup
 
   const status = engine.started ? 'running' : 'provisioned';
