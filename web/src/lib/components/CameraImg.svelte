@@ -70,7 +70,7 @@
 
 <style>
   img.fill { width: 100%; height: 100%; object-fit: cover; display: block; cursor: pointer; }
-  img.detail { width: 100%; max-width: 640px; aspect-ratio: 16 / 9; object-fit: contain; background: var(--ophq-bg-2); border: 1px solid var(--ophq-border); border-radius: var(--radius-sm); display: block; cursor: zoom-in; }
+  img.detail { width: 100%; max-width: 640px; aspect-ratio: 16 / 9; object-fit: contain; background: var(--ophq-bg-2); border: 1px solid var(--ophq-border); border-radius: var(--radius-sm); display: block; cursor: pointer; }
   img.contain { max-width: 96vw; max-height: 92vh; border-radius: var(--radius-sm); border: 1px solid var(--ophq-border); box-shadow: var(--shadow-glow); display: block; }
   img.stale { filter: saturate(0.7) brightness(0.9); }
   .skel { width: 100%; height: 100%; background: var(--ophq-bg-2); display: block; }
