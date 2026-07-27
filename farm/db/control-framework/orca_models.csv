@@ -33,20 +33,20 @@ Artillery,Artillery Sidewinder X3 Plus,marlin,1,true,
 Artillery,Artillery Sidewinder X3 Pro,marlin2,1,true,
 Artillery,Artillery Sidewinder X4 Plus,klipper,1,true,
 Artillery,Artillery Sidewinder X4 Pro,klipper,1,true,
-BBL,Bambu Lab A1,marlin,1,false,MQTT(gcode_flavor=marlin nominal)
-BBL,Bambu Lab A1 mini,marlin,1,false,MQTT(gcode_flavor=marlin nominal)
-BBL,Bambu Lab A2L,marlin,1,false,MQTT(gcode_flavor=marlin nominal)
-BBL,Bambu Lab H2C,marlin,2,true,multi-nozzle(2); aux-fan; MQTT(gcode_flavor=marlin nominal)
-BBL,Bambu Lab H2D,marlin,2,true,multi-nozzle(2); aux-fan; MQTT(gcode_flavor=marlin nominal)
-BBL,Bambu Lab H2D Pro,marlin,2,true,multi-nozzle(2); aux-fan; MQTT(gcode_flavor=marlin nominal)
-BBL,Bambu Lab H2S,marlin,1,true,aux-fan; MQTT(gcode_flavor=marlin nominal)
-BBL,Bambu Lab P1P,marlin,1,false,MQTT(gcode_flavor=marlin nominal)
-BBL,Bambu Lab P1S,marlin,1,false,aux-fan; MQTT(gcode_flavor=marlin nominal)
-BBL,Bambu Lab P2S,marlin,1,false,MQTT(gcode_flavor=marlin nominal)
-BBL,Bambu Lab X1,marlin,1,false,MQTT(gcode_flavor=marlin nominal)
-BBL,Bambu Lab X1 Carbon,marlin,1,false,aux-fan; MQTT(gcode_flavor=marlin nominal)
-BBL,Bambu Lab X1E,marlin,1,true,aux-fan; MQTT(gcode_flavor=marlin nominal)
-BBL,Bambu Lab X2D,marlin,2,true,multi-nozzle(2); aux-fan; MQTT(gcode_flavor=marlin nominal)
+BBL,Bambu Lab A1,marlin,1,false,MQTT
+BBL,Bambu Lab A1 mini,marlin,1,false,MQTT
+BBL,Bambu Lab A2L,marlin,1,false,MQTT
+BBL,Bambu Lab H2C,marlin,2,true,multi-nozzle(2); aux-fan; MQTT
+BBL,Bambu Lab H2D,marlin,2,true,multi-nozzle(2); aux-fan; MQTT
+BBL,Bambu Lab H2D Pro,marlin,2,true,multi-nozzle(2); aux-fan; MQTT
+BBL,Bambu Lab H2S,marlin,1,true,aux-fan; MQTT
+BBL,Bambu Lab P1P,marlin,1,false,MQTT
+BBL,Bambu Lab P1S,marlin,1,false,aux-fan; MQTT
+BBL,Bambu Lab P2S,marlin,1,false,MQTT
+BBL,Bambu Lab X1,marlin,1,false,MQTT
+BBL,Bambu Lab X1 Carbon,marlin,1,false,aux-fan; MQTT
+BBL,Bambu Lab X1E,marlin,1,true,aux-fan; MQTT
+BBL,Bambu Lab X2D,marlin,2,true,multi-nozzle(2); aux-fan; MQTT
 BIQU,BIQU B1,marlin,1,false,
 BIQU,BIQU BX,marlin,1,false,
 BIQU,BIQU Hurakan,klipper,1,false,
@@ -227,11 +227,11 @@ Prusa,Prusa XL 5T,marlin2,5,false,multi-nozzle(5)
 Qidi,Qidi Q1 Pro,klipper,1,true,aux-fan
 Qidi,Qidi Q2,klipper,1,true,aux-fan
 Qidi,Qidi Q2C,klipper,1,true,aux-fan
-Qidi,Qidi X-CF Pro,marlin,1,true,
-Qidi,Qidi X-Max,marlin,1,true,
+Qidi,Qidi X-CF Pro,marlin,1,false,
+Qidi,Qidi X-Max,marlin,1,false,
 Qidi,Qidi X-Max 3,klipper,1,true,aux-fan
 Qidi,Qidi X-Max 4,klipper,1,true,aux-fan
-Qidi,Qidi X-Plus,marlin,1,true,
+Qidi,Qidi X-Plus,marlin,1,false,
 Qidi,Qidi X-Plus 3,klipper,1,true,aux-fan
 Qidi,Qidi X-Plus 4,klipper,1,true,aux-fan
 Qidi,Qidi X-Smart 3,klipper,1,true,aux-fan
@@ -359,7 +359,6 @@ Wanhao France,D12 300 PRO M2 MONO DUAL PoopTool,marlin2,1,false,
 Wanhao France,D12 300 PRO SMARTPAD DIRECT,klipper,1,false,
 Wanhao France,D12 300 PRO SMARTPAD MONO DUAL,klipper,1,false,
 Wanhao France,D12 300 PRO SMARTPAD MONO DUAL PoopTool,klipper,1,false,
-Wanhao France,D12 500 PRO M2 DIRECT,unknown,1,false,
 Wanhao France,D12 500 PRO M2 MONO DUAL,marlin2,1,false,
 Wanhao France,D12 500 PRO M2 MONO DUAL PoopTool,marlin2,1,false,
 Wanhao France,D12 500 PRO SMARTPAD DIRECT,klipper|marlin2,1,false,
