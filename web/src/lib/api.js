@@ -101,6 +101,9 @@ export const api = {
     req('/engine/api/v1/printers/' + id + '/gcode', { method: 'POST', body: JSON.stringify({ command }) }),
   klipperLevel: (id) => req('/engine/api/v1/printers/' + id + '/klipper/level', { method: 'POST' }),
   klipperEmergencyStop: (id) => req('/engine/api/v1/printers/' + id + '/klipper/emergency-stop', { method: 'POST' }),
+  // Realtime Klipper console: recent gcode responses (server.gcode_store) +
+  // toolhead homed_axes. Read-only Moonraker passthrough; poll it for the console.
+  klipperConsole: (id, count = 120) => req('/engine/api/v1/printers/' + id + '/klipper/console?count=' + count),
   // ---- fleet firmware (transport-aware: Bambu wiki / Klipper Moonraker) ----
   firmwareUpdates: () => req('/engine/api/v1/firmware/updates'),
   // ---- failure analysis ----

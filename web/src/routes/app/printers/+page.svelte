@@ -203,14 +203,14 @@
           </div>
         {:else}
           <div class="cardbtns">
-            <button class="cbtn" title="Start print" aria-label="Start print"
+            <button class="cbtn" data-tip="Start print" aria-label="Start print"
                     onclick={() => startPrint(p)} disabled={!p.live?.connected || acting[`${p.id}:start`]}>▶</button>
-            <button class="cbtn" title="Pause printer" aria-label="Pause printer"
+            <button class="cbtn" data-tip="Pause printer" aria-label="Pause printer"
                     onclick={() => pausePrint(p)} disabled={!p.live?.connected || acting[`${p.id}:pause`]}>❙❙</button>
-            <button class="cbtn danger" title="Stop print" aria-label="Stop print"
+            <button class="cbtn danger" data-tip="Stop print (asks to confirm)" aria-label="Stop print"
                     onclick={() => askStop(p)} disabled={!p.live?.connected}>■</button>
-            <a class="cbtn" href="/app/queue?printer={p.id}" title="Print queue" aria-label="Open print queue">≣</a>
-            <button class="cbtn" title="Camera (new tab)" aria-label="Open camera fullscreen in a new tab"
+            <a class="cbtn" href="/app/queue?printer={p.id}" data-tip="Open this printer's queue" aria-label="Open print queue">≣</a>
+            <button class="cbtn" data-tip="Open camera fullscreen in a new tab" aria-label="Open camera fullscreen in a new tab"
                     onclick={() => window.open(`/app/printers/${p.id}/camera`, '_blank')}>⛶</button>
           </div>
         {/if}
