@@ -6,27 +6,45 @@
 
   let {
     printerId, name = 'Printer', isKlipper = false,
-    chamberHeater = false, showFilamentPanel = true,
-    onclose, onsave
+    chamberHeater = false, showFilamentPanel = true, showBedEjection = false,
+    onclose, onsave, ondelete
   } = $props();
 
   // Local editable copy, seeded from the record's current values.
-  let cfg = $state({ chamberHeater: !!chamberHeater, showFilamentPanel: showFilamentPanel !== false });
+  let cfg = $state({
+    chamberHeater: !!chamberHeater,
+    showFilamentPanel: showFilamentPanel !== false,
+    showBedEjection: !!showBedEjection
+  });
   let saving = $state(false);
   let err = $state(null);
+  let confirmDelete = $state(false);
+  let deleting = $state(false);
 
   async function save() {
     saving = true; err = null;
     try {
       await api.updatePrinter(printerId, {
         chamber_heater: cfg.chamberHeater,
-        show_filament_panel: cfg.showFilamentPanel
+        show_filament_panel: cfg.showFilamentPanel,
+        show_bed_ejection: cfg.showBedEjection
       });
-      onsave?.({ chamber_heater: cfg.chamberHeater, show_filament_panel: cfg.showFilamentPanel });
+      onsave?.({ chamber_heater: cfg.chamberHeater, show_filament_panel: cfg.showFilamentPanel, show_bed_ejection: cfg.showBedEjection });
       onclose?.();
     } catch (e) {
       err = e?.message || 'could not save settings';
     } finally { saving = false; }
+  }
+
+  async function doDelete() {
+    deleting = true; err = null;
+    try {
+      await api.deletePrinter(printerId);
+      ondelete?.();          // parent navigates away
+    } catch (e) {
+      err = e?.message || 'could not delete printer';
+      deleting = false;
+    }
   }
 </script>
 
@@ -69,14 +87,46 @@
             </span>
           </span>
         </label>
+        <label class="opt">
+          <input type="checkbox" bind:checked={cfg.showBedEjection} />
+          <span>
+            Bed ejection &amp; continuous printing
+            <span class="muted tiny block">
+              Show the automatic bed-clearing / continuous-printing panel. Off by
+              default — enable only for printers with a bed-ejection setup.
+            </span>
+          </span>
+        </label>
+      </section>
+
+      <section class="danger">
+        <h4>Danger zone</h4>
+        {#if !confirmDelete}
+          <button class="btn btn-ghost btn-sm del" onclick={() => (confirmDelete = true)} disabled={deleting}>
+            Delete printer from dashboard
+          </button>
+          <span class="muted tiny block">
+            Removes this printer from your dashboard. Print history and stats are
+            kept; any queued jobs assigned to it are returned to the unassigned pool.
+          </span>
+        {:else}
+          <p class="cq">Delete <strong>{name}</strong>? History/stats are preserved and queued
+            jobs are unassigned. This can't be undone.</p>
+          <div class="drow">
+            <button class="btn btn-ghost btn-sm" onclick={() => (confirmDelete = false)} disabled={deleting}>Cancel</button>
+            <button class="btn btn-danger btn-sm" onclick={doDelete} disabled={deleting}>
+              {deleting ? 'Deleting…' : 'Delete printer'}
+            </button>
+          </div>
+        {/if}
       </section>
 
       {#if err}<p class="err">{err}</p>{/if}
     </div>
 
     <div class="mfoot">
-      <button class="btn btn-ghost btn-sm" onclick={() => onclose?.()} disabled={saving}>Cancel</button>
-      <button class="btn btn-primary btn-sm" onclick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+      <button class="btn btn-ghost btn-sm" onclick={() => onclose?.()} disabled={saving || deleting}>Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick={save} disabled={saving || deleting}>{saving ? 'Saving…' : 'Save'}</button>
     </div>
   </div>
 </div>
@@ -97,6 +147,14 @@
   .block { display: block; margin-top: 0.2rem; line-height: 1.45; }
   .tiny { font-size: 0.78rem; }
   .err { color: var(--ophq-danger); font-size: 0.88rem; margin: 0; }
+  section.danger { border-top: 1px solid var(--ophq-border-soft); padding-top: 0.9rem; }
+  section.danger h4 { color: var(--ophq-danger); }
+  .del { color: var(--ophq-danger); border-color: rgba(255,92,108,0.35); }
+  .del:hover { border-color: var(--ophq-danger); }
+  .cq { font-size: 0.88rem; margin: 0 0 0.7rem; }
+  .drow { display: flex; gap: 0.6rem; }
+  .btn-danger { background: var(--ophq-danger); color: #fff; }
+  .btn-danger:hover { background: #ff7280; color: #fff; }
   .mfoot { display: flex; justify-content: flex-end; gap: 0.6rem; padding: 0.9rem 1.2rem;
     border-top: 1px solid var(--ophq-border-soft); background: var(--ophq-bg-2); }
 </style>

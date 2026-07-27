@@ -87,6 +87,11 @@ export const api = {
   // show_filament_panel, …). Changing ip_address re-links + reconnects engine-side.
   updatePrinter: (id, body) =>
     req('/engine/api/v1/printers/' + id, { method: 'PATCH', body: JSON.stringify(body) }),
+  // Delete a printer from the dashboard. delete_archives=false PRESERVES print
+  // archives/history (they're orphaned, not deleted); the engine also un-assigns
+  // any queued jobs (printer_id→null) rather than cascade-deleting them.
+  deletePrinter: (id) =>
+    req('/engine/api/v1/printers/' + id + '?delete_archives=false', { method: 'DELETE' }),
   printerStatus: (id) => req('/engine/api/v1/printers/' + id + '/status'),
   // action: 'print/pause' | 'print/resume' | 'print/stop' | 'connect' | 'disconnect' | 'refresh-status'
   printerAction: (id, action) =>
