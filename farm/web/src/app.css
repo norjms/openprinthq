@@ -306,3 +306,66 @@ p { color: var(--ophq-text-2); }
   padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0);
   white-space: nowrap; border: 0;
 }
+
+/* ---- instant tooltips (data-tip) ----------------------------------------- */
+/* Pure-CSS tooltip: the bubble + arrow are authored into the CSSOM at page
+   load (nothing lazy, nothing JS-driven), so on hover/focus they paint with
+   ZERO delay — unlike the native `title` attribute's ~1s browser delay. Shows
+   on :hover AND :focus-visible so keyboard users get it too. Pair every
+   data-tip with an aria-label (or visible text) for screen readers. */
+[data-tip] { position: relative; }
+[data-tip]::after,
+[data-tip]::before {
+  position: absolute;
+  left: 50%;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  z-index: 70;
+  transition: none;              /* instant — no fade/delay */
+}
+[data-tip]::after {
+  content: attr(data-tip);
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
+  background: var(--ophq-tooltip-bg, #0b0f16);
+  color: var(--ophq-tooltip-fg, #f4f7fb);
+  border: 1px solid var(--ophq-border);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  padding: 0.32rem 0.55rem;
+  border-radius: 6px;
+  font-size: 0.74rem;
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  max-width: 16rem;
+}
+[data-tip]::before {
+  content: '';
+  bottom: calc(100% + 3px);
+  transform: translateX(-50%) rotate(45deg);
+  width: 8px;
+  height: 8px;
+  background: var(--ophq-tooltip-bg, #0b0f16);
+  border-right: 1px solid var(--ophq-border);
+  border-bottom: 1px solid var(--ophq-border);
+}
+/* Below-anchored variant for controls near the top edge (e.g. header STOP). */
+[data-tip][data-tip-pos='below']::after { bottom: auto; top: calc(100% + 8px); }
+[data-tip][data-tip-pos='below']::before {
+  bottom: auto; top: calc(100% + 3px);
+  transform: translateX(-50%) rotate(225deg);
+}
+[data-tip]:hover::after,
+[data-tip]:hover::before,
+[data-tip]:focus-visible::after,
+[data-tip]:focus-visible::before {
+  opacity: 1;
+  visibility: visible;
+}
+/* Don't show a tooltip for a disabled control (nothing to act on). */
+[data-tip]:disabled::after,
+[data-tip]:disabled::before { display: none; }
+[data-a11y-motion='reduce'] [data-tip]::after,
+[data-a11y-motion='reduce'] [data-tip]::before { transition: none; }
