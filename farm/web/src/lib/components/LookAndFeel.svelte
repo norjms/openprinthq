@@ -6,10 +6,10 @@
   import { get } from 'svelte/store';
   import { appearance, saveAppearance as persist } from '$lib/stores/appearance';
   import {
-    MODES, TOKEN_GROUPS, TOKEN_LABELS, PRESETS, A11Y_OPTIONS,
+    MODES, TOKEN_GROUPS, TOKEN_LABELS, PRESETS, A11Y_OPTIONS, LOGO_SLOTS,
     ACCESSIBLE_DEFAULT_A11Y, DEFAULT_A11Y, DEFAULT_BRANDING,
     effectiveVars, normalizeConfig, applyAppearance, clampScale,
-    contrastRatio, wcagRating
+    contrastRatio, wcagRating, resolveLogo
   } from '$lib/theme';
   import ThemeMockup from './ThemeMockup.svelte';
 
@@ -54,14 +54,20 @@
   }
   function setScale(v) { draft.textScale = clampScale(v); preview(); }
   function setBrand(key, v) { draft.branding = { ...draft.branding, [key]: v }; preview(); }
+  // Set one of the three logo slots (light / dark / accessible).
+  function setLogo(slot, v) {
+    draft.branding = { ...draft.branding, logos: { ...draft.branding.logos, [slot]: v } };
+    preview();
+  }
 
-  function onImage(key, ev) {
+  // Read an uploaded image → data-URI. target is 'favicon' or a logo slot key.
+  function onImage(target, ev, label) {
     logoErr = null;
     const file = ev.target.files?.[0];
     if (!file) return;
-    if (file.size > 512 * 1024) { logoErr = `${key === 'logo' ? 'Logo' : 'Favicon'} must be under 512 KB.`; ev.target.value = ''; return; }
+    if (file.size > 512 * 1024) { logoErr = `${label || 'Image'} must be under 512 KB.`; ev.target.value = ''; return; }
     const r = new FileReader();
-    r.onload = () => { setBrand(key, r.result); };
+    r.onload = () => { if (target === 'favicon') setBrand('favicon', r.result); else setLogo(target, r.result); };
     r.onerror = () => { logoErr = 'Could not read that image.'; };
     r.readAsDataURL(file);
     ev.target.value = '';
@@ -124,7 +130,7 @@
           vars={effectiveVars(normalizeConfig(draft), m.id)}
           textScale={draft.textScale}
           brandName={draft.branding.wordmark || draft.branding.siteName}
-          logo={draft.branding.logo}
+          logo={resolveLogo(draft.branding, m.id)}
           compact={true} />
         <div class="mmeta">
           <b>{m.name}</b>
@@ -228,16 +234,26 @@
                  oninput={(e) => setBrand('contact', e.target.value)} placeholder="support@yourfarm.example · yourfarm.example" />
         </div>
 
-        <div class="field">
-          <label>Logo <span class="muted">(≤ 512 KB, PNG/SVG)</span></label>
-          <div class="upload">
-            <span class="logoprev" style={`background:${curVars['--ophq-bg-2']}`}>
-              {#if draft.branding.logo}<img src={draft.branding.logo} alt="Current logo preview" />{:else}<span class="muted tiny">default</span>{/if}
-            </span>
-            <div class="ubtns">
-              <label class="btn btn-ghost btn-sm file"><input type="file" accept="image/*" onchange={(e) => onImage('logo', e)} />Upload</label>
-              {#if draft.branding.logo}<button class="btn btn-ghost btn-sm" onclick={() => setBrand('logo', '')}>Remove</button>{/if}
-            </div>
+        <div class="field span2">
+          <label>Logos <span class="muted">(≤ 512 KB each, PNG/SVG — one per theme so the mark stays legible on every background)</span></label>
+          <div class="logogrid">
+            {#each LOGO_SLOTS as [slot, slotLabel, slotHint]}
+              <div class="logoslot">
+                <div class="slothead">
+                  <b>{slotLabel}</b>
+                  <small class="muted">{slotHint}</small>
+                </div>
+                <div class="upload">
+                  <span class="logoprev" style={`background:${(PRESETS[slot] || PRESETS.light)['--ophq-bg-2']}`}>
+                    {#if draft.branding.logos[slot]}<img src={draft.branding.logos[slot]} alt={`${slotLabel} logo preview`} />{:else}<span class="muted tiny">default</span>{/if}
+                  </span>
+                  <div class="ubtns">
+                    <label class="btn btn-ghost btn-sm file"><input type="file" accept="image/*" onchange={(e) => onImage(slot, e, `${slotLabel} logo`)} />Upload</label>
+                    {#if draft.branding.logos[slot]}<button class="btn btn-ghost btn-sm" onclick={() => setLogo(slot, '')}>Remove</button>{/if}
+                  </div>
+                </div>
+              </div>
+            {/each}
           </div>
         </div>
         <div class="field">
@@ -247,7 +263,7 @@
               {#if draft.branding.favicon}<img src={draft.branding.favicon} alt="Current favicon preview" />{:else}<span class="muted tiny">default</span>{/if}
             </span>
             <div class="ubtns">
-              <label class="btn btn-ghost btn-sm file"><input type="file" accept="image/*" onchange={(e) => onImage('favicon', e)} />Upload</label>
+              <label class="btn btn-ghost btn-sm file"><input type="file" accept="image/*" onchange={(e) => onImage('favicon', e, 'Favicon')} />Upload</label>
               {#if draft.branding.favicon}<button class="btn btn-ghost btn-sm" onclick={() => setBrand('favicon', '')}>Remove</button>{/if}
             </div>
           </div>
@@ -315,6 +331,11 @@
   .brandgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.9rem 1rem; }
   .brandgrid .span2 { grid-column: 1 / -1; }
   .brandgrid .field { margin: 0; }
+  .logogrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.9rem; }
+  .logoslot { display: flex; flex-direction: column; gap: 0.45rem; border: 1px solid var(--ophq-border-soft); border-radius: 10px; padding: 0.6rem; }
+  .slothead { display: flex; flex-direction: column; gap: 0.1rem; }
+  .slothead b { font-size: 0.86rem; }
+  .slothead small { font-size: 0.72rem; line-height: 1.35; }
   .upload { display: flex; align-items: center; gap: 0.8rem; }
   .logoprev { display: inline-grid; place-items: center; width: 88px; height: 44px; border-radius: 8px; border: 1px solid var(--ophq-border); overflow: hidden; }
   .logoprev.sm { width: 44px; }
