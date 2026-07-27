@@ -42,7 +42,10 @@
   // After a finished/failed/stopped print the printer waits for the plate to be
   // cleared; until then the last outcome is shown. Once cleared it's Ready again.
   const awaitingClear = $derived(!!st?.awaiting_plate_clear);
-  const hasJob = $derived(isPrinting || isPaused || !!st?.subtask_name || !!st?.gcode_file);
+  // A job is shown only when a print is actually active (printing/paused). A
+  // plate merely loaded while the printer sits Ready is NOT a job — idle shows
+  // no model name / layer / cover, just "Ready to print".
+  const hasJob = $derived(isPrinting || isPaused);
   const jobName = $derived(st?.subtask_name || st?.gcode_file || st?.current_print || '');
   const progress = $derived(Math.min(100, Math.max(0, Number(st?.progress) || 0)));
 
@@ -231,6 +234,13 @@
     try { await api.chamberLight(printerId, !st?.chamber_light); await refresh(); }
     catch (e) {} finally { acting = null; }
   }
+  // Emergency stop — a deliberate panic action, so it fires immediately with NO
+  // confirmation (unlike the regular Stop). Bambu has no motor-kill over MQTT, so
+  // the strongest immediate action is stopping the print.
+  async function emergencyStop() {
+    if (acting) return;
+    await act('print/stop', 'estop');
+  }
   async function clearPlate() {
     acting = 'clear';
     try {
@@ -244,8 +254,13 @@
 <div class="pdash card">
   <!-- ============ HEADER ============ -->
   <div class="pd-head">
-    <div class="pd-thumb">
-      {#if st?.cover_url}<img src={st.cover_url} alt="" />{:else}<span class="pd-thumb-i" aria-hidden="true">🖨</span>{/if}
+    <div class="pd-thumb" title="{model || 'Printer'}">
+      <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" aria-hidden="true">
+        <rect x="8" y="8" width="48" height="48" rx="5" />
+        <line x1="8" y1="21" x2="56" y2="21" />
+        <rect x="25" y="21" width="14" height="8" rx="1.5" fill="currentColor" stroke="none" />
+        <line x1="14" y1="47" x2="50" y2="47" />
+      </svg>
     </div>
     <div class="pd-idbox">
       <h1 class="pd-name">{name}</h1>
@@ -263,14 +278,20 @@
         {#if doorOpen}<span class="pchip warn">🚪 Door</span>{/if}
       </div>
     </div>
+    <button class="estop" type="button" onclick={emergencyStop} disabled={!online || acting === 'estop'}
+            title="Emergency stop (immediate — no confirmation)" aria-label="Emergency stop">
+      <span class="estop-oct"><span class="estop-txt">{acting === 'estop' ? '…' : 'STOP'}</span></span>
+    </button>
   </div>
 
   <!-- ============ STATUS ============ -->
   <div class="pd-label">STATUS</div>
-  <div class="pd-status">
-    <div class="pd-cover">
-      {#if st?.cover_url}<img src={st.cover_url} alt="current print" />{:else}<span class="pd-cube" aria-hidden="true">◲</span>{/if}
-    </div>
+  <div class="pd-status" class:idle={!hasJob}>
+    {#if hasJob}
+      <div class="pd-cover">
+        {#if st?.cover_url}<img src={st.cover_url} alt="current print" />{:else}<span class="pd-cube" aria-hidden="true">◲</span>{/if}
+      </div>
+    {/if}
     <div class="pd-status-body">
       <div class="pd-status-hd">
         <span class="pd-state {dispTone}">{dispState}</span>
@@ -280,15 +301,17 @@
           </button>
         {/if}
       </div>
-      <div class="pd-job {hasJob ? '' : 'muted'}">{hasJob ? jobName || 'Printing' : 'No active job'}</div>
-      <div class="pd-bar"><div class="fill" style="width:{progress}%"></div></div>
+      {#if hasJob}
+        <div class="pd-job">{jobName || 'Printing'}</div>
+        <div class="pd-bar"><div class="fill" style="width:{progress}%"></div></div>
+      {/if}
       <div class="pd-ready">
         {readyLine}
         {#if hasJob && fmtEta(st?.remaining_time)}<span class="mono"> · ~{fmtEta(st.remaining_time)} left</span>{/if}
         {#if hasJob && st?.layer_num != null && st?.total_layers}<span class="mono"> · layer {st.layer_num}/{st.total_layers}</span>{/if}
       </div>
     </div>
-    <div class="pd-pct mono">{hasJob ? Math.round(progress) + '%' : '---%'}</div>
+    {#if hasJob}<div class="pd-pct mono">{Math.round(progress)}%</div>{/if}
   </div>
 
   <!-- temps (settable) + nozzle / rack -->
@@ -447,10 +470,19 @@
   .pdash { padding: 1.4rem 1.4rem 1.1rem; }
 
   /* header */
-  .pd-head { display: flex; gap: 1rem; align-items: flex-start; }
-  .pd-thumb { width: 74px; height: 74px; flex: 0 0 auto; border-radius: var(--radius-sm); overflow: hidden; background: var(--ophq-bg-2); border: 1px solid var(--ophq-border); display: grid; place-items: center; }
+  .pd-head { display: flex; gap: 1rem; align-items: flex-start; position: relative; }
+  .pd-thumb { width: 74px; height: 74px; flex: 0 0 auto; border-radius: var(--radius-sm); overflow: hidden; background: var(--ophq-bg-2); border: 1px solid var(--ophq-border); display: grid; place-items: center; color: var(--ophq-text-2); }
   .pd-thumb img { width: 100%; height: 100%; object-fit: cover; }
-  .pd-thumb-i { font-size: 1.9rem; opacity: 0.7; }
+  .pd-thumb svg { width: 60%; height: 60%; opacity: 0.85; }
+  /* Emergency stop — octagon "stop sign", top-right of the header. Immediate. */
+  .estop { position: absolute; top: 0; right: 0; background: none; border: 0; padding: 0; cursor: pointer; }
+  .estop-oct { display: grid; place-items: center; width: 62px; height: 62px; background: var(--ophq-danger, #e5342f);
+    clip-path: polygon(30% 0, 70% 0, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0 70%, 0 30%);
+    border: 3px solid #fff2; box-shadow: 0 2px 10px rgba(229,52,47,0.4); transition: transform 0.1s, filter 0.1s; }
+  .estop:hover:not(:disabled) .estop-oct { filter: brightness(1.08); transform: scale(1.04); }
+  .estop:active:not(:disabled) .estop-oct { transform: scale(0.96); }
+  .estop:disabled { cursor: default; opacity: 0.4; }
+  .estop-txt { color: #fff; font-weight: 800; font-size: 0.82rem; letter-spacing: 0.02em; }
   .pd-name { margin: 0; font-size: 1.9rem; line-height: 1; }
   .pd-sub { display: flex; gap: 0.35rem; flex-wrap: wrap; color: var(--ophq-muted); font-size: 0.9rem; margin: 0.35rem 0 0.7rem; }
   .pd-chips { display: flex; gap: 0.45rem; flex-wrap: wrap; }
