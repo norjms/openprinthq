@@ -65,7 +65,7 @@
         {#if error}<p class="err" role="alert">{error}</p>{/if}
         <button class="btn btn-primary full" disabled={busy}>{busy ? 'Creating…' : 'Create account'}</button>
       </form>
-      <p class="muted small">Already have an account? <a href="/app">Sign in</a></p>
+      <p class="muted small">Already have an account? <a href="/app" data-sveltekit-reload>Sign in</a></p>
     {/if}
   </div>
 </div>
