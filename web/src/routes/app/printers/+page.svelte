@@ -50,6 +50,26 @@
     if (!p.live.connected) return 'offline';
     return (p.live.state || 'idle').toString().toLowerCase();
   }
+  // Card status chip: an idle printer with a clear plate reads "ready" (not the
+  // last job's failed/finished). After a print it prompts to clear the plate.
+  function dispOf(p) {
+    const l = p.live;
+    if (!l) return { label: 'unknown', tone: '' };
+    if (!l.connected) return { label: 'offline', tone: 'danger' };
+    const s = (l.state || '').toString().toLowerCase();
+    if (/run|print/.test(s)) return { label: 'printing', tone: 'primary' };
+    if (/pause/.test(s)) return { label: 'paused', tone: 'accent' };
+    if (l.awaiting_plate_clear) return { label: 'clear plate', tone: 'accent', clear: true };
+    return { label: 'ready', tone: 'ok' };
+  }
+  let clearing = $state({});
+  async function clearPlate(p, e) {
+    e.preventDefault(); e.stopPropagation();
+    clearing = { ...clearing, [p.id]: true };
+    try { await api.clearPlate(p.id); await load(false); }
+    catch (err) { /* next poll reflects state */ }
+    finally { clearing = { ...clearing, [p.id]: false }; }
+  }
   function tone(s) {
     if (/run|print/.test(s)) return 'primary';
     if (/pause/.test(s)) return 'accent';
@@ -109,10 +129,17 @@
   <div class="grid printers">
     {#each printers as p (p.id)}
       {@const st = statusOf(p)}
+      {@const d = dispOf(p)}
       <a class="card card-pad printer" href="/app/printers/{p.id}">
         <div class="flex between center">
           <h3>{p.name}</h3>
-          <span class="chip {tone(st)}">{st}</span>
+          {#if d.clear}
+            <button class="chip accent clearchip" onclick={(e) => clearPlate(p, e)} disabled={clearing[p.id]}>
+              {clearing[p.id] ? 'Clearing…' : '✓ Clear plate'}
+            </button>
+          {:else}
+            <span class="chip {d.tone}">{d.label}</span>
+          {/if}
         </div>
         <div class="meta mono">
           {#if p.vendor}<span>{p.vendor}</span>{/if}
@@ -192,6 +219,9 @@
   .chip.danger { color: var(--ophq-danger); border-color: rgba(255,92,108,0.3); background: rgba(255,92,108,0.08); }
   .chip.accent { color: var(--ophq-accent); border-color: rgba(255,176,32,0.3); background: rgba(255,176,32,0.08); }
   .chip.primary { color: var(--ophq-primary-2); border-color: rgba(124,108,255,0.35); background: var(--ophq-primary-dim); }
+  .clearchip { cursor: pointer; font: inherit; line-height: inherit; }
+  .clearchip:hover:not(:disabled) { filter: brightness(1.08); }
+  .clearchip:disabled { opacity: 0.6; cursor: default; }
   .fw { margin-top: 1.4rem; }
   .fwsum { margin-left: 0.6rem; font-size: 0.85rem; }
   .fwlist { display: flex; flex-direction: column; gap: 0.4rem; margin: 0.9rem 0 0.6rem; }

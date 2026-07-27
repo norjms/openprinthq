@@ -223,6 +223,9 @@ export const api = {
   hmsDescriptions: () => req('/hms/descriptions'),
   // Clear/acknowledge a printer's HMS flags (like dismissing on the printer screen).
   hmsClear: (id) => req('/engine/api/v1/printers/' + id + '/hms/clear', { method: 'POST' }),
+  // Acknowledge the build plate is cleared after a finished/failed/stopped print
+  // (resets the printer to "Ready to print"; lets the queue start the next job).
+  clearPlate: (id) => req('/engine/api/v1/printers/' + id + '/clear-plate', { method: 'POST' }),
   // Power circuits (printer_id -> circuit label) for staggered batch printing.
   circuits: () => req('/printer-circuits'),
   saveCircuits: (map) => req('/printer-circuits', { method: 'PUT', body: JSON.stringify(map) }),
