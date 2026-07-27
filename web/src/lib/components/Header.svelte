@@ -14,7 +14,7 @@
     </nav>
     <div class="actions">
       <ThemeSwitcher />
-      <a href="/app" class="btn btn-ghost btn-sm">Sign in</a>
+      <a href="/app" class="btn btn-ghost btn-sm" data-sveltekit-reload>Sign in</a>
       <a href="/signup" class="btn btn-primary btn-sm">Launch your HQ</a>
     </div>
   </div>

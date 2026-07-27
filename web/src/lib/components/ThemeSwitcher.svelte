@@ -4,7 +4,7 @@
   // for signed-in users alike (preserving any custom overrides on the config).
   import { onMount } from 'svelte';
   import { get } from 'svelte/store';
-  import { appearance, applyLocal } from '$lib/stores/appearance';
+  import { appearance, applyLocal, saveAppearance } from '$lib/stores/appearance';
 
   const modes = [
     { id: 'light', label: 'Light', icon: '☀' },
@@ -21,7 +21,11 @@
     }
   });
 
-  function set(mode) { applyLocal({ ...get(appearance), mode }); }
+  function set(mode) {
+    // Apply instantly (+ cookie); persist to the account too when signed in
+    // (the save 401s harmlessly for logged-out visitors on the landing page).
+    saveAppearance({ ...get(appearance), mode }).catch(() => {});
+  }
 </script>
 
 <div class="theme-switch" role="group" aria-label="Colour theme">
