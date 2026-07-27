@@ -366,6 +366,20 @@
   async function toggleConnection() {
     await control(st?.connected ? 'disconnect' : 'connect', st?.connected ? 'disconnect' : 'connect');
   }
+
+  // Emergency stop — immediate, NO confirmation (the regular Stop is confirm-gated).
+  // Klipper gets a true firmware halt (M112); others get an immediate print-stop.
+  async function emergencyStop() {
+    if (acting) return;
+    acting = 'estop';
+    try {
+      if (isKlipper) await api.klipperEmergencyStop(id);
+      else await api.printerAction(id, 'print/stop');
+      await api.printerAction(id, 'refresh-status').catch(() => {});
+      await loadStatus(false);
+    } catch (e) { error = e.message || 'emergency stop failed'; }
+    finally { acting = null; }
+  }
 </script>
 
 <PageTitle page={st?.name || meta?.name || 'Printer'} />
@@ -421,6 +435,10 @@
         <span class="chip {tone(stateStr)}">{stateStr}</span>
         <button class="btn btn-ghost btn-sm" onclick={toggleConnection} disabled={!!acting}>
           {st?.connected ? 'Disconnect' : 'Connect'}
+        </button>
+        <button class="estop" type="button" onclick={emergencyStop} disabled={!st?.connected || acting === 'estop'}
+                title="Emergency stop (immediate — no confirmation)" aria-label="Emergency stop">
+          <span class="estop-oct"><span class="estop-txt">{acting === 'estop' ? '…' : 'STOP'}</span></span>
         </button>
       </div>
       <button class="btn btn-ghost btn-sm gear" onclick={() => (settingsOpen = true)}>
@@ -584,6 +602,15 @@
   .title h1 { margin: 0 0 0.3rem; }
   .actions { display: flex; flex-direction: column; align-items: flex-end; gap: 0.5rem; }
   .gear { align-self: flex-end; }
+  /* Emergency stop — octagon "stop sign", immediate (no confirmation). */
+  .estop { background: none; border: 0; padding: 0; cursor: pointer; }
+  .estop-oct { display: grid; place-items: center; width: 46px; height: 46px; background: var(--ophq-danger, #e5342f);
+    clip-path: polygon(30% 0, 70% 0, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0 70%, 0 30%);
+    border: 2px solid #ffffff33; box-shadow: 0 2px 8px rgba(229,52,47,0.4); transition: transform 0.1s, filter 0.1s; }
+  .estop:hover:not(:disabled) .estop-oct { filter: brightness(1.08); transform: scale(1.04); }
+  .estop:active:not(:disabled) .estop-oct { transform: scale(0.96); }
+  .estop:disabled { cursor: default; opacity: 0.4; }
+  .estop-txt { color: #fff; font-weight: 800; font-size: 0.6rem; letter-spacing: 0.02em; }
   .offline-locate { margin: 0 0 1.2rem; padding: 0.9rem 1rem; border: 1px solid rgba(255,176,32,0.35); background: rgba(255,176,32,0.06); border-radius: var(--radius-sm); display: flex; flex-direction: column; gap: 0.7rem; }
   .ol-head { display: flex; flex-direction: column; gap: 0.15rem; }
   .ol-title { font-weight: 600; color: var(--ophq-warn); }
