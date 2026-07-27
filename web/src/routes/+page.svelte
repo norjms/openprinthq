@@ -12,11 +12,19 @@
   ];
 
   const features = [
-    { icon: '🏢', title: 'Your own private instance', body: 'Every account gets an isolated OpenPrintHQ — its own database, its own printers, its own storage. No shared tenancy, no noisy neighbors.' },
-    { icon: '🖨️', title: 'Multi-brand, one HQ', body: 'Bambu Lab, Creality, Prusa, Snapmaker and Voron supported out of the box. One queue, one dashboard, every machine.' },
-    { icon: '🧩', title: 'Orca slicing, built in', body: 'Slice STL and 3MF right in the browser with OrcaSlicer — no desktop install. Send straight to any printer in your fleet.' },
-    { icon: '🎥', title: 'Live monitoring', body: 'Camera streams, temperatures, progress and health in real time over WebSockets. Catch failures before they waste a spool.' },
-    { icon: '🧵', title: 'Filament & spool tracking', body: 'Track spools, usage and cost automatically. Know what you have and what a print really costs.' },
+    { icon: '🏢', title: 'Your own private instance', body: 'Every account gets an isolated OpenPrintHQ — its own database, printers and storage. No shared tenancy, no noisy neighbors.' },
+    { icon: '🖨️', title: 'Multi-brand, one HQ', body: 'Bambu Lab, Creality, Prusa, Snapmaker and Voron out of the box. One queue, one dashboard, every machine.' },
+    { icon: '🧩', title: 'OrcaSlicer, built in', body: 'Slice STL and 3MF right in the browser with a bundled OrcaSlicer — no desktop install. Send straight to any printer in your fleet.' },
+    { icon: '🎥', title: 'Live monitoring', body: 'Peer-to-peer WebRTC camera streams, temperatures, progress and health in real time. Catch failures before they waste a spool.' },
+    { icon: '🔐', title: 'SSO, invites & roles', body: 'Secure Authentik single sign-on. Invite-based signup, an owner admin console, and owner/user roles — provision teammates in a click.' },
+    { icon: '⚡', title: 'Staggered batch printing', body: 'Fire the same job across many printers at once. Heat-up is serialized per breaker circuit and runs in parallel across circuits — no tripped breakers.' },
+    { icon: '🛰️', title: 'Reach printers anywhere', body: 'Secure outbound connectors bridge LAN printers behind NAT or CGNAT — remote monitoring and control with no port-forwarding.' },
+    { icon: '≣', title: 'Fleet queue & scheduling', body: 'One print queue across the whole farm. Assign jobs, reorder, and keep every machine busy from a single command center.' },
+    { icon: '🎞️', title: 'Timelapses & projects', body: 'Automatic per-print timelapses and project organisation — capture, group and revisit every build.' },
+    { icon: '🧵', title: 'Filament & spool tracking', body: 'Track spools, usage and cost automatically. Know what you have on hand and what a print really costs.' },
+    { icon: '📈', title: 'Statistics & reports', body: 'Success rates, throughput and usage across the fleet, with printable reports for your records or clients.' },
+    { icon: '🔌', title: 'Integrations', body: 'Per-user read-only tokens expose fleet status to Home Assistant, Homepage and Prometheus — plug OpenPrintHQ into your dashboards.' },
+    { icon: '🎨', title: 'Themes & accessibility', body: 'Dark, light and WCAG-tuned accessible modes, custom colours, text scaling and your own branding — make it yours.' },
     { icon: '🔒', title: 'Yours to host', body: 'Self-hostable and fully open source under AGPL-3.0. Your data never has to leave your network.' }
   ];
 
