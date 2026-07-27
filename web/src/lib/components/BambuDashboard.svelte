@@ -31,6 +31,9 @@
   const isPrinting = $derived(/run|print/i.test(stateStr));
   const isPaused = $derived(/pause/i.test(stateStr));
   const isFailed = $derived(/fail|error|fault/i.test(stateStr));
+  // After a finished/failed/stopped print the printer waits for the plate to be
+  // cleared; until then the last outcome is shown. Once cleared it's Ready again.
+  const awaitingClear = $derived(!!st?.awaiting_plate_clear);
   const hasJob = $derived(isPrinting || isPaused || !!st?.subtask_name || !!st?.gcode_file);
   const jobName = $derived(st?.subtask_name || st?.gcode_file || st?.current_print || '');
   const progress = $derived(Math.min(100, Math.max(0, Number(st?.progress) || 0)));
@@ -53,11 +56,27 @@
     if (/fail|error|offline|fault/.test(x)) return 'danger';
     return '';
   }
+  // Headline status: idle (and plate already clear) reads "Ready", never the last
+  // job's Failed/Finished — that outcome only shows while awaiting a plate clear.
+  const dispState = $derived(
+    !st?.connected ? 'Offline' :
+    isPrinting ? 'Printing' :
+    isPaused ? 'Paused' :
+    awaitingClear ? stateLabel(stateStr) :
+    'Ready'
+  );
+  const dispTone = $derived(
+    !st?.connected ? 'danger' :
+    isPrinting ? 'primary' :
+    isPaused ? 'accent' :
+    awaitingClear ? 'accent' :
+    'ok'
+  );
   const readyLine = $derived(
     !st?.connected ? 'Printer offline' :
     isPrinting ? 'Printing…' :
     isPaused ? 'Paused' :
-    st?.awaiting_plate_clear ? 'Waiting for plate to be cleared' :
+    awaitingClear ? 'Print done — clear the build plate, then mark it clear' :
     'Ready to print'
   );
 
@@ -145,6 +164,14 @@
     try { await api.chamberLight(printerId, !st?.chamber_light); await refresh(); }
     catch (e) {} finally { acting = null; }
   }
+  async function clearPlate() {
+    acting = 'clear';
+    try {
+      await api.clearPlate(printerId);
+      await api.printerAction(printerId, 'refresh-status').catch(() => {});
+      await refresh();
+    } catch (e) {} finally { acting = null; }
+  }
 </script>
 
 <div class="pdash card">
@@ -179,8 +206,12 @@
     </div>
     <div class="pd-status-body">
       <div class="pd-status-hd">
-        <span class="pd-state {stateTone(stateStr)}">{stateLabel(stateStr)}</span>
-        {#if st?.awaiting_plate_clear}<span class="pchip ok">Plate Clear</span>{/if}
+        <span class="pd-state {dispTone}">{dispState}</span>
+        {#if awaitingClear}
+          <button class="btn btn-primary btn-sm clearbtn" onclick={clearPlate} disabled={acting === 'clear' || !st?.connected}>
+            {acting === 'clear' ? 'Clearing…' : '✓ Clear plate'}
+          </button>
+        {/if}
       </div>
       <div class="pd-job {hasJob ? '' : 'muted'}">{hasJob ? jobName || 'Printing' : 'No active job'}</div>
       <div class="pd-bar"><div class="fill" style="width:{progress}%"></div></div>
