@@ -4,7 +4,9 @@
   // All actions move real hardware; the whole panel is disabled while printing.
   import { api } from '$lib/api';
 
-  let { printerId, status, refresh, kind = '' } = $props();
+  // `homedAxes` (Klipper only) is the live Moonraker `toolhead.homed_axes` string
+  // (e.g. "xyz" once homed, "" before), lifted from the console poll on the page.
+  let { printerId, status, refresh, kind = '', homedAxes = null } = $props();
 
   const printing = $derived(/run|print/i.test(String(status?.state || '')));
   const t = $derived(status?.temperatures || {});
@@ -12,6 +14,17 @@
   // Klipper/Moonraker printers have no Bambu-style speed presets; they use live
   // factor overrides (M220/M221), babystep Z, and pressure advance instead.
   const isKlipper = $derived(String(kind || '').toLowerCase() === 'klipper');
+  // Klipper refuses any G0/G1 move until the axes are homed ("Must home axis
+  // first"). Surface that up-front: if we know the homed state and it isn't fully
+  // XYZ-homed, show a prominent Home prompt instead of letting jogs fail cryptically.
+  const notHomed = $derived(
+    isKlipper && homedAxes != null &&
+    !(/x/i.test(homedAxes) && /y/i.test(homedAxes) && /z/i.test(homedAxes))
+  );
+  // Fallback flag when a move is rejected for being unhomed (covers the case
+  // where live homed state isn't available yet).
+  let homeHint = $state(false);
+  function looksUnhomed(m) { return /must home|not homed|home.*(first|axis)|axis.*home/i.test(String(m || '')); }
 
   let step = $state(10);          // XY/Z step mm
   const steps = [0.1, 1, 10, 50];
@@ -58,13 +71,21 @@
 
   async function act(key, fn, okMsg) {
     busy = key; msg = null;
-    try { await fn(); if (okMsg) msg = { kind: 'ok', text: okMsg }; if (refresh) await refresh(); }
-    catch (e) { msg = { kind: 'err', text: e.message || 'command failed' }; }
+    try {
+      await fn();
+      if (okMsg) msg = { kind: 'ok', text: okMsg };
+      if (refresh) await refresh();
+    } catch (e) {
+      const text = e.message || 'command failed';
+      // Turn Klipper's cryptic "Must home axis first" into an actionable prompt.
+      if (isKlipper && looksUnhomed(text)) { homeHint = true; msg = { kind: 'err', text: 'Home the printer first — it must be homed before moving.' }; }
+      else msg = { kind: 'err', text };
+    }
     finally { busy = null; }
   }
   const jogXY = (x, y) => act('xy', () => api.xyJog(printerId, x * step, y * step));
   const jogZ = (dir) => act('z', () => api.bedJog(printerId, dir * step));
-  const home = () => act('home', () => api.homeAxes(printerId, 'XYZ'), 'Homing.');
+  const home = () => act('home', async () => { await api.homeAxes(printerId, 'XYZ'); homeHint = false; }, 'Homing — this can take a moment.');
   const extrude = (dir) => act('e', () => api.extruderJog(printerId, dir * (Number(extrudeAmt) || 10)));
   async function pickExtruder(i) { ext = i; await act('ext', () => api.selectExtruder(printerId, i)); }
   const setFan = (fan, speed) => act('fan-' + fan, () => api.fanSpeed(printerId, fan, speed));
@@ -84,12 +105,22 @@
     <p class="muted lock">Manual controls are disabled while a print is running.</p>
   {/if}
 
+  {#if isKlipper && (notHomed || homeHint)}
+    <div class="homebanner" role="status">
+      <span class="hb-txt">⚠ This printer isn't homed — motion is disabled until the axes are homed.</span>
+      <button class="btn btn-primary btn-sm" data-tip="Home all axes now (G28)" aria-label="Home all axes now"
+              onclick={home} disabled={printing || busy === 'home'}>
+        {busy === 'home' ? 'Homing…' : '🏠 Home now'}
+      </button>
+    </div>
+  {/if}
+
   <!-- Step size drives the XY/Z jog buttons, so it sits with the move controls. -->
   <div class="steprow">
     <span class="blabel">Step</span>
     <div class="steps">
       {#each steps as s}
-        <button class="stp" class:on={step === s} onclick={() => (step = s)}>{s}</button>
+        <button class="stp" class:on={step === s} data-tip={`Move ${s} mm per jog`} aria-label={`Set jog step to ${s} millimetres`} onclick={() => (step = s)}>{s}</button>
       {/each}
       <span class="muted mm">mm</span>
     </div>
@@ -100,11 +131,11 @@
     <div class="blk">
       <span class="blabel">Move XY</span>
       <div class="pad">
-        <button class="jb yb" onclick={() => jogXY(0, 1)} disabled={printing || busy === 'xy'}>Y+</button>
-        <button class="jb xl" onclick={() => jogXY(-1, 0)} disabled={printing || busy === 'xy'}>X−</button>
-        <button class="jb hm" onclick={home} disabled={printing || busy === 'home'} title="Home all axes">⌂</button>
-        <button class="jb xr" onclick={() => jogXY(1, 0)} disabled={printing || busy === 'xy'}>X+</button>
-        <button class="jb yf" onclick={() => jogXY(0, -1)} disabled={printing || busy === 'xy'}>Y−</button>
+        <button class="jb yb" data-tip="Jog Y+ by the selected step" aria-label="Jog Y plus" onclick={() => jogXY(0, 1)} disabled={printing || busy === 'xy'}>Y+</button>
+        <button class="jb xl" data-tip="Jog X− by the selected step" aria-label="Jog X minus" onclick={() => jogXY(-1, 0)} disabled={printing || busy === 'xy'}>X−</button>
+        <button class="jb hm" class:needshome={notHomed || homeHint} data-tip="Home all axes (G28)" aria-label="Home all axes" onclick={home} disabled={printing || busy === 'home'}>⌂</button>
+        <button class="jb xr" data-tip="Jog X+ by the selected step" aria-label="Jog X plus" onclick={() => jogXY(1, 0)} disabled={printing || busy === 'xy'}>X+</button>
+        <button class="jb yf" data-tip="Jog Y− by the selected step" aria-label="Jog Y minus" onclick={() => jogXY(0, -1)} disabled={printing || busy === 'xy'}>Y−</button>
       </div>
     </div>
 
@@ -112,8 +143,8 @@
     <div class="blk">
       <span class="blabel">Z / bed</span>
       <div class="zcol">
-        <button class="jb" onclick={() => jogZ(1)} disabled={printing || busy === 'z'}>Z ↑</button>
-        <button class="jb" onclick={() => jogZ(-1)} disabled={printing || busy === 'z'}>Z ↓</button>
+        <button class="jb" data-tip="Raise Z / lower the bed by the step" aria-label="Move Z up" onclick={() => jogZ(1)} disabled={printing || busy === 'z'}>Z ↑</button>
+        <button class="jb" data-tip="Lower Z / raise the bed by the step" aria-label="Move Z down" onclick={() => jogZ(-1)} disabled={printing || busy === 'z'}>Z ↓</button>
       </div>
     </div>
 
@@ -122,28 +153,28 @@
       <span class="blabel">Extruder</span>
       {#if dual}
         <div class="segl">
-          <button class:on={ext === 1} onclick={() => pickExtruder(1)} disabled={printing || busy === 'ext'}>Left</button>
-          <button class:on={ext === 0} onclick={() => pickExtruder(0)} disabled={printing || busy === 'ext'}>Right</button>
+          <button class:on={ext === 1} data-tip="Select the left extruder" aria-label="Select left extruder" onclick={() => pickExtruder(1)} disabled={printing || busy === 'ext'}>Left</button>
+          <button class:on={ext === 0} data-tip="Select the right extruder" aria-label="Select right extruder" onclick={() => pickExtruder(0)} disabled={printing || busy === 'ext'}>Right</button>
         </div>
       {/if}
       {#if isKlipper}
         <div class="erow"><span class="fl">Length</span>
-          <input class="input xs" type="number" min="1" bind:value={feedAmt} /><span class="muted">mm</span></div>
-        <div class="preset">{#each LEN_PRESETS as p}<button class="mini" class:on={feedAmt === p} onclick={() => (feedAmt = p)}>{p}</button>{/each}</div>
+          <input class="input xs" type="number" min="1" bind:value={feedAmt} aria-label="Extrude length in millimetres" /><span class="muted">mm</span></div>
+        <div class="preset">{#each LEN_PRESETS as p}<button class="mini" class:on={feedAmt === p} data-tip={`${p} mm`} aria-label={`Extrude length ${p} millimetres`} onclick={() => (feedAmt = p)}>{p}</button>{/each}</div>
         <div class="erow"><span class="fl">Rate</span>
-          <input class="input xs" type="number" min="1" bind:value={feedRate} /><span class="muted">mm/s</span></div>
-        <div class="preset">{#each RATE_PRESETS as p}<button class="mini" class:on={feedRate === p} onclick={() => (feedRate = p)}>{p}</button>{/each}</div>
+          <input class="input xs" type="number" min="1" bind:value={feedRate} aria-label="Extrude feedrate in millimetres per second" /><span class="muted">mm/s</span></div>
+        <div class="preset">{#each RATE_PRESETS as p}<button class="mini" class:on={feedRate === p} data-tip={`${p} mm/s`} aria-label={`Feedrate ${p} millimetres per second`} onclick={() => (feedRate = p)}>{p}</button>{/each}</div>
         <div class="ebtns">
-          <button class="jb" onclick={() => kExtrude(1)} disabled={printing || busy === 'ke'}>Extrude ↓</button>
-          <button class="jb" onclick={() => kExtrude(-1)} disabled={printing || busy === 'ke'}>Retract ↑</button>
+          <button class="jb" data-tip="Extrude filament (push out)" aria-label="Extrude filament" onclick={() => kExtrude(1)} disabled={printing || busy === 'ke'}>Extrude ↓</button>
+          <button class="jb" data-tip="Retract filament (pull back)" aria-label="Retract filament" onclick={() => kExtrude(-1)} disabled={printing || busy === 'ke'}>Retract ↑</button>
         </div>
       {:else}
         <div class="erow">
-          <input class="input xs" type="number" min="1" max="100" bind:value={extrudeAmt} /><span class="muted">mm</span>
+          <input class="input xs" type="number" min="1" max="100" bind:value={extrudeAmt} aria-label="Extrude amount in millimetres" /><span class="muted">mm</span>
         </div>
         <div class="ebtns">
-          <button class="jb" onclick={() => extrude(1)} disabled={printing || busy === 'e'}>Extrude ↓</button>
-          <button class="jb" onclick={() => extrude(-1)} disabled={printing || busy === 'e'}>Retract ↑</button>
+          <button class="jb" data-tip="Extrude filament (push out)" aria-label="Extrude filament" onclick={() => extrude(1)} disabled={printing || busy === 'e'}>Extrude ↓</button>
+          <button class="jb" data-tip="Retract filament (pull back)" aria-label="Retract filament" onclick={() => extrude(-1)} disabled={printing || busy === 'e'}>Retract ↑</button>
         </div>
       {/if}
     </div>
@@ -154,9 +185,9 @@
       {#each [['part', 'Part'], ['aux', 'Aux'], ['chamber', 'Chamber']] as [f, label]}
         <div class="fanctl">
           <span class="fl">{label}</span>
-          <button class="mini" onclick={() => setFan(f, 0)} disabled={busy === 'fan-' + f}>Off</button>
-          <button class="mini" onclick={() => setFan(f, 50)} disabled={busy === 'fan-' + f}>50</button>
-          <button class="mini" onclick={() => setFan(f, 100)} disabled={busy === 'fan-' + f}>100</button>
+          <button class="mini" data-tip={`${label} fan off`} aria-label={`${label} fan off`} onclick={() => setFan(f, 0)} disabled={busy === 'fan-' + f}>Off</button>
+          <button class="mini" data-tip={`${label} fan 50%`} aria-label={`${label} fan 50 percent`} onclick={() => setFan(f, 50)} disabled={busy === 'fan-' + f}>50</button>
+          <button class="mini" data-tip={`${label} fan 100%`} aria-label={`${label} fan 100 percent`} onclick={() => setFan(f, 100)} disabled={busy === 'fan-' + f}>100</button>
         </div>
       {/each}
     </div>
@@ -169,10 +200,10 @@
       <div class="krow">
         <span class="blabel">Z-offset <span class="zval mono">{round3(zOffset)} mm</span></span>
         <div class="zbtns">
-          {#each Z_STEPS as z}<button class="mini" onclick={() => babyZ(-z)} disabled={busy === 'z-off'}>−{z}</button>{/each}
+          {#each Z_STEPS as z}<button class="mini" data-tip={`Lower nozzle ${z} mm (babystep)`} aria-label={`Babystep Z minus ${z} millimetres`} onclick={() => babyZ(-z)} disabled={busy === 'z-off'}>−{z}</button>{/each}
           <span class="sep"></span>
-          {#each [...Z_STEPS].reverse() as z}<button class="mini" onclick={() => babyZ(z)} disabled={busy === 'z-off'}>+{z}</button>{/each}
-          <button class="mini" onclick={zeroZ} disabled={busy === 'z-off'} title="Reset offset to 0">Reset</button>
+          {#each [...Z_STEPS].reverse() as z}<button class="mini" data-tip={`Raise nozzle ${z} mm (babystep)`} aria-label={`Babystep Z plus ${z} millimetres`} onclick={() => babyZ(z)} disabled={busy === 'z-off'}>+{z}</button>{/each}
+          <button class="mini" data-tip="Reset live Z-offset to 0" aria-label="Reset Z offset to zero" onclick={zeroZ} disabled={busy === 'z-off'}>Reset</button>
         </div>
       </div>
 
@@ -180,11 +211,11 @@
       <div class="krow">
         <span class="blabel">Speed factor</span>
         <div class="factor">
-          <button class="mini" onclick={() => { speedFactor = Math.max(1, (Number(speedFactor) || 100) - 5); applySpeed(); }} disabled={busy === 'spd'}>−</button>
-          <input class="input xs" type="number" min="1" max="300" bind:value={speedFactor} />
+          <button class="mini" data-tip="Speed −5%" aria-label="Decrease speed factor 5 percent" onclick={() => { speedFactor = Math.max(1, (Number(speedFactor) || 100) - 5); applySpeed(); }} disabled={busy === 'spd'}>−</button>
+          <input class="input xs" type="number" min="1" max="300" bind:value={speedFactor} aria-label="Speed factor percent" />
           <span class="muted">%</span>
-          <button class="mini" onclick={() => { speedFactor = (Number(speedFactor) || 100) + 5; applySpeed(); }} disabled={busy === 'spd'}>+</button>
-          <button class="btn btn-ghost btn-sm" onclick={applySpeed} disabled={busy === 'spd'}>Set</button>
+          <button class="mini" data-tip="Speed +5%" aria-label="Increase speed factor 5 percent" onclick={() => { speedFactor = (Number(speedFactor) || 100) + 5; applySpeed(); }} disabled={busy === 'spd'}>+</button>
+          <button class="btn btn-ghost btn-sm" data-tip="Apply speed factor (M220)" aria-label="Apply speed factor" onclick={applySpeed} disabled={busy === 'spd'}>Set</button>
         </div>
       </div>
 
@@ -192,11 +223,11 @@
       <div class="krow">
         <span class="blabel">Flow factor</span>
         <div class="factor">
-          <button class="mini" onclick={() => { flowFactor = Math.max(1, (Number(flowFactor) || 100) - 5); applyFlow(); }} disabled={busy === 'flow'}>−</button>
-          <input class="input xs" type="number" min="1" max="200" bind:value={flowFactor} />
+          <button class="mini" data-tip="Flow −5%" aria-label="Decrease flow factor 5 percent" onclick={() => { flowFactor = Math.max(1, (Number(flowFactor) || 100) - 5); applyFlow(); }} disabled={busy === 'flow'}>−</button>
+          <input class="input xs" type="number" min="1" max="200" bind:value={flowFactor} aria-label="Flow factor percent" />
           <span class="muted">%</span>
-          <button class="mini" onclick={() => { flowFactor = (Number(flowFactor) || 100) + 5; applyFlow(); }} disabled={busy === 'flow'}>+</button>
-          <button class="btn btn-ghost btn-sm" onclick={applyFlow} disabled={busy === 'flow'}>Set</button>
+          <button class="mini" data-tip="Flow +5%" aria-label="Increase flow factor 5 percent" onclick={() => { flowFactor = (Number(flowFactor) || 100) + 5; applyFlow(); }} disabled={busy === 'flow'}>+</button>
+          <button class="btn btn-ghost btn-sm" data-tip="Apply flow factor (M221)" aria-label="Apply flow factor" onclick={applyFlow} disabled={busy === 'flow'}>Set</button>
         </div>
       </div>
 
@@ -204,15 +235,15 @@
       <div class="krow">
         <span class="blabel">Pressure advance</span>
         <div class="factor">
-          <input class="input xs" type="number" min="0" max="1" step="0.001" bind:value={paValue} /><span class="muted">s</span>
+          <input class="input xs" type="number" min="0" max="1" step="0.001" bind:value={paValue} aria-label="Pressure advance seconds" /><span class="muted">s</span>
           <span class="fl sm">smooth</span>
-          <input class="input xs" type="number" min="0" max="0.2" step="0.005" bind:value={smoothTime} /><span class="muted">s</span>
-          <button class="btn btn-ghost btn-sm" onclick={applyPA} disabled={busy === 'pa'}>Set</button>
+          <input class="input xs" type="number" min="0" max="0.2" step="0.005" bind:value={smoothTime} aria-label="Pressure advance smooth time seconds" /><span class="muted">s</span>
+          <button class="btn btn-ghost btn-sm" data-tip="Apply pressure advance" aria-label="Apply pressure advance" onclick={applyPA} disabled={busy === 'pa'}>Set</button>
         </div>
       </div>
 
       <div class="krow">
-        <button class="btn btn-ghost btn-sm light {light ? 'on' : ''}" onclick={toggleLight} disabled={busy === 'light'}>
+        <button class="btn btn-ghost btn-sm light {light ? 'on' : ''}" data-tip={light ? 'Turn chamber light off' : 'Turn chamber light on'} aria-label={light ? 'Turn chamber light off' : 'Turn chamber light on'} onclick={toggleLight} disabled={busy === 'light'}>
           {light ? '💡 Light on' : 'Light off'}
         </button>
       </div>
@@ -222,10 +253,10 @@
       <span class="blabel">Print speed</span>
       <div class="segl wide">
         {#each SPEEDS as [m, label]}
-          <button class:on={speedLevel === m} onclick={() => setSpeed(m)} disabled={busy === 'speed'}>{label}</button>
+          <button class:on={speedLevel === m} data-tip={`Print speed: ${label}`} aria-label={`Print speed ${label}`} onclick={() => setSpeed(m)} disabled={busy === 'speed'}>{label}</button>
         {/each}
       </div>
-      <button class="btn btn-ghost btn-sm light {light ? 'on' : ''}" onclick={toggleLight} disabled={busy === 'light'}>
+      <button class="btn btn-ghost btn-sm light {light ? 'on' : ''}" data-tip={light ? 'Turn chamber light off' : 'Turn chamber light on'} aria-label={light ? 'Turn chamber light off' : 'Turn chamber light on'} onclick={toggleLight} disabled={busy === 'light'}>
         {light ? '💡 Light on' : 'Light off'}
       </button>
     </div>
@@ -242,6 +273,10 @@
   .stp.on { border-color: var(--ophq-primary); color: var(--ophq-text); background: var(--ophq-primary-dim); }
   .mm { font-size: 0.78rem; margin-left: 0.2rem; }
   .lock { font-size: 0.85rem; margin: 0 0 0.8rem; }
+  .homebanner { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; margin: 0 0 1rem; padding: 0.7rem 0.9rem;
+    border: 1px solid rgba(255,176,32,0.4); background: rgba(255,176,32,0.08); border-radius: var(--radius-sm); }
+  .homebanner .hb-txt { color: var(--ophq-warn); font-size: 0.88rem; flex: 1; min-width: 12rem; }
+  .jb.needshome { border-color: var(--ophq-accent); color: var(--ophq-accent); box-shadow: 0 0 0 2px rgba(255,176,32,0.25); }
   .steprow { display: flex; align-items: center; gap: 0.7rem; margin-bottom: 1rem; }
   .ctl { grid-template-columns: auto auto auto auto; justify-content: start; gap: 1.6rem; align-items: start; }
   .fans { gap: 0.55rem; }
