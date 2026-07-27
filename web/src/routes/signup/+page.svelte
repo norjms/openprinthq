@@ -24,9 +24,12 @@
     try {
       await api.signup({ code: code.trim(), email: email.trim(), name: name.trim(), password });
       done = true;
+      // Full-page navigation (NOT client-side) so npmplus forward-auth can hand
+      // off to the Authentik login cleanly — otherwise the SPA can't follow the
+      // external redirect and the app looks broken until a manual refresh.
+      setTimeout(() => { window.location.href = '/app'; }, 1100);
     } catch (err) {
       error = err?.message || 'Signup failed. Please try again.';
-    } finally {
       busy = false;
     }
   }
@@ -39,8 +42,8 @@
     <div class="lg"><Logo size={34} /></div>
     {#if done}
       <h2>You're in 🎉</h2>
-      <p class="muted">Your account and private instance are being set up. Sign in with SSO to launch your HQ.</p>
-      <a class="btn btn-primary full" href="/app">Continue with SSO →</a>
+      <p class="muted">Your account and private instance are ready — taking you to secure sign-in…</p>
+      <a class="btn btn-primary full" href="/app" data-sveltekit-reload>Continue with SSO →</a>
     {:else}
       <h2>Create your account</h2>
       <p class="muted">{inviteRequired ? 'Redeem your invite code to get your own private OpenPrintHQ instance.' : 'Set up the first account — you’ll be the owner.'}</p>

@@ -1,10 +1,10 @@
 <script>
   import { onMount } from 'svelte';
-  import { goto } from '$app/navigation';
   import Logo from '$lib/components/Logo.svelte';
   import PageTitle from '$lib/components/PageTitle.svelte';
-  // SSO (Authentik) is the only sign-in path; /app triggers the login flow.
-  onMount(() => { const t = setTimeout(() => goto('/app'), 1200); return () => clearTimeout(t); });
+  // SSO (Authentik) is the only sign-in path. Use a FULL page load (not
+  // client-side nav) so npmplus forward-auth can redirect to the Authentik login.
+  onMount(() => { const t = setTimeout(() => { window.location.href = '/app'; }, 900); return () => clearTimeout(t); });
 </script>
 
 <PageTitle page="Sign in" />
@@ -14,7 +14,7 @@
     <div class="lg"><Logo size={34} /></div>
     <h2>Sign in</h2>
     <p class="muted">Redirecting you to secure sign-in…</p>
-    <a class="btn btn-primary full" href="/app">Continue with SSO</a>
+    <a class="btn btn-primary full" href="/app" data-sveltekit-reload>Continue with SSO</a>
   </div>
 </div>
 
