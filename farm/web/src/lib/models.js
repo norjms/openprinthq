@@ -47,6 +47,29 @@ export function printerLabel(connectionType, model) {
   return [mfr, m].filter(Boolean).join(' ').trim();
 }
 
+import { PRINTER_IMAGES } from './printerImages.js';
+
+// Resolve a printer's cover image (from the bundled OrcaSlicer set) by matching
+// its "<manufacturer> <model>" label to the image manifest, with a few tolerant
+// fallbacks (model-name alias, revision-token drop). Returns a /printers URL or
+// null (callers fall back to a generic printer glyph).
+const _normImg = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+const IMG_ALIAS = { 'x1c': 'x1 carbon' }; // our common name → OrcaSlicer file name
+export function printerImage(connectionType, model) {
+  const label = printerLabel(connectionType, model);
+  const tries = [];
+  const add = (s) => { const n = _normImg(s); if (n && !tries.includes(n)) tries.push(n); };
+  add(label);
+  const pm = _normImg(prettyModel(model));
+  if (IMG_ALIAS[pm]) add(_normImg(label).replace(pm, IMG_ALIAS[pm]));
+  add(_normImg(label).replace(/\br\d\b/g, ' ').replace(/\s+/g, ' ').trim()); // drop R2/R1 etc.
+  add(model);
+  for (const t of tries) {
+    if (PRINTER_IMAGES[t]) return '/printers/' + encodeURIComponent(PRINTER_IMAGES[t]);
+  }
+  return null;
+}
+
 // Bambu H2-series nozzle hardware codes → readable material + flow. The code is
 // <material><flow><rev>: 1st char material (H=Hardened Steel, S=Stainless Steel),
 // 2nd char flow (H=High-Flow, S=Standard). e.g. HS01 = Hardened Steel,
