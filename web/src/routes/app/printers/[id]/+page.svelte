@@ -425,7 +425,7 @@
 
   {#if isBambu}
     <BambuDashboard printerId={id} status={st} meta={meta} refresh={() => loadStatus(false)}
-      oncamera={openCamera} />
+      oncamera={openCamera} onsettings={() => (settingsOpen = true)} />
   {/if}
 
   {#if !isBambu}
