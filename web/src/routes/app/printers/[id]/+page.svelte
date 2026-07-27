@@ -241,6 +241,14 @@
 
   // ---- AMS filament backup (Bambu; auto-switch to backup spool on runout) ----
   const hasAms = $derived((st?.ams || []).length > 0);
+  // A real multi-material unit or a loaded external spool — i.e. something worth
+  // showing. When neither is present the filament panel is hidden entirely
+  // (no "nothing detected" placeholder), per the vendor-agnostic panel rules.
+  const hasFilamentUnit = $derived.by(() => {
+    if ((st?.ams || []).length > 0) return true;
+    const vt = Array.isArray(st?.vt_tray) ? st.vt_tray : (st?.vt_tray ? [st.vt_tray] : []);
+    return vt.some((t) => t?.tray_type);
+  });
   const isKlipper = $derived((meta?.connection_type || '').toLowerCase() === 'klipper');
   // Bambu printers get the full skinned dashboard; others keep the classic layout.
   const isBambu = $derived((meta?.connection_type || 'bambu').toLowerCase() === 'bambu');
@@ -491,7 +499,7 @@
   {/if}
   </div>
 
-  {#if hasAms || (st?.vt_tray)}
+  {#if printerCfg.showFilamentPanel && hasFilamentUnit}
     <AmsPanel printerId={id} status={st} refresh={() => loadStatus(false)} />
     {#if hasAms}
       <label class="opt bkp standalone">

@@ -6,10 +6,23 @@
 
   let { printerId, status, refresh } = $props();
 
-  const AMS_TYPES = { n3f: 'AMS 2 Pro', n3s: 'AMS HT', ams: 'AMS', f1: 'AMS Lite', ams_lite: 'AMS Lite' };
+  // Vendor-agnostic panel label — the box is the same concept across brands
+  // (Bambu AMS, Creality CFS, Prusa MMU…); the specific model shows as a sub-name.
+  const PANEL_LABEL = 'Multi-material unit';
+
+  // Per-vendor module codes → the model shown beneath the panel label.
+  const AMS_TYPES = {
+    n3f: 'AMS 2 Pro', n3s: 'AMS HT', ams: 'AMS', f1: 'AMS Lite', ams_lite: 'AMS Lite',
+    cfs: 'CFS', creality_cfs: 'CFS',
+    mmu: 'MMU', mmu2: 'MMU2', mmu3: 'MMU3',
+    ace: 'ACE Pro', ace_pro: 'ACE Pro'
+  };
   function typeName(u) {
     if (u?.is_ams_ht) return 'AMS HT';
-    return AMS_TYPES[String(u?.module_type || '').toLowerCase()] || 'AMS';
+    const mt = String(u?.module_type || '').toLowerCase();
+    if (AMS_TYPES[mt]) return AMS_TYPES[mt];
+    // Unknown vendor code: show it uppercased rather than assuming "AMS".
+    return u?.module_type ? String(u.module_type).toUpperCase() : 'Unit';
   }
   const hex = (c) => (c ? (String(c).startsWith('#') ? c : '#' + String(c).slice(0, 6)) : '');
   const supportsDrying = $derived(!!status?.supports_chamber_heater || !!status?.supports_drying);
@@ -42,6 +55,14 @@
     return vt.filter((t) => t?.tray_type).map((t) => ({ material: t.tray_type, color: hex(t.tray_color), remain: t.remain }));
   });
 
+  // Sub-name shown under the vendor-agnostic label: the specific model(s) present
+  // (e.g. "AMS 2 Pro", or "AMS 2 Pro · AMS HT"), falling back to external spool.
+  const subName = $derived.by(() => {
+    const names = [...new Set(units.map((u) => u.type).filter(Boolean))];
+    if (names.length) return names.join(' · ');
+    return external.length ? 'External spool' : '';
+  });
+
   let busy = $state(null);
   let msg = $state(null);
   let dryIn = $state({});
@@ -70,7 +91,10 @@
 
 <div class="card card-pad ams">
   <div class="ah">
-    <h3>Filament (AMS)</h3>
+    <div class="atitle">
+      <h3>{PANEL_LABEL}</h3>
+      {#if subName}<span class="asub muted">{subName}</span>{/if}
+    </div>
     <div class="ah-act">
       {#if confirmUnload}
         <span class="muted tiny">Unload?</span>
@@ -150,8 +174,10 @@
 
 <style>
   .ams { margin-top: 1.2rem; }
-  .ah { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.9rem; }
+  .ah { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 0.9rem; gap: 0.8rem; }
+  .atitle { display: flex; flex-direction: column; gap: 0.1rem; }
   .ah h3 { margin: 0; font-size: 1.05rem; }
+  .asub { font-size: 0.8rem; }
   .ah-act { display: flex; align-items: center; gap: 0.4rem; }
   .unit { border: 1px solid var(--ophq-border); border-radius: var(--radius-sm); padding: 0.7rem 0.9rem; background: var(--ophq-surface); margin-bottom: 0.7rem; }
   .unit-hd { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem; }
