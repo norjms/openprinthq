@@ -19,8 +19,9 @@
   import EjectPanel from '$lib/components/EjectPanel.svelte';
   import BambuDashboard from '$lib/components/BambuDashboard.svelte';
   import PrinterSettingsModal from '$lib/components/PrinterSettingsModal.svelte';
+  import LocatePrinter from '$lib/components/LocatePrinter.svelte';
   import { printerLabel } from '$lib/models.js';
-  import { getPrinterSettings } from '$lib/printerSettings.js';
+  import { recentlyOnline } from '$lib/online.js';
   import PageTitle from '$lib/components/PageTitle.svelte';
 
   const id = $derived($page.params.id);
@@ -39,9 +40,24 @@
   let camAvailable = $state(true);
   let camZoom = $state(false);   // fullscreen lightbox
 
-  // ---- per-printer settings (popup) ----
+  // ---- per-printer settings (popup) — persisted on the printer record (DB) ----
   let settingsOpen = $state(false);
-  let printerCfg = $state({ chamberHeater: false });
+  const chamberHeaterOn = $derived(!!meta?.chamber_heater);
+  const showFilamentPanel = $derived(meta?.show_filament_panel !== false);
+
+  // ---- offline relocate ----
+  const isOffline = $derived(!!st && !st.connected && !recentlyOnline(id));
+  const printerForLocate = $derived(
+    meta ? {
+      id: meta.id ?? Number(id), name: meta.name || 'Printer',
+      ip_address: meta.ip_address, serial_number: meta.serial_number,
+      mac_address: meta.mac_address, connection_type: meta.connection_type
+    } : null
+  );
+  function afterRelink() {
+    api.printer(id).then((m) => (meta = m)).catch(() => {});
+    loadStatus(false);
+  }
 
   async function loadStatus(initial = false) {
     if (initial) { loading = true; error = null; }
@@ -71,7 +87,6 @@
   $effect(() => {
     const _id = id;
     camAvailable = true; camTick = 0;
-    printerCfg = getPrinterSettings(_id);
     api.printer(_id).then((m) => (meta = m)).catch(() => {});
     loadStatus(true);
   });
@@ -117,7 +132,7 @@
       }));
     // If the printer is configured to have a chamber heater but the engine isn't
     // (yet) reporting a chamber reading, still offer the control below Bed.
-    if (printerCfg?.chamberHeater && !cards.some((c) => c.key === 'chamber')) {
+    if (chamberHeaterOn && !cards.some((c) => c.key === 'chamber')) {
       cards.push({
         kind: 'chamber', label: 'Chamber', key: 'chamber',
         current: Number(t.chamber) || 0,
@@ -373,6 +388,16 @@
 {:else}
   {#if error}<p class="err banner">{error}</p>{/if}
 
+  {#if isOffline && printerForLocate}
+    <div class="offline-locate">
+      <div class="ol-head">
+        <span class="ol-title">⚠ {printerForLocate.name} is offline</span>
+        <span class="muted tiny">Checking the network in case its IP changed…</span>
+      </div>
+      <LocatePrinter printer={printerForLocate} auto={true} onrelinked={afterRelink} />
+    </div>
+  {/if}
+
   {#if isBambu}
     <BambuDashboard printerId={id} status={st} meta={meta} refresh={() => loadStatus(false)}
       oncamera={() => { camAvailable = true; camZoom = true; }} />
@@ -499,7 +524,7 @@
   {/if}
   </div>
 
-  {#if printerCfg.showFilamentPanel && hasFilamentUnit}
+  {#if showFilamentPanel && hasFilamentUnit}
     <AmsPanel printerId={id} status={st} refresh={() => loadStatus(false)} />
     {#if hasAms}
       <label class="opt bkp standalone">
@@ -542,8 +567,10 @@
     printerId={id}
     name={st?.name || meta?.name || 'Printer'}
     isKlipper={isKlipper}
+    chamberHeater={!!meta?.chamber_heater}
+    showFilamentPanel={meta?.show_filament_panel !== false}
     onclose={() => (settingsOpen = false)}
-    onsave={(cfg) => (printerCfg = cfg)} />
+    onsave={(cfg) => { meta = { ...meta, ...cfg }; }} />
 {/if}
 
 {#if camZoom && camAvailable}
@@ -563,6 +590,9 @@
   .title h1 { margin: 0 0 0.3rem; }
   .actions { display: flex; flex-direction: column; align-items: flex-end; gap: 0.5rem; }
   .gear { align-self: flex-end; }
+  .offline-locate { margin: 0 0 1.2rem; padding: 0.9rem 1rem; border: 1px solid rgba(255,176,32,0.35); background: rgba(255,176,32,0.06); border-radius: var(--radius-sm); display: flex; flex-direction: column; gap: 0.7rem; }
+  .ol-head { display: flex; flex-direction: column; gap: 0.15rem; }
+  .ol-title { font-weight: 600; color: var(--ophq-warn); }
   .meta { display: flex; gap: 0.7rem; color: var(--ophq-muted); font-size: 0.85rem; flex-wrap: wrap; }
   .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; }
   @media (max-width: 720px) { .cols { grid-template-columns: 1fr; } }
