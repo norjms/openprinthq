@@ -278,7 +278,10 @@
   .homebanner .hb-txt { color: var(--ophq-warn); font-size: 0.88rem; flex: 1; min-width: 12rem; }
   .jb.needshome { border-color: var(--ophq-accent); color: var(--ophq-accent); box-shadow: 0 0 0 2px rgba(255,176,32,0.25); }
   .steprow { display: flex; align-items: center; gap: 0.7rem; margin-bottom: 1rem; }
-  .ctl { grid-template-columns: auto auto auto auto; justify-content: start; gap: 1.6rem; align-items: start; }
+  /* Flex-wrap (not a fixed 4-col grid) so the blocks reflow when the panel is
+     narrow — e.g. sharing a row with the Klipper console — instead of
+     overflowing into the neighbouring column. */
+  .ctl { display: flex; flex-wrap: wrap; column-gap: 1.6rem; row-gap: 1.2rem; justify-content: start; align-items: flex-start; }
   .fans { gap: 0.55rem; }
   .blk { display: flex; flex-direction: column; gap: 0.5rem; }
   .blabel { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ophq-muted); }
