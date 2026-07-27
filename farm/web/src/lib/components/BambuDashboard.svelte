@@ -97,19 +97,66 @@
   // ---- temperatures -----------------------------------------------------
   const T = $derived(st?.temperatures || {});
   const dualNozzle = $derived((st?.nozzles?.length || 0) > 1 || T.nozzle_2 != null);
-  const nozzleL = $derived(Number(T.nozzle) || 0);
-  const nozzleR = $derived(Number(T.nozzle_2) || 0);
-  const bed = $derived(T.bed != null ? Number(T.bed) : null);
-  const chamber = $derived(T.chamber != null ? Number(T.chamber) : null);
   const diaL = $derived(st?.nozzles?.[0]?.nozzle_diameter || nozzleDia || '');
   const diaR = $derived(st?.nozzles?.[1]?.nozzle_diameter || '');
 
-  // ---- fans (report as %) ----------------------------------------------
+  // Settable temperature cards. Dual-nozzle machines get one card per nozzle
+  // (index 0 = default → reports as T.nozzle; index 1 → T.nozzle_2), each set
+  // independently so you can watch that nozzle heat toward its target. Chamber is
+  // only settable on machines with a chamber heater (H2C/H2D/H2DPro/H2S/X2D).
+  const tempCards = $derived.by(() => {
+    const num = (v) => (v != null && v !== '' ? Number(v) : null);
+    const heatingTo = (cur, tgt) => tgt > 0 && cur != null && cur < tgt - 1;
+    const cards = [];
+    if (dualNozzle) {
+      cards.push({ key: 'nzL', kind: 'nozzle', nozzle: 0, label: 'Left nozzle', cur: num(T.nozzle), target: num(T.nozzle_target) || 0, settable: true });
+      cards.push({ key: 'nzR', kind: 'nozzle', nozzle: 1, label: 'Right nozzle', cur: num(T.nozzle_2), target: num(T.nozzle_2_target) || 0, settable: true });
+    } else {
+      cards.push({ key: 'nz', kind: 'nozzle', nozzle: 0, label: 'Nozzle', cur: num(T.nozzle), target: num(T.nozzle_target) || 0, settable: true });
+    }
+    cards.push({ key: 'bed', kind: 'bed', nozzle: 0, label: 'Bed', cur: num(T.bed), target: num(T.bed_target) || 0, settable: true });
+    cards.push({ key: 'chamber', kind: 'chamber', nozzle: 0, label: 'Chamber', cur: num(T.chamber), target: num(T.chamber_target) || 0, settable: !!st?.supports_chamber_heater });
+    return cards.map((c) => ({ ...c, heating: heatingTo(c.cur, c.target) }));
+  });
+
+  // Editable target inputs, keyed by card. Set on Enter or the Set button.
+  let tset = $state({});
+  async function setTempCard(c) {
+    const v = tset[c.key];
+    if (v === '' || v == null) return;
+    acting = 'temp-' + c.key;
+    try {
+      await api.setTemp(printerId, c.kind, Number(v), c.nozzle || 0);
+      tset[c.key] = '';
+      await api.printerAction(printerId, 'refresh-status').catch(() => {});
+      await refresh();
+    } catch (e) { /* surfaced on next poll */ } finally { acting = null; }
+  }
+  async function tempOff(c) {
+    acting = 'temp-' + c.key;
+    try {
+      await api.setTemp(printerId, c.kind, 0, c.nozzle || 0);
+      await api.printerAction(printerId, 'refresh-status').catch(() => {});
+      await refresh();
+    } catch (e) { /* */ } finally { acting = null; }
+  }
+
+  // ---- fans (report as %) — slider-adjustable ---------------------------
   const fans = $derived([
-    { label: 'Part', v: st?.cooling_fan_speed },
-    { label: 'Aux', v: st?.big_fan1_speed },
-    { label: 'Chamber', v: st?.big_fan2_speed }
+    { label: 'Part', key: 'part', v: st?.cooling_fan_speed },
+    { label: 'Aux', key: 'aux', v: st?.big_fan1_speed },
+    { label: 'Chamber', key: 'chamber', v: st?.big_fan2_speed }
   ].filter((f) => f.v != null));
+  // Optimistic slider positions while dragging / just after a set; falls back to
+  // the live reported speed.
+  let fanUI = $state({});
+  function fanVal(f) { return fanUI[f.label] != null ? fanUI[f.label] : Math.round(Number(f.v) || 0); }
+  async function commitFan(f, pct) {
+    fanUI[f.label] = pct;
+    acting = 'fan-' + f.key;
+    try { await api.fanSpeed(printerId, f.key, pct); await refresh(); }
+    catch (e) { /* */ } finally { acting = null; }
+  }
 
   // ---- nozzle rack (H2C tool-changer) ----------------------------------
   const rack = $derived(st?.nozzle_rack || []);
@@ -232,30 +279,29 @@
     <div class="pd-pct mono">{hasJob ? Math.round(progress) + '%' : '---%'}</div>
   </div>
 
-  <!-- temps + nozzle / rack -->
-  <div class="pd-temps" class:has-rack={rack.length > 0}>
-    <div class="tcard">
-      <span class="tico n" aria-hidden="true">🌡</span>
-      <span class="tk">{dualNozzle ? 'L / R' : 'Nozzle'}</span>
-      <span class="tv mono">{dualNozzle ? `${nozzleL.toFixed(0)}° / ${nozzleR.toFixed(0)}°` : `${nozzleL.toFixed(0)}°`}</span>
-    </div>
-    <div class="tcard">
-      <span class="tico b" aria-hidden="true">🌡</span>
-      <span class="tk">Bed</span>
-      <span class="tv mono">{bed != null ? bed.toFixed(0) + '°C' : '—'}</span>
-    </div>
-    <div class="tcard">
-      <span class="tico c" aria-hidden="true">🌡</span>
-      <span class="tk">Chamber</span>
-      <span class="tv mono">{chamber != null ? chamber.toFixed(0) + '°C' : '—'}</span>
-    </div>
-    {#if rack.length === 0}
-      <div class="tcard nz">
-        <span class="tico y" aria-hidden="true">⬇</span>
-        <span class="tv mono nzv">{diaL ? `L ${diaL}` : ''}{diaR ? ` · R ${diaR}` : ''}{!diaL && !diaR ? '—' : ''}</span>
-        <span class="tk">Nozzle</span>
+  <!-- temps (settable) + nozzle / rack -->
+  <div class="pd-temps">
+    {#each tempCards as c (c.key)}
+      <div class="tcard settable" class:heating={c.heating}>
+        <div class="tc-hd">
+          <span class="tico" aria-hidden="true">🌡</span>
+          <span class="tk">{c.label}</span>
+          {#if c.heating}<span class="heatchip">heating</span>{/if}
+        </div>
+        <span class="tv mono">{c.cur != null ? c.cur.toFixed(0) + '°' : '—'}{#if c.target}<span class="tgt"> / {c.target.toFixed(0)}°</span>{/if}</span>
+        {#if c.settable}
+          <div class="tset">
+            <input class="tinput mono" type="number" min="0" placeholder="set °C"
+                   bind:value={tset[c.key]}
+                   onkeydown={(e) => { if (e.key === 'Enter') setTempCard(c); }}
+                   disabled={!online} aria-label="{c.label} target temperature" />
+            <button class="tsetbtn" onclick={() => setTempCard(c)} disabled={!online || acting === 'temp-' + c.key}>Set</button>
+            {#if c.target > 0}<button class="tsetbtn off" onclick={() => tempOff(c)} disabled={!online || acting === 'temp-' + c.key}>Off</button>{/if}
+          </div>
+        {/if}
       </div>
-    {:else}
+    {/each}
+    {#if rack.length}
       <div class="rack">
         <div class="rack-t">Nozzle Rack</div>
         <div class="rack-slots">
@@ -264,13 +310,25 @@
           {/each}
         </div>
       </div>
+    {:else if diaL || diaR}
+      <div class="tcard nz">
+        <div class="tc-hd"><span class="tico" aria-hidden="true">⬇</span><span class="tk">Nozzle</span></div>
+        <span class="tv mono nzv">{diaL ? `L ${diaL}` : ''}{diaR ? ` · R ${diaR}` : ''}</span>
+      </div>
     {/if}
   </div>
 
   {#if fans.length}
     <div class="pd-fans">
-      {#each fans as f}
-        <div class="fanpill"><span aria-hidden="true">✽</span> {f.label} {Math.round(Number(f.v) || 0)}%</div>
+      {#each fans as f (f.key)}
+        <div class="fanctl">
+          <div class="fanhd"><span class="fanlbl"><span aria-hidden="true">✽</span> {f.label}</span><span class="fanpct mono">{fanVal(f)}%</span></div>
+          <input class="fanrange" type="range" min="0" max="100" step="1"
+                 value={fanVal(f)}
+                 oninput={(e) => (fanUI[f.label] = Number(e.target.value))}
+                 onchange={(e) => commitFan(f, Number(e.target.value))}
+                 disabled={!online} aria-label="{f.label} fan speed percent" />
+        </div>
       {/each}
     </div>
   {/if}
@@ -385,13 +443,24 @@
   .pd-ready { font-size: 0.85rem; color: var(--ophq-text-2); }
   .pd-pct { align-self: flex-end; color: var(--ophq-muted); font-size: 0.95rem; }
 
-  /* temp cards */
-  .pd-temps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.6rem; margin-top: 0.6rem; }
-  .pd-temps.has-rack { grid-template-columns: repeat(3, 1fr) 1.6fr; }
-  .tcard { background: var(--ophq-bg-2); border: 1px solid var(--ophq-border); border-radius: var(--radius-sm); padding: 0.7rem 0.8rem; display: flex; flex-direction: column; align-items: center; gap: 0.2rem; text-align: center; }
-  .tico { font-size: 1rem; filter: grayscale(0.2); }
+  /* temp cards (settable) */
+  .pd-temps { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.6rem; margin-top: 0.6rem; }
+  .tcard { background: var(--ophq-bg-2); border: 1px solid var(--ophq-border); border-radius: var(--radius-sm); padding: 0.6rem 0.7rem; display: flex; flex-direction: column; align-items: flex-start; gap: 0.35rem; text-align: left; }
+  .tcard.settable.heating { border-color: rgba(255,176,32,0.4); }
+  .tc-hd { display: flex; align-items: center; gap: 0.35rem; width: 100%; }
+  .tico { font-size: 0.95rem; filter: grayscale(0.2); }
   .tk { font-size: 0.78rem; color: var(--ophq-muted); }
-  .tv { font-size: 1.05rem; color: var(--ophq-text); font-weight: 600; }
+  .heatchip { margin-left: auto; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 700; color: var(--ophq-accent); border: 1px solid rgba(255,176,32,0.35); background: rgba(255,176,32,0.1); border-radius: 999px; padding: 0.05rem 0.4rem; }
+  .tv { font-size: 1.15rem; color: var(--ophq-text); font-weight: 700; }
+  .tv .tgt { color: var(--ophq-muted); font-weight: 500; font-size: 0.9rem; }
+  .tset { display: flex; gap: 0.3rem; width: 100%; margin-top: 0.1rem; }
+  .tinput { flex: 1; min-width: 0; background: var(--ophq-surface); border: 1px solid var(--ophq-border); color: var(--ophq-text); border-radius: calc(var(--radius-sm) - 3px); padding: 0.28rem 0.4rem; font-size: 0.82rem; }
+  .tinput:focus { outline: none; border-color: var(--ophq-primary); }
+  .tsetbtn { background: var(--ophq-surface); border: 1px solid var(--ophq-border); color: var(--ophq-text-2); border-radius: calc(var(--radius-sm) - 3px); padding: 0.28rem 0.5rem; font-size: 0.78rem; cursor: pointer; }
+  .tsetbtn:hover:not(:disabled) { border-color: var(--ophq-primary); color: var(--ophq-text); }
+  .tsetbtn:disabled { opacity: 0.45; cursor: default; }
+  .tsetbtn.off:hover:not(:disabled) { border-color: var(--ophq-danger); color: var(--ophq-danger); }
+  .tcard.nz { align-items: center; text-align: center; justify-content: center; }
   .tcard.nz .nzv { color: var(--ophq-accent); }
   .rack { background: var(--ophq-bg-2); border: 1px solid var(--ophq-border); border-radius: var(--radius-sm); padding: 0.6rem 0.8rem; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.4rem; }
   .rack-t { font-size: 0.78rem; color: var(--ophq-muted); }
@@ -399,9 +468,13 @@
   .rslot { min-width: 2.2rem; text-align: center; padding: 0.28rem 0.4rem; border-radius: calc(var(--radius-sm) - 3px); font-size: 0.82rem; font-weight: 600; font-family: var(--font-mono); background: var(--ophq-surface); border: 1px solid var(--ophq-border); color: var(--ophq-text-2); }
   .rslot.mounted { background: var(--ophq-accent); color: #1a1205; border-color: var(--ophq-accent); }
 
-  /* fans */
-  .pd-fans { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; margin-top: 0.6rem; }
-  .fanpill { background: var(--ophq-bg-2); border: 1px solid var(--ophq-border); border-radius: var(--radius-sm); padding: 0.5rem; text-align: center; font-size: 0.85rem; color: var(--ophq-text-2); }
+  /* fans (slider-adjustable) */
+  .pd-fans { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.6rem; margin-top: 0.6rem; }
+  .fanctl { background: var(--ophq-bg-2); border: 1px solid var(--ophq-border); border-radius: var(--radius-sm); padding: 0.5rem 0.7rem; display: flex; flex-direction: column; gap: 0.35rem; }
+  .fanhd { display: flex; align-items: center; justify-content: space-between; font-size: 0.85rem; color: var(--ophq-text-2); }
+  .fanpct { color: var(--ophq-text); font-weight: 600; }
+  .fanrange { width: 100%; accent-color: var(--ophq-primary); cursor: pointer; }
+  .fanrange:disabled { opacity: 0.5; cursor: default; }
 
   /* controls */
   .pd-controls { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
