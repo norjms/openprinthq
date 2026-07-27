@@ -12,7 +12,7 @@ import { migrate, upsertUser, getUserByEmail, getInstanceForUser, getCompatibleP
   getAppearance, setAppearance,
   createInvite, getValidInvite, consumeInvite, listInvites, revokeInvite,
   listUsers, listAllInstances, countUsers } from './db.js';
-import { createAuthentikUser, authentikUserExists, authentikConfigured, OWNER_GROUP } from './authentik.js';
+import { createAuthentikUser, linkAuthentikUser, authentikUserExists, authentikConfigured, OWNER_GROUP } from './authentik.js';
 import { registerConnectorRoutes, connectorOnline, isConnectorOnline, proxyViaConnector, openTcpStream } from './connector.js';
 import { provisionForUser } from './provisioner.js';
 import { startBatch, activeBatchForUser, advanceBatch, cancelBatch, startOrchestrator } from './batch.js';
@@ -329,17 +329,26 @@ app.post('/api/pub/signup', async (req, reply) => {
     if (!invite) return reply.code(400).send({ error: 'invalid or expired invite code' });
     if (invite.email && invite.email !== email) return reply.code(400).send({ error: 'this invite is for a different email' });
   }
-  if (await getUserByEmail(email) || await authentikUserExists(email)) {
-    return reply.code(409).send({ error: 'an account with this email already exists' });
+  // A LOCAL OpenPrintHQ account for this email is a genuine duplicate — bail.
+  if (await getUserByEmail(email)) {
+    return reply.code(409).send({ error: 'an OpenPrintHQ account already exists for this email — sign in instead' });
   }
-  // Create the Authentik login identity first; only then consume the invite +
-  // provision, so a failed create leaves the code still redeemable. The first
-  // user is placed in the owner group to match their bootstrapped is_owner flag.
+  // If the email already exists in Authentik (e.g. from another Authentik-backed
+  // service), DON'T error — link OpenPrintHQ to that existing identity by
+  // ensuring group membership (their existing password/other-service access is
+  // untouched; the password typed here is ignored for a linked account). Only a
+  // brand-new email gets a fresh Authentik user created. Either way we then
+  // consume the invite + provision, so a failure leaves the code redeemable. The
+  // first user lands in the owner group to match their bootstrapped is_owner flag.
   try {
-    await createAuthentikUser(email, name, password, { owner: bootstrap });
+    if (await authentikUserExists(email)) {
+      await linkAuthentikUser(email, { owner: bootstrap });
+    } else {
+      await createAuthentikUser(email, name, password, { owner: bootstrap });
+    }
   } catch (e) {
-    req.log.error({ err: e.message }, 'authentik user create failed');
-    return reply.code(502).send({ error: 'could not create the login account' });
+    req.log.error({ err: e.message }, 'authentik user create/link failed');
+    return reply.code(502).send({ error: 'could not set up the login account' });
   }
   const user = await upsertUser(email, name || null);
   if (invite) await consumeInvite(code, user.id).catch(() => {});
