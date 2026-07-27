@@ -6,6 +6,7 @@
   // theme variables so it follows Light / Dark / Accessible.
   // SPDX-License-Identifier: AGPL-3.0-or-later
   import { api } from '$lib/api';
+  import { prettyModel } from '$lib/models.js';
 
   let { printerId, status = null, meta = null, refresh = () => {}, oncamera = () => {} } = $props();
 
@@ -13,7 +14,7 @@
 
   // ---- identity / header ------------------------------------------------
   const name = $derived(st?.name || meta?.name || 'Printer');
-  const model = $derived(meta?.model || st?.model || '');
+  const model = $derived(prettyModel(meta?.model || st?.model || ''));
   const nozzleDia = $derived(st?.nozzles?.[0]?.nozzle_diameter || '');
   const printHours = $derived(meta?.print_hours_offset ? Math.round(meta.print_hours_offset) : null);
 
