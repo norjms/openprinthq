@@ -15,17 +15,19 @@
     model: { key: 'model', label: 'Model (optional)', type: 'text', ph: 'e.g. Voron 2.4 / X1C / MK4' }
   };
 
+  // `ex` = a brand-appropriate Display-name example, used as the name-field
+  // placeholder so it matches the selected platform (Bambu → a Bambu, etc.).
   const vendors = [
-    { key: 'bambu', ct: 'bambu', name: 'Bambu Lab', sub: 'X1 · P1 · A1 · H2D', fields: [F.name, F.ip, F.serial, F.access, F.model] },
-    { key: 'klipper', ct: 'klipper', name: 'Klipper · Mainsail / Fluidd', sub: 'Voron · RatRig · Creality · Moonraker',
+    { key: 'bambu', ct: 'bambu', name: 'Bambu Lab', sub: 'X1 · P1 · A1 · H2D', ex: 'X1 Carbon #1', fields: [F.name, F.ip, F.serial, F.access, F.model] },
+    { key: 'klipper', ct: 'klipper', name: 'Klipper · Mainsail / Fluidd', sub: 'Voron · RatRig · Creality · Moonraker', ex: 'Voron 2.4 #1',
       note: 'Any Klipper printer exposed through Moonraker (Mainsail or Fluidd) — Voron, RatRig, Creality K1/K2, custom builds. Enter the printer’s IP and Moonraker port (default 7125). An API key is only needed if your Moonraker requires one.',
       fields: [F.name, F.ip, F.port, F.apikey, F.model] },
-    { key: 'prusa', ct: 'prusalink', name: 'Prusa (PrusaLink)', sub: 'MK4 · XL · CORE One', fields: [F.name, F.ip, F.apikeyReq, F.model] },
-    { key: 'octoprint', ct: 'octoprint', name: 'OctoPrint', sub: 'REST API', fields: [F.name, F.ip, F.apikeyReq, F.model] },
-    { key: 'duet', ct: 'duet', name: 'Duet / RepRap', sub: 'DWC', fields: [F.name, F.ip, F.model] },
-    { key: 'flashforge', ct: 'flashforge', name: 'FlashForge', sub: 'LAN', fields: [F.name, F.ip, F.model] },
-    { key: 'mks', ct: 'mks', name: 'MKS', sub: 'WiFi module', fields: [F.name, F.ip, F.model] },
-    { key: 'snapmaker', ct: 'snapmaker', name: 'Snapmaker', sub: 'Artisan · J1 · 2.0',
+    { key: 'prusa', ct: 'prusalink', name: 'Prusa (PrusaLink)', sub: 'MK4 · XL · CORE One', ex: 'MK4 #1', fields: [F.name, F.ip, F.apikeyReq, F.model] },
+    { key: 'octoprint', ct: 'octoprint', name: 'OctoPrint', sub: 'REST API', ex: 'Ender 3 #1', fields: [F.name, F.ip, F.apikeyReq, F.model] },
+    { key: 'duet', ct: 'duet', name: 'Duet / RepRap', sub: 'DWC', ex: 'RatRig V-Core #1', fields: [F.name, F.ip, F.model] },
+    { key: 'flashforge', ct: 'flashforge', name: 'FlashForge', sub: 'LAN', ex: 'Adventurer 5M #1', fields: [F.name, F.ip, F.model] },
+    { key: 'mks', ct: 'mks', name: 'MKS', sub: 'WiFi module', ex: 'Sidewinder X2 #1', fields: [F.name, F.ip, F.model] },
+    { key: 'snapmaker', ct: 'snapmaker', name: 'Snapmaker', sub: 'Artisan · J1 · 2.0', ex: 'Artisan #1',
       note: 'First connection: tap Allow on the printer’s touchscreen to authorize OpenPrintHQ.',
       fields: [F.name, F.ip, F.apikey, F.model] }
   ];
@@ -180,7 +182,8 @@
     {#each selected.fields as f}
       <div class="field">
         <label for={f.key}>{f.label}{f.required ? ' *' : ''}</label>
-        <input id={f.key} class="input" type={f.type} placeholder={f.ph || ''}
+        <input id={f.key} class="input" type={f.type}
+               placeholder={f.key === 'name' ? (selected.ex || f.ph || '') : (f.ph || '')}
                required={f.required} bind:value={values[f.key]} />
       </div>
     {/each}
