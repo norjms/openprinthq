@@ -103,12 +103,39 @@ export const ACCESSIBLE_DEFAULT_A11Y = { underline: true, focus: true, targets: 
 export const DEFAULT_BRANDING = {
   siteName: 'OpenPrintHQ',
   tagline: 'One command center for every 3D printer.',
-  logo: '',       // data-URI; empty = built-in wordmark
+  // Three per-mode logo variants (data-URIs; empty = built-in wordmark). The app
+  // shows the one matching the active theme mode so the mark stays legible on any
+  // background: `light` for Light mode, `dark` for Dark mode, `accessible` for
+  // Accessible/high-contrast mode. Custom mode falls back to the light variant.
+  logos: { light: '', dark: '', accessible: '' },
+  logo: '',       // legacy single logo — kept for back-compat; resolveLogo falls back to it
   favicon: '',    // data-URI; empty = default favicon.svg
   wordmark: '',   // optional text override for the wordmark (defaults to siteName)
   trademark: '',  // footer trademark / legal line (e.g. "AcmePrint™ is a trademark of Acme Inc.")
   contact: ''     // footer host contact info (email, URL, or address)
 };
+
+// The three uploadable logo slots, in editor display order.
+export const LOGO_SLOTS = [
+  ['light', 'Light mode', 'Shown on light backgrounds.'],
+  ['dark', 'Dark mode', 'Shown on the dark graphite theme.'],
+  ['accessible', 'Accessible', 'High-contrast / accessible mode.']
+];
+
+// Resolve which logo data-URI to display for a given theme mode, with graceful
+// fallbacks (chosen slot → light → dark → accessible → legacy single logo → '').
+export function resolveLogo(branding, mode) {
+  const b = branding || {};
+  const logos = b.logos || {};
+  const order = {
+    dark: ['dark', 'light', 'accessible'],
+    light: ['light', 'dark', 'accessible'],
+    accessible: ['accessible', 'light', 'dark'],
+    custom: ['light', 'dark', 'accessible']
+  }[mode] || ['light', 'dark', 'accessible'];
+  for (const k of order) if (logos[k]) return logos[k];
+  return b.logo || '';
+}
 
 // A complete appearance config. `overrides` is per-mode sparse maps of token->value.
 export const DEFAULT_CONFIG = {
@@ -133,7 +160,12 @@ export function normalizeConfig(raw) {
     },
     textScale: clampScale(c.textScale),
     a11y: { ...DEFAULT_A11Y, ...(c.a11y || {}) },
-    branding: { ...DEFAULT_BRANDING, ...(c.branding || {}) }
+    branding: {
+      ...DEFAULT_BRANDING,
+      ...(c.branding || {}),
+      // Always keep the three logo slots present, even for older saved configs.
+      logos: { ...DEFAULT_BRANDING.logos, ...((c.branding && c.branding.logos) || {}) }
+    }
   };
 }
 
