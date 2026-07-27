@@ -18,7 +18,9 @@
   import GcodeConsole from '$lib/components/GcodeConsole.svelte';
   import EjectPanel from '$lib/components/EjectPanel.svelte';
   import BambuDashboard from '$lib/components/BambuDashboard.svelte';
+  import PrinterSettingsModal from '$lib/components/PrinterSettingsModal.svelte';
   import { printerLabel } from '$lib/models.js';
+  import { getPrinterSettings } from '$lib/printerSettings.js';
   import PageTitle from '$lib/components/PageTitle.svelte';
 
   const id = $derived($page.params.id);
@@ -36,6 +38,10 @@
   let camTick = $state(0);
   let camAvailable = $state(true);
   let camZoom = $state(false);   // fullscreen lightbox
+
+  // ---- per-printer settings (popup) ----
+  let settingsOpen = $state(false);
+  let printerCfg = $state({ chamberHeater: false });
 
   async function loadStatus(initial = false) {
     if (initial) { loading = true; error = null; }
@@ -65,6 +71,7 @@
   $effect(() => {
     const _id = id;
     camAvailable = true; camTick = 0;
+    printerCfg = getPrinterSettings(_id);
     api.printer(_id).then((m) => (meta = m)).catch(() => {});
     loadStatus(true);
   });
@@ -99,7 +106,7 @@
       { kind: 'bed', label: 'Bed', key: 'bed' },
       { kind: 'chamber', label: 'Chamber', key: 'chamber' }
     ];
-    return kinds
+    const cards = kinds
       .filter((k) => t[k.key] !== undefined && t[k.key] !== null)
       .map((k) => ({
         ...k,
@@ -108,6 +115,18 @@
         heating: !!t[`${k.key}_heating`],
         settable: k.settable !== false
       }));
+    // If the printer is configured to have a chamber heater but the engine isn't
+    // (yet) reporting a chamber reading, still offer the control below Bed.
+    if (printerCfg?.chamberHeater && !cards.some((c) => c.key === 'chamber')) {
+      cards.push({
+        kind: 'chamber', label: 'Chamber', key: 'chamber',
+        current: Number(t.chamber) || 0,
+        target: Number(t.chamber_target) || 0,
+        heating: !!t.chamber_heating,
+        settable: true
+      });
+    }
+    return cards;
   });
 
   // ---- printer alerts (Bambu HMS errors) ----
@@ -360,10 +379,15 @@
         <span>#{id}</span>
       </div>
     </div>
-    <div class="flex gap center">
-      <span class="chip {tone(stateStr)}">{stateStr}</span>
-      <button class="btn btn-ghost btn-sm" onclick={toggleConnection} disabled={!!acting}>
-        {st?.connected ? 'Disconnect' : 'Connect'}
+    <div class="actions">
+      <div class="flex gap center">
+        <span class="chip {tone(stateStr)}">{stateStr}</span>
+        <button class="btn btn-ghost btn-sm" onclick={toggleConnection} disabled={!!acting}>
+          {st?.connected ? 'Disconnect' : 'Connect'}
+        </button>
+      </div>
+      <button class="btn btn-ghost btn-sm gear" onclick={() => (settingsOpen = true)}>
+        <span aria-hidden="true">⚙</span> Settings
       </button>
     </div>
   </div>
@@ -505,6 +529,15 @@
   {/if}
 {/if}
 
+{#if settingsOpen}
+  <PrinterSettingsModal
+    printerId={id}
+    name={st?.name || meta?.name || 'Printer'}
+    isKlipper={isKlipper}
+    onclose={() => (settingsOpen = false)}
+    onsave={(cfg) => (printerCfg = cfg)} />
+{/if}
+
 {#if camZoom && camAvailable}
   <div class="lightbox" role="presentation" onclick={() => (camZoom = false)}>
     <button class="lb-close" onclick={() => (camZoom = false)} aria-label="Close">✕</button>
@@ -520,6 +553,8 @@
   .banner { margin: 0 0 1rem; }
   .title { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 1.4rem; }
   .title h1 { margin: 0 0 0.3rem; }
+  .actions { display: flex; flex-direction: column; align-items: flex-end; gap: 0.5rem; }
+  .gear { align-self: flex-end; }
   .meta { display: flex; gap: 0.7rem; color: var(--ophq-muted); font-size: 0.85rem; flex-wrap: wrap; }
   .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; }
   @media (max-width: 720px) { .cols { grid-template-columns: 1fr; } }
