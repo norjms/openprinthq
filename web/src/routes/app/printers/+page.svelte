@@ -162,6 +162,8 @@
               <span class="cam-prog mono">{Math.round(p.live.progress)}%</span>
             {/if}
           </div>
+        {:else}
+          <div class="offhint muted tiny">Offline — open to locate it on the network in case its IP changed.</div>
         {/if}
         {#if p.live?.connected}
           <div class="temps mono">
@@ -220,6 +222,7 @@
   .printer h3 { margin: 0; font-size: 1.05rem; color: var(--ophq-text); }
   .printer .meta { display: flex; gap: 0.6rem; margin-top: 0.5rem; color: var(--ophq-muted); font-size: 0.85rem; }
   .cam { position: relative; margin-top: 0.7rem; aspect-ratio: 16 / 9; border-radius: var(--radius-sm); overflow: hidden; background: var(--ophq-bg-2); border: 1px solid var(--ophq-border); }
+  .offhint { margin-top: 0.6rem; line-height: 1.45; }
   .cam img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .cam-prog { position: absolute; bottom: 6px; right: 7px; font-size: 0.75rem; padding: 0.1rem 0.4rem; border-radius: 999px; background: rgba(0,0,0,0.55); color: #fff; backdrop-filter: blur(2px); }
   .temps { display: flex; gap: 0.9rem; margin-top: 0.6rem; color: var(--ophq-text-2); font-size: 0.85rem; }

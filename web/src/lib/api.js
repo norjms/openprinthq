@@ -73,6 +73,10 @@ export const api = {
   discoverKlipperScanStatus: () => req('/engine/api/v1/discovery/klipper/scan/status'),
   discoveredKlipperPrinters: () => req('/engine/api/v1/discovery/klipper/printers'),
   printer: (id) => req('/engine/api/v1/printers/' + id),
+  // Update a printer record (name, ip_address, mac_address, chamber_heater,
+  // show_filament_panel, …). Changing ip_address re-links + reconnects engine-side.
+  updatePrinter: (id, body) =>
+    req('/engine/api/v1/printers/' + id, { method: 'PATCH', body: JSON.stringify(body) }),
   printerStatus: (id) => req('/engine/api/v1/printers/' + id + '/status'),
   // action: 'print/pause' | 'print/resume' | 'print/stop' | 'connect' | 'disconnect' | 'refresh-status'
   printerAction: (id, action) =>
