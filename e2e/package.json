@@ -1,0 +1,13 @@
+{
+  "name": "openprinthq-e2e",
+  "private": true,
+  "version": "0.1.0",
+  "description": "OpenPrintHQ end-to-end regression tests (Playwright)",
+  "scripts": {
+    "test": "playwright test",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.55.0"
+  }
+}
