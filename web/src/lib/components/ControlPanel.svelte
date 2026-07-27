@@ -85,7 +85,10 @@
   }
   const jogXY = (x, y) => act('xy', () => api.xyJog(printerId, x * step, y * step));
   const jogZ = (dir) => act('z', () => api.bedJog(printerId, dir * step));
-  const home = () => act('home', async () => { await api.homeAxes(printerId, 'XYZ'); homeHint = false; }, 'Homing — this can take a moment.');
+  // NB: the engine's /home-axes only accepts 'z' | 'xy' | 'all' (it always runs a
+  // full G28 regardless). Passing 'XYZ' returned a 400, so the Home button silently
+  // did nothing while a console G28 worked — send 'all'.
+  const home = () => act('home', async () => { await api.homeAxes(printerId, 'all'); homeHint = false; }, 'Homing — this can take a moment.');
   const extrude = (dir) => act('e', () => api.extruderJog(printerId, dir * (Number(extrudeAmt) || 10)));
   async function pickExtruder(i) { ext = i; await act('ext', () => api.selectExtruder(printerId, i)); }
   const setFan = (fan, speed) => act('fan-' + fan, () => api.fanSpeed(printerId, fan, speed));
