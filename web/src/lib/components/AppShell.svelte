@@ -66,7 +66,6 @@
           </a>
         {/if}
       </nav>
-      <div class="theme-row"><ThemeSwitcher /></div>
       <a href="/logout" class="navitem logout" data-sveltekit-preload-data="off">
         <span class="ic" aria-hidden="true">⎋</span>Sign out
       </a>
@@ -81,6 +80,7 @@
   </aside>
 
   <div class="main">
+    <div class="appbar"><ThemeSwitcher /></div>
     <div class="content">
       {@render children()}
     </div>
@@ -101,7 +101,8 @@
   .navitem { display: flex; align-items: center; gap: 0.7rem; padding: 0.6rem 0.7rem; border-radius: var(--radius-sm); color: var(--ophq-text-2); font-size: 0.93rem; font-weight: 500; }
   .navitem:hover { background: var(--ophq-surface); color: var(--ophq-text); }
   .navitem.active { background: var(--ophq-primary-dim); color: var(--ophq-primary-2); box-shadow: inset 2px 0 0 var(--ophq-primary); }
-  .theme-row { padding: 0.5rem 0.5rem 0.2rem; }
+  /* Theme control anchored at the top of the content area (like the landing header). */
+  .appbar { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; justify-content: flex-end; gap: 0.6rem; height: 56px; padding: 0 1.8rem; background: var(--ophq-glass); backdrop-filter: blur(12px); border-bottom: 1px solid var(--ophq-border-soft); }
   .logout { margin-top: 0.3rem; color: var(--ophq-muted); }
   .logout:hover { background: color-mix(in srgb, var(--ophq-danger) 12%, transparent); color: var(--ophq-danger); }
   .ic { width: 1.2rem; text-align: center; opacity: 0.9; }
@@ -128,5 +129,8 @@
     .shell.menu-open nav { flex: 0 0 auto; }
     .navitem { padding: 0.7rem 0.7rem; font-size: 1rem; }
     .content { padding: 1.1rem; }
+    /* On phones the sidebar is already a sticky top bar; keep the theme strip in
+       normal flow (right-aligned) so two sticky bars don't overlap. */
+    .appbar { position: static; height: auto; padding: 0.5rem 1.1rem; }
   }
 </style>
