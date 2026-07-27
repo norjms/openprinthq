@@ -2,6 +2,7 @@
   import { goto } from '$app/navigation';
   import { api } from '$lib/api';
   import PageTitle from '$lib/components/PageTitle.svelte';
+  import { prettyModel } from '$lib/models.js';
 
   // Connection types are the engine's authoritative set (printer_capabilities.py).
   const F = {
@@ -87,7 +88,7 @@
       values.moonraker_port = values.moonraker_port || 7125;
     } else {
       values.serial_number = p.serial;
-      if (p.model) values.model = p.model;
+      if (p.model) values.model = prettyModel(p.model);
     }
     pickedIp = p.ip_address;
   }
@@ -159,7 +160,7 @@
           <div class="found">
             {#each discovered as p}
               <button type="button" class="foundrow" class:sel={pickedIp === p.ip_address} onclick={() => pickDiscovered(p)}>
-                <span class="fn">{p.name || p.model || (isKlipper ? 'Klipper printer' : 'Bambu printer')}{#if p.model && !isKlipper}<span class="muted mono"> · {p.model}</span>{/if}</span>
+                <span class="fn">{p.name || prettyModel(p.model) || (isKlipper ? 'Klipper printer' : 'Bambu printer')}{#if p.model && !isKlipper}<span class="muted mono"> · {prettyModel(p.model)}</span>{/if}</span>
                 <span class="muted mono tiny">{p.ip_address}{#if !isKlipper} · {p.serial}{/if}</span>
               </button>
             {/each}

@@ -25,6 +25,28 @@ const FULL_MAP = {
   'BAMBU LAB H2S': 'H2S', 'BAMBU LAB X2D': 'X2D', 'BAMBU LAB A2L': 'A2L'
 };
 
+// Platform connection_type → manufacturer name, for platforms that ARE a single
+// manufacturer. Generic platforms (klipper / octoprint / duet / mks) are left
+// blank on purpose: there the free-text model already carries the brand
+// (e.g. "Voron 2.4 R2 350", "RatRig V-Core 4"), so we don't want to prepend the
+// platform name.
+const MANUFACTURER = {
+  bambu: 'Bambu Lab',
+  prusalink: 'Prusa', prusa: 'Prusa',
+  snapmaker: 'Snapmaker',
+  flashforge: 'FlashForge'
+};
+
+/**
+ * "<Manufacturer> <Model>" display label — e.g. "Bambu Lab H2D" for a Bambu, or
+ * "Voron 2.4 R2 350" for a Klipper Voron (manufacturer already in the model).
+ */
+export function printerLabel(connectionType, model) {
+  const mfr = MANUFACTURER[String(connectionType || '').toLowerCase()] || '';
+  const m = prettyModel(model || '');
+  return [mfr, m].filter(Boolean).join(' ').trim();
+}
+
 /** Return the printer's common model name for display. */
 export function prettyModel(raw) {
   if (!raw) return raw || '';

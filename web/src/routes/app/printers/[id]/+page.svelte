@@ -18,7 +18,7 @@
   import GcodeConsole from '$lib/components/GcodeConsole.svelte';
   import EjectPanel from '$lib/components/EjectPanel.svelte';
   import BambuDashboard from '$lib/components/BambuDashboard.svelte';
-  import { prettyModel } from '$lib/models.js';
+  import { printerLabel } from '$lib/models.js';
   import PageTitle from '$lib/components/PageTitle.svelte';
 
   const id = $derived($page.params.id);
@@ -356,8 +356,7 @@
     <div>
       <h1>{st?.name || meta?.name || 'Printer'}</h1>
       <div class="meta mono">
-        {#if meta?.model}<span>{prettyModel(meta.model)}</span>{/if}
-        {#if meta?.connection_type}<span>{meta.connection_type}</span>{/if}
+        {#if printerLabel(meta?.connection_type, meta?.model)}<span>{printerLabel(meta?.connection_type, meta?.model)}</span>{/if}
         <span>#{id}</span>
       </div>
     </div>
