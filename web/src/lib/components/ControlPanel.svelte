@@ -43,6 +43,15 @@
 <div class="card card-pad control">
   <div class="chead">
     <h3>Move &amp; control</h3>
+  </div>
+
+  {#if printing}
+    <p class="muted lock">Manual controls are disabled while a print is running.</p>
+  {/if}
+
+  <!-- Step size drives the XY/Z jog buttons, so it sits with the move controls. -->
+  <div class="steprow">
+    <span class="blabel">Step</span>
     <div class="steps">
       {#each steps as s}
         <button class="stp" class:on={step === s} onclick={() => (step = s)}>{s}</button>
@@ -50,10 +59,6 @@
       <span class="muted mm">mm</span>
     </div>
   </div>
-
-  {#if printing}
-    <p class="muted lock">Manual controls are disabled while a print is running.</p>
-  {/if}
 
   <div class="grid ctl">
     <!-- XY + home -->
@@ -94,11 +99,9 @@
         <button class="jb" onclick={() => extrude(-1)} disabled={printing || busy === 'e'}>Retract ↑</button>
       </div>
     </div>
-  </div>
 
-  <!-- Fans + light -->
-  <div class="env">
-    <div class="fanrow">
+    <!-- Fans — start right of the extruder, each fan stacked vertically. -->
+    <div class="blk fans">
       <span class="blabel">Fans</span>
       {#each [['part', 'Part'], ['aux', 'Aux'], ['chamber', 'Chamber']] as [f, label]}
         <div class="fanctl">
@@ -109,9 +112,6 @@
         </div>
       {/each}
     </div>
-    <button class="btn btn-ghost btn-sm light {light ? 'on' : ''}" onclick={toggleLight} disabled={busy === 'light'}>
-      {light ? '💡 Light on' : 'Light off'}
-    </button>
   </div>
 
   <div class="speed">
@@ -121,6 +121,9 @@
         <button class:on={speedLevel === m} onclick={() => setSpeed(m)} disabled={busy === 'speed'}>{label}</button>
       {/each}
     </div>
+    <button class="btn btn-ghost btn-sm light {light ? 'on' : ''}" onclick={toggleLight} disabled={busy === 'light'}>
+      {light ? '💡 Light on' : 'Light off'}
+    </button>
   </div>
   {#if msg}<p class={msg.kind === 'ok' ? 'ok-msg' : 'err'}>{msg.text}</p>{/if}
 </div>
@@ -134,7 +137,9 @@
   .stp.on { border-color: var(--ophq-primary); color: var(--ophq-text); background: var(--ophq-primary-dim); }
   .mm { font-size: 0.78rem; margin-left: 0.2rem; }
   .lock { font-size: 0.85rem; margin: 0 0 0.8rem; }
-  .ctl { grid-template-columns: auto auto 1fr; gap: 1.4rem; align-items: start; }
+  .steprow { display: flex; align-items: center; gap: 0.7rem; margin-bottom: 1rem; }
+  .ctl { grid-template-columns: auto auto auto auto; justify-content: start; gap: 1.6rem; align-items: start; }
+  .fans { gap: 0.55rem; }
   .blk { display: flex; flex-direction: column; gap: 0.5rem; }
   .blabel { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ophq-muted); }
   .jb { background: var(--ophq-surface-2); border: 1px solid var(--ophq-border); color: var(--ophq-text); border-radius: var(--radius-sm); padding: 0.5rem 0.7rem; font-size: 0.85rem; cursor: pointer; font-family: var(--font-mono); }
@@ -153,14 +158,14 @@
   .erow { display: flex; align-items: center; gap: 0.35rem; }
   .input.xs { max-width: 70px; padding: 0.35rem 0.5rem; font-size: 0.85rem; }
   .ebtns { display: flex; gap: 0.35rem; flex-wrap: wrap; }
-  .env { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; margin-top: 1.2rem; padding-top: 1rem; border-top: 1px solid var(--ophq-border-soft); flex-wrap: wrap; }
-  .fanrow { display: flex; align-items: center; gap: 0.9rem; flex-wrap: wrap; }
   .fanctl { display: flex; align-items: center; gap: 0.3rem; }
   .fl { font-size: 0.8rem; color: var(--ophq-text-2); margin-right: 0.2rem; }
+  .fans .fl { min-width: 4em; }
   .mini { background: var(--ophq-bg-2); border: 1px solid var(--ophq-border); color: var(--ophq-text-2); border-radius: var(--radius-sm); padding: 0.2rem 0.45rem; font-size: 0.74rem; cursor: pointer; }
   .mini:hover:not(:disabled) { border-color: var(--ophq-primary); color: var(--ophq-text); }
   .light.on { color: var(--ophq-accent); border-color: rgba(255,176,32,0.35); }
-  .speed { margin-top: 1rem; display: flex; align-items: center; gap: 0.8rem; }
+  .speed { margin-top: 1.2rem; padding-top: 1rem; border-top: 1px solid var(--ophq-border-soft); display: flex; align-items: center; gap: 0.8rem; }
+  .speed .light { margin-left: auto; }
   .segl.wide button { padding: 0.35rem 0.9rem; }
   .ok-msg { color: var(--ophq-success); font-size: 0.88rem; margin: 0.7rem 0 0; }
   .err { color: var(--ophq-danger); font-size: 0.88rem; margin: 0.7rem 0 0; }
