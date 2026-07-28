@@ -9,6 +9,7 @@
   let stats = $state(null);
   let error = $state(null);
   let provisioning = $state(false);
+  let host = $state('');
 
   async function load() {
     loading = true; error = null;
@@ -31,7 +32,7 @@
     finally { provisioning = false; }
   }
 
-  onMount(load);
+  onMount(() => { host = window.location.host; load(); });
 
   const tiles = $derived([
     { label: 'Printers online', value: stats?.printersOnline ?? '—', accent: 'ok', href: '/app/printers' },
@@ -116,7 +117,7 @@
     </div>
     <div class="kv mono">
       <div><span>instance</span>{instance?.subdomain ?? '—'}</div>
-      <div><span>access</span><a href="/app">internal.example.com</a></div>
+      <div><span>access</span><a href="/app">{host || '—'}</a></div>
       <div><span>engine</span>{instance?.engineVersion ?? 'openprinthq-engine'}</div>
       <div><span>created</span>{fmtDate(instance?.createdAt)}</div>
     </div>

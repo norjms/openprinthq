@@ -172,6 +172,14 @@ app.get('/api/hms/descriptions', async (req, reply) => {
   return HMS_DESCRIPTIONS;
 });
 
+// Engine image display derived from the running tier (OPHQ_ENGINE_IMAGE),
+// so each environment shows its real engine tag (dev/test/prod).
+const ENGINE_IMAGE = process.env.OPHQ_ENGINE_IMAGE || '';
+const engineDisplay = (stored) => {
+  const m = ENGINE_IMAGE.match(/:([^:/]+)$/);
+  return m ? `openprinthq-engine:${m[1]}` : (stored || 'openprinthq-engine');
+};
+
 // ---- instance -----------------------------------------------------------
 app.get('/api/instance', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
@@ -179,7 +187,7 @@ app.get('/api/instance', async (req, reply) => {
   if (!inst) return reply.code(404).send({ error: 'no-instance', status: 'not_provisioned' });
   return {
     status: inst.status, subdomain: inst.subdomain, dbName: inst.db_name,
-    port: inst.port, engineVersion: inst.engine_version,
+    port: inst.port, engineVersion: engineDisplay(inst.engine_version),
     createdAt: inst.created_at
   };
 });
@@ -190,7 +198,7 @@ app.post('/api/instance/provision', async (req, reply) => {
     const inst = await provisionForUser(user);
     return {
       status: inst.status, subdomain: inst.subdomain, dbName: inst.db_name,
-      port: inst.port, engineVersion: inst.engine_version, createdAt: inst.created_at,
+      port: inst.port, engineVersion: engineDisplay(inst.engine_version), createdAt: inst.created_at,
       engine: inst.engine
     };
   } catch (e) {
