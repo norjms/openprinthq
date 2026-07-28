@@ -1,10 +1,10 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('landing', () => {
-  test('loads with the light theme by default', async ({ page }) => {
+  test('loads with the dark theme by default', async ({ page }) => {
     await page.goto('/');
     await expect(page).toHaveTitle(/OpenPrintHQ/);
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   });
 
   test('theme switcher offers Light / Dark / Accessible', async ({ page }) => {
