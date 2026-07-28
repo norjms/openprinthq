@@ -19,6 +19,7 @@
   let msg = $state(null);
   let dirty = $state(false);
   let logoErr = $state(null);
+  let logoNote = $state(null);
 
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
 
@@ -60,17 +61,81 @@
     preview();
   }
 
-  // Read an uploaded image → data-URI. target is 'favicon' or a logo slot key.
-  function onImage(target, ev, label) {
-    logoErr = null;
+  // The server caps each stored image at 512 KB of data-URI *string* (MAX_IMG).
+  // Aim a little under that so we never trip the server limit after base64.
+  const IMG_URI_LIMIT = 512 * 1024;
+  const IMG_URI_TARGET = 500 * 1024;
+  const IMG_MAX_DIM = 1024; // largest edge — plenty for a logo/favicon
+
+  function readDataURL(file) {
+    return new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(r.result);
+      r.onerror = () => rej(new Error('read'));
+      r.readAsDataURL(file);
+    });
+  }
+  function loadImage(src) {
+    return new Promise((res, rej) => {
+      const im = new Image();
+      im.onload = () => res(im);
+      im.onerror = () => rej(new Error('decode'));
+      im.src = src;
+    });
+  }
+
+  // Return a data-URI that fits IMG_URI_LIMIT. Images already small enough pass
+  // through untouched (original format/quality preserved). Oversized images are
+  // drawn to a canvas, scaled down and re-encoded (WebP w/ alpha, PNG fallback)
+  // until they fit — so the user never has to shrink an image by hand.
+  async function resampleToFit(file) {
+    const original = await readDataURL(file);
+    if (original.length <= IMG_URI_LIMIT) return { uri: original, resampled: false };
+    const img = await loadImage(original);
+    const iw = img.naturalWidth || img.width || 1;
+    const ih = img.naturalHeight || img.height || 1;
+    const base = Math.min(1, IMG_MAX_DIM / Math.max(iw, ih));
+    let best = null;
+    for (let i = 0; i < 12; i++) {
+      const s = base * Math.pow(0.85, i);
+      const w = Math.max(1, Math.round(iw * s));
+      const h = Math.max(1, Math.round(ih * s));
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      const ctx = c.getContext('2d');
+      ctx.clearRect(0, 0, w, h);
+      ctx.drawImage(img, 0, 0, w, h);
+      let cand = c.toDataURL('image/webp', 0.9);
+      if (cand.startsWith('data:image/webp')) {
+        let q = 0.9;
+        while (cand.length > IMG_URI_TARGET && q > 0.4) { q -= 0.15; cand = c.toDataURL('image/webp', q); }
+      } else {
+        cand = c.toDataURL('image/png'); // WebP unsupported → alpha-safe PNG
+      }
+      best = cand;
+      if (cand.length <= IMG_URI_TARGET) break;
+    }
+    if (!best || best.length > IMG_URI_LIMIT) throw new Error('too-large');
+    return { uri: best, resampled: true };
+  }
+
+  // Read an uploaded image → data-URI (auto-resampling if too big for the store).
+  // target is 'favicon' or a logo slot key.
+  async function onImage(target, ev, label) {
+    logoErr = null; logoNote = null;
     const file = ev.target.files?.[0];
-    if (!file) return;
-    if (file.size > 512 * 1024) { logoErr = `${label || 'Image'} must be under 512 KB.`; ev.target.value = ''; return; }
-    const r = new FileReader();
-    r.onload = () => { if (target === 'favicon') setBrand('favicon', r.result); else setLogo(target, r.result); };
-    r.onerror = () => { logoErr = 'Could not read that image.'; };
-    r.readAsDataURL(file);
     ev.target.value = '';
+    if (!file) return;
+    if (!/^image\//.test(file.type)) { logoErr = 'Please choose an image file.'; return; }
+    try {
+      const { uri, resampled } = await resampleToFit(file);
+      if (target === 'favicon') setBrand('favicon', uri); else setLogo(target, uri);
+      if (resampled) logoNote = `${label || 'Image'} was large — resampled to fit.`;
+    } catch (e) {
+      logoErr = e?.message === 'too-large'
+        ? `${label || 'Image'} is too detailed to fit even after resampling — try a simpler or smaller image.`
+        : 'Could not read that image.';
+    }
   }
 
   async function save() {
@@ -235,7 +300,7 @@
         </div>
 
         <div class="field span2">
-          <label>Logos <span class="muted">(≤ 512 KB each, PNG/SVG — one per theme so the mark stays legible on every background)</span></label>
+          <label>Logos <span class="muted">(PNG/SVG — one per theme so the mark stays legible on every background; large images are resampled to fit)</span></label>
           <div class="logogrid">
             {#each LOGO_SLOTS as [slot, slotLabel, slotHint]}
               <div class="logoslot">
@@ -257,7 +322,7 @@
           </div>
         </div>
         <div class="field">
-          <label>Favicon <span class="muted">(≤ 512 KB)</span></label>
+          <label>Favicon <span class="muted">(resampled to fit)</span></label>
           <div class="upload">
             <span class="logoprev sm" style={`background:${curVars['--ophq-bg-2']}`}>
               {#if draft.branding.favicon}<img src={draft.branding.favicon} alt="Current favicon preview" />{:else}<span class="muted tiny">default</span>{/if}
@@ -270,6 +335,7 @@
         </div>
       </div>
       {#if logoErr}<p class="err">{logoErr}</p>{/if}
+      {#if logoNote}<p class="ok-msg tiny">{logoNote}</p>{/if}
     </div>
   </div>
 
