@@ -139,7 +139,7 @@ export function resolveLogo(branding, mode) {
 
 // A complete appearance config. `overrides` is per-mode sparse maps of token->value.
 export const DEFAULT_CONFIG = {
-  mode: 'light',
+  mode: 'dark',
   overrides: { dark: {}, light: {}, accessible: {}, custom: {} },
   textScale: 1,
   a11y: { ...DEFAULT_A11Y },
@@ -151,7 +151,7 @@ export function normalizeConfig(raw) {
   const c = raw && typeof raw === 'object' ? raw : {};
   const ov = c.overrides && typeof c.overrides === 'object' ? c.overrides : {};
   return {
-    mode: MODES.some((m) => m.id === c.mode) ? c.mode : 'light',
+    mode: MODES.some((m) => m.id === c.mode) ? c.mode : 'dark',
     overrides: {
       dark: { ...(ov.dark || {}) },
       light: { ...(ov.light || {}) },
@@ -175,6 +175,17 @@ export function clampScale(v) {
   return Math.min(1.5, Math.max(0.85, n));
 }
 
+// Accessible mode makes base text 1.5x larger by default (a11y aid) WITHOUT the
+// user having to touch the text-size slider. An explicit user scale (any value
+// other than the 1.0 default) always wins, and the bump only applies while the
+// mode is 'accessible' — so it never sticks after switching away.
+export const ACCESSIBLE_DEFAULT_SCALE = 1.5;
+export function effectiveTextScale(mode, textScale) {
+  const s = clampScale(textScale);
+  if (mode === 'accessible' && s === 1) return ACCESSIBLE_DEFAULT_SCALE;
+  return s;
+}
+
 // The effective variable map for a mode = preset merged with the user's overrides.
 export function effectiveVars(config, mode = config.mode) {
   return { ...PRESETS[mode], ...(config.overrides?.[mode] || {}) };
@@ -193,7 +204,7 @@ export function applyAppearance(config, el) {
     if (v) el.style.setProperty(k, v);
     else el.style.removeProperty(k); // fall back to the CSS preset value
   }
-  el.style.setProperty('--ophq-text-scale', String(cfg.textScale));
+  el.style.setProperty('--ophq-text-scale', String(effectiveTextScale(cfg.mode, cfg.textScale)));
   setA11yAttrs(el, cfg.a11y);
   applyFavicon(cfg.branding.favicon);
   return cfg;
@@ -231,7 +242,7 @@ export function writeAppearanceCookie(config) {
   const slim = {
     mode: cfg.mode,
     overrides: cfg.overrides[cfg.mode] || {},
-    textScale: cfg.textScale,
+    textScale: effectiveTextScale(cfg.mode, cfg.textScale),
     a11y: cfg.a11y,
     favicon: cfg.branding.favicon || ''
   };

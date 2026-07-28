@@ -45,6 +45,8 @@ export const api = {
   // Per-user Look & Feel (theme mode, colour overrides, text scale, a11y, branding).
   appearance: () => req('/appearance'),
   saveAppearance: (config) => req('/appearance', { method: 'PUT', body: JSON.stringify(config) }),
+  // Public SITE branding (owner's branding) for the logged-out landing page.
+  pubBranding: () => req('/pub/branding'),
   myInstance: () => req('/instance'),
   provision: () => req('/instance/provision', { method: 'POST' }),
   claim: (code) => req('/instance/claim', { method: 'POST', body: JSON.stringify({ code }) }),
