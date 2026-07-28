@@ -12,6 +12,7 @@
   // network-use source requirement and stays current with the deployed version.
   const APP_REPO = 'https://git.nnlink.org/OpenPrintHQ/openprinthq';
   const ENGINE_REPO = 'https://git.nnlink.org/OpenPrintHQ/openprinthq-engine';
+  const CLIENT_REPO = 'https://git.nnlink.org/OpenPrintHQ/openprinthq-cloud-client';
   // Deployed commit SHAs (injected at build time via vite `define`). When present,
   // link to the exact running version; otherwise fall back to the repo default branch.
   const appCommit = (typeof __OPHQ_APP_COMMIT__ === 'string') ? __OPHQ_APP_COMMIT__ : '';
@@ -79,6 +80,7 @@
     <p class="actions">
       <a class="btn btn-primary" href={APP_SRC} rel="noopener">Application source (web + control-plane) →</a>
       <a class="btn btn-primary" href={ENGINE_SRC} rel="noopener">Print-engine source →</a>
+      <a class="btn btn-primary" href={CLIENT_REPO} rel="noopener">Cloud Client (connector) source →</a>
     </p>
     {#if appCommit || engineCommit}
       <p class="fine">Pinned to the exact version running here —

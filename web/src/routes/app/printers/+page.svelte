@@ -3,6 +3,7 @@
   import { api } from '$lib/api';
   import PageTitle from '$lib/components/PageTitle.svelte';
   import CameraImg from '$lib/components/CameraImg.svelte';
+  import DownloadClient from '$lib/components/DownloadClient.svelte';
   import { prettyModel, printerLabel } from '$lib/models.js';
   import { markSeen, recentlyOnline } from '$lib/online.js';
 
@@ -157,6 +158,7 @@
     <p class="muted">Your engine is live and ready. Add your first printer — Bambu, Klipper (Mainsail/Fluidd), Prusa, Snapmaker and more are supported out of the box.</p>
     <a class="btn btn-primary" href="/app/printers/add">+ Add your first printer</a>
   </div>
+  <div class="card card-pad"><DownloadClient /></div>
 {:else}
   <div class="grid printers">
     {#each printers as p (p.id)}
@@ -250,9 +252,17 @@
       <p class="muted">Check current firmware and available updates across every printer (Bambu + Klipper).</p>
     {/if}
   </div>
+
+  <details class="card card-pad connect-more">
+    <summary>Connect printers on another network</summary>
+    <div class="connect-more-body"><DownloadClient /></div>
+  </details>
 {/if}
 
 <style>
+  .connect-more { margin-top: 1.2rem; }
+  .connect-more summary { cursor: pointer; font-weight: 600; }
+  .connect-more-body { margin-top: 1rem; }
   .head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 1.4rem; gap: 1rem; }
   .head h1 { margin: 0; }
   .printers { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
