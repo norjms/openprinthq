@@ -1,10 +1,11 @@
 <script>
+  import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { api } from '$lib/api';
   import PageTitle from '$lib/components/PageTitle.svelte';
   import { prettyModel } from '$lib/models.js';
 
-  // Connection types are the engine's authoritative set (printer_capabilities.py).
+  // Connection-type field sets (engine printer_capabilities.py is authoritative).
   const F = {
     name: { key: 'name', label: 'Display name', type: 'text', required: true, ph: 'Voron 2.4 #1' },
     ip: { key: 'ip_address', label: 'IP address', type: 'text', required: true, ph: '10.10.10.50' },
@@ -16,12 +17,10 @@
     model: { key: 'model', label: 'Model (optional)', type: 'text', ph: 'e.g. Voron 2.4 / X1C / MK4' }
   };
 
-  // `ex` = a brand-appropriate Display-name example, used as the name-field
-  // placeholder so it matches the selected platform (Bambu → a Bambu, etc.).
   const vendors = [
     { key: 'bambu', ct: 'bambu', name: 'Bambu Lab', sub: 'X1 · P1 · A1 · H2D', ex: 'X1 Carbon #1', fields: [F.name, F.ip, F.serial, F.access, F.model] },
     { key: 'klipper', ct: 'klipper', name: 'Klipper · Mainsail / Fluidd', sub: 'Voron · RatRig · Creality · Moonraker', ex: 'Voron 2.4 #1',
-      note: 'Any Klipper printer exposed through Moonraker (Mainsail or Fluidd) — Voron, RatRig, Creality K1/K2, custom builds. Enter the printer’s IP and Moonraker port (default 7125). An API key is only needed if your Moonraker requires one.',
+      note: 'Any Klipper printer exposed through Moonraker (Mainsail or Fluidd). Enter the IP and Moonraker port (default 7125). An API key is only needed if your Moonraker requires one.',
       fields: [F.name, F.ip, F.port, F.apikey, F.model] },
     { key: 'prusa', ct: 'prusalink', name: 'Prusa (PrusaLink)', sub: 'MK4 · XL · CORE One', ex: 'MK4 #1', fields: [F.name, F.ip, F.apikeyReq, F.model] },
     { key: 'octoprint', ct: 'octoprint', name: 'OctoPrint', sub: 'REST API', ex: 'Ender 3 #1', fields: [F.name, F.ip, F.apikeyReq, F.model] },
@@ -32,13 +31,65 @@
       note: 'First connection: tap Allow on the printer’s touchscreen to authorize OpenPrintHQ.',
       fields: [F.name, F.ip, F.apikey, F.model] }
   ];
+  const vendorByKey = Object.fromEntries(vendors.map((v) => [v.key, v]));
+
+  // Catalog comm-mechanism -> our connection vendor. Covers the whole OrcaSlicer set.
+  const MECH_TO_VENDOR = {
+    bambu_mqtt: 'bambu', moonraker: 'klipper', creality_ws: 'klipper',
+    octoprint: 'octoprint', repetier: 'octoprint', esp3d: 'octoprint',
+    elegoo_sdcp: 'octoprint', marlin_serial: 'octoprint',
+    prusalink: 'prusa', duet_rrf: 'duet', flashforge_tcp: 'flashforge', mks_tcp: 'mks'
+  };
+  const VENDOR_NAMES = {
+    BBL: 'Bambu Lab', Creality: 'Creality', Prusa: 'Prusa', Voron: 'Voron', Ratrig: 'RatRig',
+    Snapmaker: 'Snapmaker', Anycubic: 'Anycubic', Elegoo: 'Elegoo', Sovol: 'Sovol', Qidi: 'QIDI',
+    FlashForge: 'FlashForge', Raise3D: 'Raise3D', Ultimaker: 'Ultimaker', Artillery: 'Artillery',
+    BIQU: 'BIQU', TwoTrees: 'Two Trees', Kingroon: 'Kingroon', Vzbot: 'VzBot'
+  };
+  const vname = (c) => VENDOR_NAMES[c] || c;
+  const vendorForRow = (r) => (r.vendor === 'Snapmaker' ? 'snapmaker' : (MECH_TO_VENDOR[r.mechanism_key] || 'octoprint'));
+
+  // ---- catalog (search-first) ----
+  let catalog = $state([]);
+  let catalogErr = $state(null);
+  let catalogLoading = $state(true);
+  let query = $state('');
+
+  onMount(async () => {
+    try { const d = await api.printerCatalog({ limit: 2000 }); catalog = d.printers || []; }
+    catch (e) { catalogErr = e.message || 'catalog unavailable'; }
+    finally { catalogLoading = false; }
+  });
+
+  const results = $derived.by(() => {
+    const q = query.trim().toLowerCase();
+    if (!q || q.length < 2) return [];
+    const out = [];
+    for (const r of catalog) {
+      const hay = (vname(r.vendor) + ' ' + r.model).toLowerCase();
+      const i = hay.indexOf(q);
+      if (i >= 0) out.push({ r, score: i * 100 + (r.popularity_rank ?? 9) });
+    }
+    out.sort((a, b) => a.score - b.score);
+    return out.slice(0, 40).map((s) => s.r);
+  });
+  const popular = $derived(catalog.filter((r) => (r.popularity_rank ?? 9) <= 1).slice(0, 10));
+
+  const caps = (r) => {
+    const c = [];
+    if (r.is_multi_nozzle) c.push(r.nozzle_count + '-nozzle');
+    if (r.has_chamber_heater) c.push('chamber');
+    if (r.has_aux_fan) c.push('aux fan');
+    return c;
+  };
 
   let selected = $state(null);
+  let pickedCatalog = $state(null);
   let values = $state({});
   let busy = $state(false);
   let err = $state(null);
 
-  // ---- Bambu network discovery ----
+  // ---- network discovery ----
   let subnet = $state('10.10.10.0/24');
   let scanning = $state(false);
   let scanProgress = $state({ scanned: 0, total: 0 });
@@ -46,12 +97,9 @@
   let scanned = $state(false);
   let scanErr = $state(null);
   let pickedIp = $state(null);
-  let existing = $state([]);      // printers already added, to filter out of discovery
-  let hiddenCount = $state(0);    // how many discovered were hidden as already-added
+  let existing = $state([]);
+  let hiddenCount = $state(0);
 
-  // A discovered printer counts as already-added if its serial matches an existing
-  // one (strong key for Bambu), or its IP matches an existing printer of the same
-  // platform (Klipper/Moonraker has no serial and is keyed by IP + port).
   function alreadyAdded(p) {
     const serial = String(p.serial || '').trim().toUpperCase();
     const ip = String(p.ip_address || '').trim();
@@ -72,10 +120,15 @@
     for (const f of v.fields) if (f.def !== undefined) values[f.key] = f.def;
   }
 
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  function pickCatalog(r) {
+    pickedCatalog = r;
+    pick(vendorByKey[vendorForRow(r)] || vendorByKey.octoprint);
+    values.model = r.model;
+  }
+  function pickVendor(v) { pickedCatalog = null; pick(v); }
+  function changeSel() { selected = null; pickedCatalog = null; }
 
-  // Discovery is offered for two vendors with different engine endpoints:
-  // Bambu (SSDP/port scan) and Klipper (Moonraker port-7125 probe).
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const isKlipper = $derived(selected?.ct === 'klipper');
 
   async function scan() {
@@ -83,8 +136,7 @@
     scanning = true; scanErr = null; discovered = []; scanned = false; hiddenCount = 0;
     scanProgress = { scanned: 0, total: 0 };
     try {
-      // Refresh the list of already-added printers so discovery can hide them.
-      try { existing = await api.printers() || []; } catch { /* keep prior list */ }
+      try { existing = await api.printers() || []; } catch { /* keep prior */ }
       await (klip ? api.discoverKlipperScan(subnet, 1.5) : api.discoverScan(subnet, 1.5));
       for (let i = 0; i < 40; i++) {
         await sleep(1500);
@@ -107,7 +159,6 @@
     values.name = values.name || p.name || p.model || (isKlipper ? 'Klipper printer' : 'Bambu printer');
     values.ip_address = p.ip_address;
     if (isKlipper) {
-      // Moonraker printers are reached by IP + port; no serial/access code.
       values.moonraker_port = values.moonraker_port || 7125;
     } else {
       values.serial_number = p.serial;
@@ -143,21 +194,66 @@
 </div>
 
 {#if !selected}
-  <p class="muted lead">Pick your printer's platform. OpenPrintHQ connects through your private engine — nothing leaves your network.</p>
-  <div class="grid vend">
-    {#each vendors as v}
-      <button class="card card-pad vendor" type="button" onclick={() => pick(v)}>
-        <h3>{v.name}</h3>
-        <span class="muted">{v.sub}</span>
-      </button>
-    {/each}
+  <p class="muted lead">Search your printer by brand or model — we set up the right connection automatically. Everything connects through your private engine; nothing leaves your network.</p>
+
+  <div class="finder card card-pad">
+    <input class="input search" bind:value={query} autocomplete="off" spellcheck="false"
+           placeholder="Search — e.g. X1 Carbon, Voron 2.4, Ender 3 V3, Prusa MK4…" aria-label="Search printers" />
+
+    {#if query.trim().length >= 2}
+      {#if results.length}
+        <div class="results">
+          {#each results as r}
+            <button type="button" class="resrow" onclick={() => pickCatalog(r)}>
+              <span class="rmain"><b class="rm">{r.model}</b><span class="rv muted">{vname(r.vendor)}</span></span>
+              <span class="rmeta">
+                <span class="conn">{vendorByKey[vendorForRow(r)]?.name?.split(' ')[0] ?? 'Host'}</span>
+                {#each caps(r) as c}<span class="cap">{c}</span>{/each}
+              </span>
+            </button>
+          {/each}
+        </div>
+      {:else if !catalogLoading}
+        <p class="muted tiny nores">No match in the {catalog.length}-model catalog. Pick a platform below, or scan your network.</p>
+      {/if}
+    {:else}
+      {#if popular.length}
+        <div class="pop">
+          <span class="muted tiny poplabel">Popular</span>
+          {#each popular as r}
+            <button type="button" class="chip" onclick={() => pickCatalog(r)}>{r.model}</button>
+          {/each}
+        </div>
+      {/if}
+      {#if catalogErr}<p class="muted tiny">Catalog unavailable ({catalogErr}) — pick a platform below.</p>{/if}
+    {/if}
+
+    <div class="scanrow2">
+      <span class="muted tiny">On your network right now?</span>
+      <button type="button" class="btn btn-ghost btn-sm" onclick={() => pickVendor(vendorByKey.bambu)}>Scan for Bambu</button>
+      <button type="button" class="btn btn-ghost btn-sm" onclick={() => pickVendor(vendorByKey.klipper)}>Scan for Klipper</button>
+    </div>
   </div>
-  <p class="muted small">Running Klipper on a Voron, RatRig or Creality? Use <b>Klipper · Mainsail / Fluidd</b> — it connects through Moonraker.</p>
+
+  <details class="browse">
+    <summary>Or browse by platform</summary>
+    <div class="grid vend">
+      {#each vendors as v}
+        <button class="card card-pad vendor" type="button" onclick={() => pickVendor(v)}>
+          <h3>{v.name}</h3>
+          <span class="muted">{v.sub}</span>
+        </button>
+      {/each}
+    </div>
+  </details>
 {:else}
   <form class="card card-pad form" onsubmit={submit}>
     <div class="flex between center">
-      <h3>{selected.name}</h3>
-      <button type="button" class="btn btn-ghost btn-sm" onclick={() => (selected = null)}>Change</button>
+      <div>
+        <h3>{pickedCatalog ? pickedCatalog.model : selected.name}</h3>
+        {#if pickedCatalog}<span class="muted tiny">{vname(pickedCatalog.vendor)} · connects via {selected.name}</span>{/if}
+      </div>
+      <button type="button" class="btn btn-ghost btn-sm" onclick={changeSel}>Change</button>
     </div>
 
     {#if selected.ct === 'bambu' || selected.ct === 'klipper'}
@@ -189,18 +285,13 @@
             {/each}
           </div>
           {#if hiddenCount}<p class="muted tiny">{hiddenCount} already-added printer{hiddenCount > 1 ? 's' : ''} hidden.</p>{/if}
-          {#if isKlipper}
-            <p class="muted tiny">Selected the printer? Give it a <b>display name</b> below. Add an API key only if your Moonraker requires one.</p>
-          {:else}
-            <p class="muted tiny">Selected the printer? Enter its <b>access code</b> below (Settings → LAN-only mode on the printer's screen).</p>
-          {/if}
         {:else if scanned && !scanning}
           {#if hiddenCount}
-            <p class="muted tiny">All {hiddenCount} discovered printer{hiddenCount > 1 ? 's are' : ' is'} already added. Nothing new to add on this subnet.</p>
+            <p class="muted tiny">All {hiddenCount} discovered printer{hiddenCount > 1 ? 's are' : ' is'} already added.</p>
           {:else if isKlipper}
-            <p class="muted tiny">No Klipper printers found. Confirm Moonraker is reachable on port 7125 and the subnet is right, or enter the details manually below.</p>
+            <p class="muted tiny">No Klipper printers found. Confirm Moonraker is reachable on port 7125, or enter details manually below.</p>
           {:else}
-            <p class="muted tiny">No printers found. Confirm LAN-only mode is on and the subnet is right, or enter the details manually below.</p>
+            <p class="muted tiny">No printers found. Confirm LAN-only mode is on, or enter details manually below.</p>
           {/if}
         {/if}
       </div>
@@ -226,19 +317,41 @@
 <style>
   .head { display: flex; align-items: center; justify-content: space-between; }
   .head h1 { margin: 0; }
-  .lead { margin: 0.4rem 0 1.4rem; max-width: 58ch; }
-  .vend { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); margin-bottom: 1.2rem; }
+  .lead { margin: 0.4rem 0 1.2rem; max-width: 62ch; }
+  .finder { margin-bottom: 1rem; }
+  .search { width: 100%; font-size: 1.05rem; padding: 0.8rem 1rem; }
+  .results { display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.8rem; max-height: 46vh; overflow-y: auto; }
+  .resrow { display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; text-align: left;
+    padding: 0.6rem 0.8rem; border: 1px solid var(--ophq-border); border-radius: var(--radius-sm);
+    background: var(--ophq-surface); cursor: pointer; transition: border 0.12s, background 0.12s; }
+  .resrow:hover { border-color: var(--ophq-primary); background: var(--ophq-primary-dim); }
+  .rmain { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
+  .rm { color: var(--ophq-text); font-size: 0.96rem; }
+  .rv { font-size: 0.8rem; }
+  .rmeta { display: flex; align-items: center; gap: 0.35rem; flex-shrink: 0; }
+  .conn { font-size: 0.72rem; font-weight: 600; color: var(--ophq-primary); background: var(--ophq-primary-dim);
+    padding: 0.12rem 0.5rem; border-radius: 999px; }
+  .cap { font-size: 0.68rem; color: var(--ophq-text-2); background: var(--ophq-bg-2);
+    border: 1px solid var(--ophq-border); padding: 0.1rem 0.42rem; border-radius: 999px; }
+  .nores { margin-top: 0.8rem; }
+  .pop { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin-top: 0.8rem; }
+  .poplabel { margin-right: 0.2rem; }
+  .chip { font-size: 0.82rem; padding: 0.34rem 0.7rem; border: 1px solid var(--ophq-border);
+    border-radius: 999px; background: var(--ophq-surface); color: var(--ophq-text); cursor: pointer; transition: border 0.12s; }
+  .chip:hover { border-color: var(--ophq-primary); }
+  .scanrow2 { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 1rem;
+    padding-top: 0.9rem; border-top: 1px solid var(--ophq-border); }
+  .browse { margin-top: 0.4rem; }
+  .browse summary { cursor: pointer; color: var(--ophq-text-2); font-size: 0.9rem; padding: 0.3rem 0; user-select: none; }
+  .vend { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); margin: 0.8rem 0 0.4rem; }
   .vendor { text-align: left; cursor: pointer; transition: border 0.15s, transform 0.15s; color: var(--ophq-text); }
-  .vendor h3 { color: var(--ophq-text); }
   .vendor:hover { border-color: var(--ophq-primary); transform: translateY(-2px); }
-  .vendor h3 { margin: 0 0 0.3rem; font-size: 1.02rem; }
-  .small { margin-top: 1rem; font-size: 0.88rem; }
+  .vendor h3 { margin: 0 0 0.3rem; font-size: 1.02rem; color: var(--ophq-text); }
   .form { max-width: 460px; }
-  .form h3 { margin: 0 0 0.4rem; }
+  .form h3 { margin: 0 0 0.2rem; }
   .err { color: var(--ophq-danger); font-size: 0.9rem; }
   .note { font-size: 0.83rem; margin: -0.2rem 0 0.6rem; line-height: 1.5; }
-
-  .discover { border: 1px solid var(--ophq-border); border-radius: var(--radius-sm); padding: 1rem; margin: 0.4rem 0 1.2rem; background: var(--ophq-bg-2); }
+  .discover { border: 1px solid var(--ophq-border); border-radius: var(--radius-sm); padding: 1rem; margin: 0.6rem 0 1.2rem; background: var(--ophq-bg-2); }
   .dtitle { margin-bottom: 0.2rem; }
   .tiny { font-size: 0.8rem; }
   .scanrow { display: flex; gap: 0.5rem; margin: 0.7rem 0 0.4rem; }
