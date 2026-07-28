@@ -1,3 +1,4 @@
+import { setInstanceFeature } from './db.js';
 // OpenPrintHQ control-plane — HTTP API
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import Fastify from 'fastify';
@@ -188,7 +189,7 @@ app.get('/api/instance', async (req, reply) => {
   return {
     status: inst.status, subdomain: inst.subdomain, dbName: inst.db_name,
     port: inst.port, engineVersion: engineDisplay(inst.engine_version),
-    createdAt: inst.created_at
+    createdAt: inst.created_at, features: inst.features || {}
   };
 });
 
@@ -270,6 +271,21 @@ app.delete('/api/admin/invites/:code', async (req, reply) => {
 app.get('/api/admin/users', async (req, reply) => {
   const owner = await requireOwner(req, reply); if (!owner) return;
   return { users: await listUsers() };
+});
+const FEATURES = [
+  { key: 'genfilament', name: 'GenFilament', desc: 'AI filament profile generator for OrcaSlicer / Bambu Studio', paid: true }
+];
+app.get('/api/admin/features', async (req, reply) => {
+  const owner = await requireOwner(req, reply); if (!owner) return;
+  return { features: FEATURES };
+});
+app.put('/api/admin/instances/:id/features', async (req, reply) => {
+  const owner = await requireOwner(req, reply); if (!owner) return;
+  const key = String(req.body?.key || '');
+  if (!FEATURES.some((f) => f.key === key)) return reply.code(400).send({ error: 'unknown feature' });
+  const inst = await setInstanceFeature(Number(req.params.id), key, !!req.body?.enabled);
+  if (!inst) return reply.code(404).send({ error: 'instance not found' });
+  return { ok: true, instance: inst };
 });
 // All instances with live per-instance usage (best-effort; a down engine -> zeros).
 app.get('/api/admin/instances', async (req, reply) => {
