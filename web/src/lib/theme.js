@@ -137,14 +137,35 @@ export function resolveLogo(branding, mode) {
   return b.logo || '';
 }
 
+// Per-user left-nav customization: reorder / hide built-ins + add custom links.
+// `order`/`hidden` are arrays of hrefs; `links` are user-added external rows.
+export const DEFAULT_NAV = { order: [], hidden: [], links: [] };
+
 // A complete appearance config. `overrides` is per-mode sparse maps of token->value.
 export const DEFAULT_CONFIG = {
   mode: 'dark',
   overrides: { dark: {}, light: {}, accessible: {}, custom: {} },
   textScale: 1,
   a11y: { ...DEFAULT_A11Y },
-  branding: { ...DEFAULT_BRANDING }
+  branding: { ...DEFAULT_BRANDING },
+  nav: { ...DEFAULT_NAV }
 };
+
+// Coerce a stored (possibly malformed) nav customization into a safe shape:
+// `order`/`hidden` become string arrays; `links` becomes an array of {label,url}
+// with string fields (only http(s) urls are kept).
+export function normalizeNav(raw) {
+  const n = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  const strArr = (a) => (Array.isArray(a) ? a.filter((x) => typeof x === 'string') : []);
+  const links = Array.isArray(n.links) ? n.links : [];
+  return {
+    order: strArr(n.order),
+    hidden: strArr(n.hidden),
+    links: links
+      .filter((l) => l && typeof l === 'object' && typeof l.url === 'string' && /^https?:\/\//i.test(l.url.trim()))
+      .map((l) => ({ label: typeof l.label === 'string' ? l.label : '', url: l.url.trim() }))
+  };
+}
 
 // Merge a stored (possibly partial) config onto the defaults, defensively.
 export function normalizeConfig(raw) {
@@ -165,7 +186,8 @@ export function normalizeConfig(raw) {
       ...(c.branding || {}),
       // Always keep the three logo slots present, even for older saved configs.
       logos: { ...DEFAULT_BRANDING.logos, ...((c.branding && c.branding.logos) || {}) }
-    }
+    },
+    nav: normalizeNav(c.nav)
   };
 }
 
