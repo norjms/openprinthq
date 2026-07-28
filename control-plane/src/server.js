@@ -195,7 +195,8 @@ app.get('/api/instance', async (req, reply) => {
   return {
     status: inst.status, subdomain: inst.subdomain, dbName: inst.db_name,
     port: inst.port, engineVersion: engineDisplay(inst.engine_version),
-    createdAt: inst.created_at, features: inst.features || {}
+    createdAt: inst.created_at, features: inst.features || {},
+    genfilamentUrl: process.env.OPHQ_GENFILAMENT_URL || ''
   };
 });
 
