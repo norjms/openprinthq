@@ -180,6 +180,7 @@ export async function migrate() {
     WHERE id = (SELECT id FROM users ORDER BY id LIMIT 1)
       AND NOT EXISTS (SELECT 1 FROM users WHERE is_owner)`);
 
+  await pool.query(`ALTER TABLE instances ADD COLUMN IF NOT EXISTS features JSONB NOT NULL DEFAULT '{}'::jsonb;`);
   await seedSlicerCompat();
 }
 
@@ -483,9 +484,17 @@ export async function listUsers() {
      ORDER BY u.id`);
   return rows;
 }
+export async function setInstanceFeature(instanceId, key, enabled) {
+  const { rows } = await pool.query(
+    `UPDATE instances SET features = jsonb_set(coalesce(features, '{}'::jsonb), $2::text[], $3::jsonb)
+     WHERE id = $1 RETURNING id, subdomain, features`,
+    [instanceId, [key], JSON.stringify(!!enabled)]);
+  return rows[0] || null;
+}
+
 export async function listAllInstances() {
   const { rows } = await pool.query(
-    `SELECT i.id, i.user_id, i.subdomain, i.status, i.port, i.engine_version, i.created_at,
+    `SELECT i.id, i.user_id, i.subdomain, i.status, i.port, i.engine_version, i.features, i.created_at,
             u.email AS user_email
      FROM instances i JOIN users u ON u.id = i.user_id
      ORDER BY i.id`);
