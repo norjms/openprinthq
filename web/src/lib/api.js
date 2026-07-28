@@ -47,6 +47,7 @@ export const api = {
   saveAppearance: (config) => req('/appearance', { method: 'PUT', body: JSON.stringify(config) }),
   myInstance: () => req('/instance'),
   provision: () => req('/instance/provision', { method: 'POST' }),
+  claim: (code) => req('/instance/claim', { method: 'POST', body: JSON.stringify({ code }) }),
   stats: () => req('/instance/stats'),
   // Public signup (invite code -> Authentik user + instance).
   signupInfo: () => req('/pub/signup-info'),

@@ -81,9 +81,12 @@ function currentEmail(req) {
 async function requireUser(req, reply) {
   const email = currentEmail(req);
   if (!email) { reply.code(401).send({ error: 'not authenticated' }); return null; }
-  let user = await getUserByEmail(email);
-  // First SSO login: auto-create the account from the Authentik identity.
-  if (!user) user = await upsertUser(email, req.headers['x-authentik-name'] || null);
+  const user = await getUserByEmail(email);
+  // No auto-provisioning. An authenticated identity WITHOUT an OpenPrintHQ account
+  // must claim one with an invite (POST /api/instance/claim). This closes the
+  // social-login bypass where any Google/Microsoft/Facebook sign-in silently
+  // created (and could self-promote to owner) an account with no invite.
+  if (!user) { reply.code(403).send({ error: 'no-account', needsInvite: (await countUsers()) > 0 }); return null; }
   return user;
 }
 
@@ -142,9 +145,12 @@ app.post('/api/auth/logout', async (req, reply) => {
 
 // ---- account ------------------------------------------------------------
 app.get('/api/me', async (req, reply) => {
-  const user = await requireUser(req, reply); if (!user) return;
+  const email = currentEmail(req);
+  if (!email) { reply.code(401).send({ error: 'not authenticated' }); return; }
+  const user = await getUserByEmail(email);
+  if (!user) return { email, hasAccount: false, needsInvite: (await countUsers()) > 0, isOwner: false, role: 'guest' };
   const owner = isOwner(req, user);
-  return { id: user.id, email: user.email, displayName: user.display_name, role: owner ? 'owner' : 'user', isOwner: owner };
+  return { id: user.id, email: user.email, displayName: user.display_name, role: owner ? 'owner' : 'user', isOwner: owner, hasAccount: true };
 });
 
 // ---- slicer preset compatibility ---------------------------------------
@@ -246,6 +252,28 @@ app.get('/api/instance/stats', async (req, reply) => {
   } catch {
     return { printersOnline: 0, activeJobs: 0, queued: 0, successRate: null, printersTotal: 0 };
   }
+});
+
+// Claim an OpenPrintHQ account for an already-authenticated identity (e.g. a
+// social login). Invite-gated exactly like /api/pub/signup, so NO login method
+// can create an account without an invite. Provisions the instance on success.
+app.post('/api/instance/claim', async (req, reply) => {
+  const email = currentEmail(req);
+  if (!email) return reply.code(401).send({ error: 'not authenticated' });
+  if (await getUserByEmail(email)) return reply.code(409).send({ error: 'account already exists' });
+  const code = (req.body?.code || '').toString().trim();
+  const bootstrap = (await countUsers()) === 0;
+  let invite = null;
+  if (!bootstrap) {
+    if (!code) return reply.code(400).send({ error: 'an invite code is required' });
+    invite = await getValidInvite(code);
+    if (!invite) return reply.code(400).send({ error: 'invalid or expired invite code' });
+    if (invite.email && invite.email.toLowerCase() !== email) return reply.code(400).send({ error: 'this invite is for a different email' });
+  }
+  const user = await upsertUser(email, req.headers['x-authentik-name'] || null);
+  if (invite) await consumeInvite(code, user.id).catch(() => {});
+  try { await provisionForUser(user); } catch (e) { req.log.error({ err: e.message }, 'provision after claim failed'); }
+  return { ok: true, email, owner: bootstrap };
 });
 
 // ---- owner: admin (invites, users, instances, usage) --------------------

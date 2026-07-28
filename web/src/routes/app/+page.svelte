@@ -9,20 +9,37 @@
   let stats = $state(null);
   let error = $state(null);
   let provisioning = $state(false);
+  let needAccount = $state(false);
+  let needsInvite = $state(true);
+  let inviteCode = $state('');
+  let claiming = $state(false);
+  let claimErr = $state(null);
   let host = $state('');
 
   async function load() {
     loading = true; error = null;
     try {
+      const me = await api.me().catch(() => null);
+      if (me && me.hasAccount === false) {
+        needAccount = true; needsInvite = me.needsInvite !== false; loading = false; return;
+      }
+      needAccount = false;
       instance = await api.myInstance();
       if (instance?.status === 'running') {
         stats = await api.stats().catch(() => null);
       }
     } catch (e) {
-      error = e.status === 404 ? 'no-instance' : (e.message || 'unreachable');
+      error = e.status === 404 ? 'no-instance' : (e.status === 403 ? 'no-account' : (e.message || 'unreachable'));
     } finally {
       loading = false;
     }
+  }
+
+  async function claim() {
+    claiming = true; claimErr = null;
+    try { await api.claim(inviteCode.trim()); needAccount = false; await load(); }
+    catch (e) { claimErr = e.message || 'could not create your account'; }
+    finally { claiming = false; }
   }
 
   async function provision() {
@@ -61,6 +78,17 @@
 
 {#if loading}
   <div class="card card-pad muted">Loading your instance…</div>
+{:else if needAccount || error === 'no-account'}
+  <div class="card card-pad provision glow">
+    <span class="eyebrow">Almost there</span>
+    <h2>Enter your invite code</h2>
+    <p>You're signed in. OpenPrintHQ is invite-only — enter the code you were given to create your private HQ.{#if !needsInvite} You're the first user, so no code is needed — just continue.{/if}</p>
+    {#if needsInvite}
+      <input class="input claim-input" placeholder="Invite code" bind:value={inviteCode} onkeydown={(e) => { if (e.key === 'Enter') claim(); }} />
+    {/if}
+    {#if claimErr}<p class="err">{claimErr}</p>{/if}
+    <button class="btn btn-primary" onclick={claim} disabled={claiming || (needsInvite && !inviteCode.trim())}>{claiming ? 'Creating…' : 'Create my HQ →'}</button>
+  </div>
 {:else if error === 'no-instance' || instance?.status === 'not_provisioned'}
   <div class="card card-pad provision glow">
     <span class="eyebrow">Welcome</span>
@@ -129,6 +157,7 @@
   .head h1 { margin: 0; }
   .provision { text-align: center; padding: 2.5rem; }
   .provision p { max-width: 52ch; margin: 0.8rem auto 1.4rem; }
+  .claim-input { max-width: 320px; margin: 0.2rem auto 1rem; text-align: center; }
   .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.2rem; }
   .tile { display: flex; flex-direction: column; gap: 0.3rem; color: var(--ophq-text); text-decoration: none; transition: border 0.15s, transform 0.15s; }
   .tile:hover { border-color: var(--ophq-primary); transform: translateY(-2px); color: var(--ophq-text); }
