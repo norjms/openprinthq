@@ -64,6 +64,7 @@ export const api = {
   adminProvision: (body) => req('/admin/instances', { method: 'POST', body: JSON.stringify(body) }),
   adminFeatures: () => req('/admin/features'),
   setInstanceFeature: (id, key, enabled) => req('/admin/instances/' + id + '/features', { method: 'PUT', body: JSON.stringify({ key, enabled }) }),
+  setInstanceQuota: (id, quotaMb) => req('/admin/instances/' + id + '/quota', { method: 'PUT', body: JSON.stringify({ quotaMb }) }),
   // Proxy straight to the logged-in user's engine (frontend-first model).
   engine: (path, opts) => req('/engine' + path, opts),
   printers: () => req('/engine/api/v1/printers/'),

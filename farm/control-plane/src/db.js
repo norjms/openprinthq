@@ -181,6 +181,7 @@ export async function migrate() {
       AND NOT EXISTS (SELECT 1 FROM users WHERE is_owner)`);
 
   await pool.query(`ALTER TABLE instances ADD COLUMN IF NOT EXISTS features JSONB NOT NULL DEFAULT '{}'::jsonb;`);
+  await pool.query(`ALTER TABLE instances ADD COLUMN IF NOT EXISTS storage_quota_mb INTEGER;`);
   await seedSlicerCompat();
 }
 
@@ -498,10 +499,19 @@ export async function setInstanceFeature(instanceId, key, enabled) {
     [instanceId, [key], JSON.stringify(!!enabled)]);
   return rows[0] || null;
 }
+// Per-instance file-storage quota in MB (NULL = unlimited). Store + display only.
+export async function setInstanceQuota(instanceId, mb) {
+  const val = (mb === null || mb === undefined) ? null : Number(mb);
+  const { rows } = await pool.query(
+    `UPDATE instances SET storage_quota_mb = $2
+     WHERE id = $1 RETURNING id, subdomain, storage_quota_mb`,
+    [instanceId, val]);
+  return rows[0] || null;
+}
 
 export async function listAllInstances() {
   const { rows } = await pool.query(
-    `SELECT i.id, i.user_id, i.subdomain, i.status, i.port, i.engine_version, i.features, i.created_at,
+    `SELECT i.id, i.user_id, i.subdomain, i.status, i.port, i.engine_version, i.features, i.storage_quota_mb, i.created_at,
             u.email AS user_email
      FROM instances i JOIN users u ON u.id = i.user_id
      ORDER BY i.id`);
