@@ -14,8 +14,8 @@
 </script>
 
 {#if custom}
-  <span class="logo" style="--s:{size}px">
-    <img src={custom} alt={text} style="height:{size}px" />
+  <span class="logo custom" style="--s:{size}px">
+    <img src={custom} alt={text} />
   </span>
 {:else}
   <span class="logo" style="--s:{size}px">
@@ -43,6 +43,13 @@
 
 <style>
   .logo { display: inline-flex; align-items: center; gap: 0.55rem; }
+  /* Custom uploads are full lockups (mark + wordmark), so render them taller than
+     the bare mark height and let width scale — clamped so they never overflow a
+     top bar. Height ≈ 1.9× the passed size, capped at 56px. */
+  .logo.custom img {
+    height: calc(var(--s) * 1.9); max-height: 56px; width: auto; max-width: 320px;
+    object-fit: contain; display: block;
+  }
   .logo img { width: auto; max-width: 240px; object-fit: contain; border-radius: 4px; display: block; }
   .wm {
     font-family: var(--font-ui);
