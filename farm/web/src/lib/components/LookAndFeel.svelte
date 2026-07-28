@@ -12,6 +12,7 @@
     contrastRatio, wcagRating, resolveLogo
   } from '$lib/theme';
   import ThemeMockup from './ThemeMockup.svelte';
+  import NavPrefs from './NavPrefs.svelte';
 
   // Editable draft (deeply reactive). Seeded from the current saved config.
   let draft = $state(clone(get(appearance)));
@@ -55,7 +56,7 @@
 
   async function save() {
     saving = true; msg = null;
-    try { await persist(draft); dirty = false; msg = { ok: true, text: 'Look & Feel saved.' }; }
+    try { await persist({ ...draft, nav: get(appearance).nav }); dirty = false; msg = { ok: true, text: 'Look & Feel saved.' }; }
     catch (e) { msg = { ok: false, text: e.message || 'Could not save.' }; }
     finally { saving = false; }
   }
@@ -184,6 +185,8 @@
     </div>
 
   </div>
+
+  <NavPrefs />
 
   <div class="lf-foot">
     <button class="btn btn-ghost btn-sm" onclick={revert} disabled={!dirty && !saving}>Revert</button>
