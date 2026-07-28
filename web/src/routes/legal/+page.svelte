@@ -12,6 +12,12 @@
   // network-use source requirement and stays current with the deployed version.
   const APP_REPO = 'https://git.nnlink.org/OpenPrintHQ/openprinthq';
   const ENGINE_REPO = 'https://git.nnlink.org/OpenPrintHQ/openprinthq-engine';
+  // Deployed commit SHAs (injected at build time via vite `define`). When present,
+  // link to the exact running version; otherwise fall back to the repo default branch.
+  const appCommit = (typeof __OPHQ_APP_COMMIT__ === 'string') ? __OPHQ_APP_COMMIT__ : '';
+  const engineCommit = (typeof __OPHQ_ENGINE_COMMIT__ === 'string') ? __OPHQ_ENGINE_COMMIT__ : '';
+  const APP_SRC = appCommit ? `${APP_REPO}/src/commit/${appCommit}` : APP_REPO;
+  const ENGINE_SRC = engineCommit ? `${ENGINE_REPO}/src/commit/${engineCommit}` : ENGINE_REPO;
   const LICENSE_TXT = APP_REPO + '/src/branch/main/LICENSE';
   const NOTICE_TXT = ENGINE_REPO + '/src/branch/main/NOTICE';
 </script>
@@ -71,9 +77,13 @@
       OpenPrintHQ running on this instance is public and available to every user, at no charge — both the
       application and the print engine, in their entirety:</p>
     <p class="actions">
-      <a class="btn btn-primary" href={APP_REPO} rel="noopener">Application source (web + control-plane) →</a>
-      <a class="btn btn-primary" href={ENGINE_REPO} rel="noopener">Print-engine source →</a>
+      <a class="btn btn-primary" href={APP_SRC} rel="noopener">Application source (web + control-plane) →</a>
+      <a class="btn btn-primary" href={ENGINE_SRC} rel="noopener">Print-engine source →</a>
     </p>
+    {#if appCommit || engineCommit}
+      <p class="fine">Pinned to the exact version running here —
+        {#if appCommit}app <span class="mono">{appCommit.slice(0, 10)}</span>{/if}{#if appCommit && engineCommit}, {/if}{#if engineCommit}engine <span class="mono">{engineCommit.slice(0, 10)}</span>{/if}.</p>
+    {/if}
     <p class="fine">Public repositories, browsable and cloneable by anyone. Upstream copyright and
       licences are preserved in the history; deployment secrets are never committed.</p>
   </section>
@@ -93,4 +103,5 @@
   .credits li { margin: 0.35rem 0; }
   .actions { margin: 1rem 0 0; }
   .fine { font-size: 0.85rem; color: var(--ophq-muted); margin-top: 0.6rem; }
+  .mono { font-family: var(--font-mono); font-size: 0.82em; color: var(--ophq-text-2); }
 </style>

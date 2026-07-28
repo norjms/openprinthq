@@ -27,7 +27,7 @@
     background: var(--ophq-glass);
     border-bottom: 1px solid var(--ophq-border-soft);
   }
-  .inner { display: flex; align-items: center; justify-content: space-between; height: 66px; }
+  .inner { display: flex; align-items: center; justify-content: space-between; min-height: 66px; padding: 0.4rem 0; }
   .nav { display: flex; gap: 1.6rem; }
   .nav a { color: var(--ophq-text-2); font-size: 0.92rem; font-weight: 500; }
   .nav a:hover { color: var(--ophq-text); }
