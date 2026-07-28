@@ -8,11 +8,9 @@
 
   let { children } = $props();
 
-  // Owner-only nav (the Instances admin tab) is hidden entirely for non-owners.
-  let isOwner = $state(false);
+  // Per-instance feature flags gate the GenFilament nav entry.
   let features = $state({});
   onMount(() => {
-    api.me().then((m) => { isOwner = !!m?.isOwner; }).catch(() => {});
     api.myInstance().then((i) => { features = i?.features || {}; }).catch(() => {});
     // Session keep-alive: every 15 min, re-run Authentik forward-auth in a hidden
     // iframe so the proxy cookie is refreshed (via the still-valid SSO session)
@@ -88,11 +86,6 @@
         {#if features.genfilament}
           <a href="/app/genfilament" class="navitem" class:active={current.startsWith('/app/genfilament')}>
             <span class="ic" aria-hidden="true">🧪</span>GenFilament
-          </a>
-        {/if}
-        {#if isOwner}
-          <a href="/app/instances" class="navitem" class:active={current.startsWith('/app/instances')}>
-            <span class="ic" aria-hidden="true">🛰</span>Instances
           </a>
         {/if}
       </nav>
