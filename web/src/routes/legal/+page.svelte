@@ -7,12 +7,13 @@
   import Footer from '$lib/components/Footer.svelte';
   import { branding } from '$lib/stores/appearance';
 
-  // Served as .zip (not .tar.gz): the static server tags .gz with
-  // Content-Encoding: gzip, which the edge proxy transparently decompresses —
-  // delivering a broken archive. Zip sidesteps that entirely.
-  const SOURCE_ARCHIVE = '/legal/openprinthq-source.zip';
-  const LICENSE_TXT = '/legal/LICENSE.txt';
-  const NOTICE_TXT = '/legal/NOTICE.txt';
+  // AGPL §13 source offer — the complete corresponding source is published in the
+  // public repositories (the app + the print engine). Linking them satisfies the
+  // network-use source requirement and stays current with the deployed version.
+  const APP_REPO = 'https://git.nnlink.org/OpenPrintHQ/openprinthq';
+  const ENGINE_REPO = 'https://git.nnlink.org/OpenPrintHQ/openprinthq-engine';
+  const LICENSE_TXT = APP_REPO + '/src/branch/main/LICENSE';
+  const NOTICE_TXT = ENGINE_REPO + '/src/branch/main/NOTICE';
 </script>
 
 <svelte:head>
@@ -67,12 +68,14 @@
   <section id="source" class="card card-pad">
     <h2>Source code</h2>
     <p>In keeping with AGPL-3.0 §13, the <strong>complete corresponding source</strong> for the version of
-      OpenPrintHQ running on this instance is available to every user, at no charge. It includes both the
-      application and the print engine, with the exact commit identifiers recorded inside.</p>
+      OpenPrintHQ running on this instance is public and available to every user, at no charge — both the
+      application and the print engine, in their entirety:</p>
     <p class="actions">
-      <a class="btn btn-primary" href={SOURCE_ARCHIVE} download>Download complete source (.zip)</a>
+      <a class="btn btn-primary" href={APP_REPO} rel="noopener">Application source (web + control-plane) →</a>
+      <a class="btn btn-primary" href={ENGINE_REPO} rel="noopener">Print-engine source →</a>
     </p>
-    <p class="fine">The archive contains tracked source only — no credentials or deployment secrets.</p>
+    <p class="fine">Public repositories, browsable and cloneable by anyone. Upstream copyright and
+      licences are preserved in the history; deployment secrets are never committed.</p>
   </section>
 </main>
 
