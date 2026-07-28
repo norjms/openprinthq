@@ -1,4 +1,4 @@
-import { setInstanceFeature } from './db.js';
+import { setInstanceFeature, setInstanceQuota } from './db.js';
 // OpenPrintHQ control-plane — HTTP API
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import Fastify from 'fastify';
@@ -312,6 +312,19 @@ app.put('/api/admin/instances/:id/features', async (req, reply) => {
   const key = String(req.body?.key || '');
   if (!FEATURES.some((f) => f.key === key)) return reply.code(400).send({ error: 'unknown feature' });
   const inst = await setInstanceFeature(Number(req.params.id), key, !!req.body?.enabled);
+  if (!inst) return reply.code(404).send({ error: 'instance not found' });
+  return { ok: true, instance: inst };
+});
+// Per-instance file-storage quota (MB). Empty/null body -> unlimited. Stored only.
+app.put('/api/admin/instances/:id/quota', async (req, reply) => {
+  const owner = await requireOwner(req, reply); if (!owner) return;
+  const raw = req.body?.quotaMb;
+  let quotaMb = null;
+  if (raw !== null && raw !== undefined && raw !== '') {
+    quotaMb = Number(raw);
+    if (!Number.isInteger(quotaMb) || quotaMb < 0) return reply.code(400).send({ error: 'quotaMb must be an integer >= 0 or null' });
+  }
+  const inst = await setInstanceQuota(Number(req.params.id), quotaMb);
   if (!inst) return reply.code(404).send({ error: 'instance not found' });
   return { ok: true, instance: inst };
 });
