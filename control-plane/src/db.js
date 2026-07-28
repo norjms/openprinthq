@@ -196,6 +196,13 @@ export async function setAppearance(userId, config) {
     [userId, config]);
   return config;
 }
+// The site owner's user id (earliest owner account); null if there is none yet.
+// Used to expose the owner's branding as the public SITE branding.
+export async function getOwnerUserId() {
+  const { rows } = await pool.query(
+    'SELECT id FROM users WHERE is_owner = true ORDER BY id LIMIT 1');
+  return rows[0]?.id ?? null;
+}
 
 // ---- integration tokens -------------------------------------------------
 export async function getIntegrationToken(userId) {

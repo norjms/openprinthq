@@ -10,7 +10,7 @@ import { migrate, upsertUser, getUserByEmail, getInstanceForUser, getCompatibleP
   createConnector, listConnectors, deleteConnector, setConnectorClientKey,
   getSigningPublic, setSigningKey, deleteSigningKey, getBatchById,
   getIntegrationToken, setIntegrationToken, getUserByIntegrationToken,
-  getAppearance, setAppearance,
+  getAppearance, setAppearance, getOwnerUserId,
   createInvite, getValidInvite, consumeInvite, listInvites, revokeInvite,
   listUsers, listAllInstances, countUsers } from './db.js';
 import { createAuthentikUser, linkAuthentikUser, authentikUserExists, authentikConfigured, OWNER_GROUP } from './authentik.js';
@@ -360,6 +360,17 @@ app.post('/api/admin/instances', async (req, reply) => {
 // (bootstrap) account never sees an invite field that would only confuse them.
 app.get('/api/pub/signup-info', async () => {
   return { inviteRequired: (await countUsers()) > 0, enabled: authentikConfigured() };
+});
+// Public SITE branding = the owner's branding, so the logged-out landing page can
+// show the host's configured logo / site name. Unauthenticated (npmplus /api/pub/,
+// no forward-auth). Returns ONLY the branding sub-object (logos / siteName /
+// wordmark / tagline / trademark / contact) — never theme, a11y, or other users'
+// data. Empty object if no owner exists yet.
+app.get('/api/pub/branding', async () => {
+  const ownerId = await getOwnerUserId();
+  if (!ownerId) return { branding: {} };
+  const config = await getAppearance(ownerId);
+  return { branding: (config && config.branding) || {} };
 });
 app.post('/api/pub/signup', async (req, reply) => {
   const b = req.body || {};
