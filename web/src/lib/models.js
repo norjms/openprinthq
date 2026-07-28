@@ -47,6 +47,44 @@ export function printerLabel(connectionType, model) {
   return [mfr, m].filter(Boolean).join(' ').trim();
 }
 
+// ---- OrcaSlicer printer-preset filtering by connected printers ----------------
+// The slice dialog should offer profiles only for the printers a user has added,
+// not OrcaSlicer's full ~hundreds-entry catalogue. We match a connected printer's
+// marketing model (via prettyModel) against the preset display names.
+// Some very-new models (e.g. H2C) aren't in older OrcaSlicer builds yet — fall
+// back to the closest sibling's presets so those printers can still slice.
+const _PRESET_ALIAS = { 'h2c': 'h2d' };
+function _coreTokens(str) {
+  return String(str || '').toLowerCase().replace(/[^a-z0-9. ]/g, ' ').split(/\s+/)
+    .filter(Boolean).filter((t) => !/^r\d+$/.test(t)); // drop revision tokens (r2…)
+}
+function _nameMatches(nameLower, toks) {
+  if (!toks.length) return false;
+  return toks.length === 1 ? nameLower.includes(toks[0]) : toks.every((t) => nameLower.includes(t));
+}
+/**
+ * Filter OrcaSlicer printer presets to those matching the user's connected
+ * printers. `presets`: [{ name, … }]; `printers`: [{ model, … }]. Returns the
+ * matching subset — or the full list if nothing matched (so slicing is never
+ * blocked). Each printer contributes its native presets, or its alias sibling's
+ * presets when it has no native match in the current catalogue.
+ */
+export function filterPresetsForConnected(presets, printers) {
+  if (!Array.isArray(presets) || !Array.isArray(printers) || !printers.length) return presets;
+  const keep = new Set();
+  for (const p of printers) {
+    const pretty = prettyModel(p.model || '').toLowerCase();
+    if (!pretty) continue;
+    let hits = presets.filter((pr) => _nameMatches(String(pr.name || '').toLowerCase(), _coreTokens(pretty)));
+    if (!hits.length && _PRESET_ALIAS[pretty]) {
+      hits = presets.filter((pr) => _nameMatches(String(pr.name || '').toLowerCase(), _coreTokens(_PRESET_ALIAS[pretty])));
+    }
+    for (const h of hits) keep.add(h);
+  }
+  const out = presets.filter((pr) => keep.has(pr));
+  return out.length ? out : presets;
+}
+
 import { PRINTER_IMAGES } from './printerImages.js';
 
 // Resolve a printer's cover image (from the bundled OrcaSlicer set) by matching
