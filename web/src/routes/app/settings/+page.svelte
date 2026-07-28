@@ -6,12 +6,14 @@
   import ApiKeys from '$lib/components/ApiKeys.svelte';
   import Connectors from '$lib/components/Connectors.svelte';
   import LookAndFeel from '$lib/components/LookAndFeel.svelte';
+  import GlobalAdmin from '$lib/components/GlobalAdmin.svelte';
   import PageTitle from '$lib/components/PageTitle.svelte';
 
   // Top-level settings tab (General account/instance settings vs Look & Feel).
   let tab = $state('general');
 
   let me = $state(null);
+  const isOwner = $derived(!!me?.isOwner);
   let inst = $state(null);
   let err = $state(null);
 
@@ -169,10 +171,15 @@ scrape_configs:
 <div class="pagetabs" role="tablist" aria-label="Settings sections">
   <button role="tab" aria-selected={tab === 'general'} class:on={tab === 'general'} onclick={() => (tab = 'general')}>General</button>
   <button role="tab" aria-selected={tab === 'look'} class:on={tab === 'look'} onclick={() => (tab = 'look')}>Look &amp; Feel</button>
+  {#if isOwner}
+    <button role="tab" aria-selected={tab === 'admin'} class:on={tab === 'admin'} onclick={() => (tab = 'admin')}>Global Admin</button>
+  {/if}
 </div>
 
 {#if tab === 'look'}
   <LookAndFeel />
+{:else if tab === 'admin' && isOwner}
+  <GlobalAdmin />
 {:else}
 <div class="grid two">
   <div class="card card-pad">
