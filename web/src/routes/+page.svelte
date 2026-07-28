@@ -5,18 +5,22 @@
 
   const printers = [
     { name: 'Bambu Lab', models: 'X1 · P1 · A1 · H2D', note: 'AMS, HMS, LAN & cloud' },
-    { name: 'Creality', models: 'K1 · K2 · Ender', note: 'Klipper & CFS' },
     { name: 'Prusa', models: 'MK4 · XL · CORE One', note: 'PrusaLink / Buddy' },
+    { name: 'Creality', models: 'K1 · K2 · Ender', note: 'Klipper & CFS' },
+    { name: 'Voron / Klipper', models: '2.4 · Trident · V0', note: 'Moonraker' },
+    { name: 'OctoPrint', models: 'any OctoPrint host', note: 'REST API' },
     { name: 'Snapmaker', models: 'Artisan · J1 · U1', note: 'multi-function' },
-    { name: 'Voron', models: '2.4 · Trident · 0', note: 'Klipper / Moonraker' }
+    { name: 'FlashForge', models: 'Adventurer · Creator', note: 'OrcaSlicer profiles' },
+    { name: 'MKS', models: 'Robin · Klipper boards', note: 'Moonraker' },
+    { name: 'Duet / RRF', models: 'Duet 2 · 3 · 6HC', note: 'RepRapFirmware' }
   ];
 
   const features = [
     { icon: '🏢', title: 'Your own private instance', body: 'Every account gets an isolated OpenPrintHQ — its own database, printers and storage. No shared tenancy, no noisy neighbors.' },
-    { icon: '🖨️', title: 'Multi-brand, one HQ', body: 'Bambu Lab, Creality, Prusa, Snapmaker and Voron out of the box. One queue, one dashboard, every machine.' },
+    { icon: '🖨️', title: 'Multi-brand, one HQ', body: 'Built around OrcaSlicer, so it targets what OrcaSlicer targets — Bambu Lab today, with Prusa, Creality, Klipper/Voron and more in active validation. One queue, one dashboard, every machine.' },
     { icon: '🧩', title: 'OrcaSlicer, built in', body: 'Slice STL and 3MF right in the browser with a bundled OrcaSlicer — no desktop install. Send straight to any printer in your fleet.' },
     { icon: '🎥', title: 'Live monitoring', body: 'Peer-to-peer WebRTC camera streams, temperatures, progress and health in real time. Catch failures before they waste a spool.' },
-    { icon: '🔐', title: 'SSO, invites & roles', body: 'Secure Authentik single sign-on. Invite-based signup, an owner admin console, and owner/user roles — provision teammates in a click.' },
+    { icon: '🔐', title: 'SSO, invites & roles', body: 'Secure Authentik single sign-on with invite-gated onboarding. An owner admin console with per-instance controls and owner/user roles — provision teammates in a click.' },
     { icon: '⚡', title: 'Staggered batch printing', body: 'Fire the same job across many printers at once. Heat-up is serialized per breaker circuit and runs in parallel across circuits — no tripped breakers.' },
     { icon: '🛰️', title: 'Reach printers anywhere', body: 'Secure outbound connectors bridge LAN printers behind NAT or CGNAT — remote monitoring and control with no port-forwarding.' },
     { icon: '≣', title: 'Fleet queue & scheduling', body: 'One print queue across the whole farm. Assign jobs, reorder, and keep every machine busy from a single command center.' },
@@ -24,13 +28,15 @@
     { icon: '🧵', title: 'Filament & spool tracking', body: 'Track spools, usage and cost automatically. Know what you have on hand and what a print really costs.' },
     { icon: '📈', title: 'Statistics & reports', body: 'Success rates, throughput and usage across the fleet, with printable reports for your records or clients.' },
     { icon: '🔌', title: 'Integrations', body: 'Per-user read-only tokens expose fleet status to Home Assistant, Homepage and Prometheus — plug OpenPrintHQ into your dashboards.' },
-    { icon: '🎨', title: 'Themes & accessibility', body: 'Dark, light and WCAG-tuned accessible modes, custom colours, text scaling and your own branding — make it yours.' },
+    { icon: '🎨', title: 'Themes & accessibility', body: 'Dark, light and WCAG-tuned accessible modes — accessible mode ships high-contrast colours and larger text by default. Custom colours, text scaling and your own branding — make it yours.' },
+    { icon: '🔓', title: 'Social sign-in', body: 'Sign in with Google, Facebook or Microsoft as well as email. Onboarding stays invite-gated, so you keep control of who joins.' },
+    { icon: '🧪', title: 'GenFilament — AI profiles', body: 'Generate tuned filament profiles for new or unusual materials with AI, ready to slice. Available as an optional paid add-on.' },
     { icon: '🔒', title: 'Yours to host', body: 'Self-hostable and fully open source under AGPL-3.0. Your data never has to leave your network.' }
   ];
 
   const steps = [
     { n: '01', t: 'Create your account', d: 'Sign in and we provision a dedicated instance just for you in seconds.' },
-    { n: '02', t: 'Add your printers', d: 'Point OpenPrintHQ at your machines — Bambu, Creality, Prusa, Snapmaker or Voron.' },
+    { n: '02', t: 'Add your printers', d: 'Point OpenPrintHQ at your machines — Bambu Lab, Prusa, Creality, Klipper/Voron, OctoPrint and more.' },
     { n: '03', t: 'Run your farm', d: 'Queue, slice, monitor and manage everything from one command center.' }
   ];
 </script>
@@ -45,15 +51,16 @@
     <span class="chip primary">Open source · AGPL-3.0 · Self-hostable</span>
     <h1>One command center for<br /><span class="grad">every 3D printer.</span></h1>
     <p class="lead">
-      {$branding.siteName} brings Bambu Lab, Creality, Prusa, Snapmaker and Voron into a single private HQ —
-      queue, slice, monitor and manage your whole farm from one place. Every user gets their own isolated instance.
+      {$branding.siteName} brings Bambu Lab, Prusa, Creality, Klipper/Voron and more OrcaSlicer-compatible
+      printers into a single private HQ — queue, slice, monitor and manage your whole farm from one place.
+      Every user gets their own isolated instance.
     </p>
     <div class="cta">
       <a href="/signup" class="btn btn-primary">Launch your HQ →</a>
       <a href="/#how" class="btn btn-ghost">See how it works</a>
     </div>
     <div class="stat-row">
-      <div><b>5</b><span>printer brands out of the box</span></div>
+      <div><b>9</b><span>printer brands supported &amp; in validation</span></div>
       <div><b>1</b><span>isolated instance per user</span></div>
       <div><b>100%</b><span>open source</span></div>
     </div>
@@ -74,7 +81,12 @@
         </div>
       {/each}
     </div>
-    <p class="muted small">More brands are on the roadmap — the engine is vendor-agnostic by design.</p>
+    <p class="small note-validating">
+      OpenPrintHQ targets every printer OrcaSlicer can talk to — Bambu Lab, Prusa, Creality,
+      Voron/Klipper (Moonraker), OctoPrint, Snapmaker, FlashForge, MKS and Duet/RepRapFirmware.
+      Support beyond Bambu Lab is <strong>actively being tested and validated</strong>, so brands
+      roll out as they pass our hardware checks.
+    </p>
   </div>
 </section>
 
@@ -147,6 +159,13 @@
   .section { padding: 3.5rem 0; }
   .section h2 { margin-top: 0.4rem; margin-bottom: 2rem; }
   .small { font-size: 0.9rem; margin-top: 1.2rem; }
+  .note-validating {
+    margin-top: 1.4rem; padding: 0.85rem 1.1rem;
+    border: 1px solid var(--ophq-border); border-left: 3px solid var(--ophq-accent);
+    border-radius: var(--radius-sm); background: var(--ophq-surface);
+    color: var(--ophq-text-2); max-width: 90ch;
+  }
+  .note-validating strong { color: var(--ophq-text); }
 
   .printer-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1rem; }
   .printer h3 { margin-bottom: 0.3rem; }
