@@ -44,8 +44,7 @@
   --ophq-text-scale: 1;
 }
 
-/* ---- palette: LIGHT is the :root default (and the "light" theme) -------- */
-:root,
+/* ---- palette: LIGHT is an explicit opt-in (dark is the :root default) --- */
 [data-theme='light'] {
   color-scheme: light;
   /* base surfaces — #999999 backdrop with light raised panels for contrast */
@@ -81,7 +80,8 @@
   --shadow-glow: var(--ophq-shadow-glow);
 }
 
-/* ---- DARK: the original graphite theme ---------------------------------- */
+/* ---- DARK: the original graphite theme (also the :root default) --------- */
+:root,
 [data-theme='dark'] {
   color-scheme: dark;
   --ophq-bg: #0d1117;
