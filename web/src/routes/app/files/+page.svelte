@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
   import PresetSelect from '$lib/components/PresetSelect.svelte';
+  import { filterPresetsForConnected } from '$lib/models.js';
   import GcodeViewer from '$lib/components/GcodeViewer.svelte';
   import PageTitle from '$lib/components/PageTitle.svelte';
 
@@ -184,7 +185,17 @@
   function fromKey(list, k) { return list.find((p) => key(p) === k) || null; }
 
   const toOpts = (list) => list.map((p) => ({ value: key(p), label: p.name }));
-  const printerOpts = $derived(toOpts(printerPresets));
+  // Only offer profiles for the printers the user has connected (not OrcaSlicer's
+  // full catalogue). A toggle reveals the full list for edge cases.
+  let connectedPrinters = $state([]);
+  let showAllPrinters = $state(false);
+  const shownPrinterPresets = $derived(
+    showAllPrinters ? printerPresets : filterPresetsForConnected(printerPresets, connectedPrinters)
+  );
+  const printerOpts = $derived(toOpts(shownPrinterPresets));
+  const isPrinterFiltered = $derived(
+    !showAllPrinters && connectedPrinters.length > 0 && shownPrinterPresets.length < printerPresets.length
+  );
 
   // Real compatibility: the control-plane joins OrcaSlicer's compatible_printers
   // data, so process/filament are filtered to what actually fits the printer
@@ -246,16 +257,22 @@
     sliceFile = f; sliceErr = null; sliceMsg = null;
     presetsLoading = true;
     try {
-      const cats = await api.slicerPresets();
+      const [cats, pl] = await Promise.all([
+        api.slicerPresets(),
+        api.printers().catch(() => [])
+      ]);
+      connectedPrinters = Array.isArray(pl) ? pl : (pl?.printers || pl?.items || []);
       printerPresets = flatten(cats, 'printer');
       processPresets = flatten(cats, 'process');
       filamentPresets = flatten(cats, 'filament');
       // Concrete machines (e.g. "… 0.4 nozzle") are the sliceable ones; bare
-      // model presets are inherited bases the slicer rejects. Default to 0.4mm.
+      // model presets are inherited bases the slicer rejects. Default to 0.4mm,
+      // chosen from the user's connected-printer profiles.
+      const pool = filterPresetsForConnected(printerPresets, connectedPrinters);
       const dfltPrinter =
-        printerPresets.find((p) => /0\.4\s*nozzle/i.test(p.id)) ||
-        printerPresets.find((p) => /nozzle/i.test(p.id)) ||
-        printerPresets[0];
+        pool.find((p) => /0\.4\s*nozzle/i.test(p.id)) ||
+        pool.find((p) => /nozzle/i.test(p.id)) ||
+        pool[0];
       selPrinter = dfltPrinter ? key(dfltPrinter) : '';
       // Process + filament defaults are chosen from the printer's COMPATIBLE
       // presets by the $effect (repickDefaults) once compatibility loads.
@@ -508,6 +525,14 @@
         <div class="field">
           <label for="pr">Printer</label>
           <PresetSelect id="pr" options={printerOpts} bind:value={selPrinter} placeholder="Search printers…" />
+          {#if connectedPrinters.length > 0}
+            <p class="muted hint">
+              {#if isPrinterFiltered}Showing profiles for your connected printers.{:else}Your connected printers.{/if}
+              <button type="button" class="linkbtn" onclick={() => (showAllPrinters = !showAllPrinters)}>
+                {showAllPrinters ? 'Show only my printers' : 'Show all OrcaSlicer printers'}
+              </button>
+            </p>
+          {/if}
         </div>
         <div class="field">
           <label for="pc">Process / quality</label>
@@ -613,6 +638,8 @@
   .dhead h3 { margin: 0.2rem 0 0; font-size: 1.1rem; word-break: break-word; }
   .dactions { margin-top: 1.2rem; }
   .hint { font-size: 0.8rem; margin: 0.2rem 0 0; }
+  .linkbtn { background: none; border: 0; padding: 0; font: inherit; color: var(--ophq-primary-2);
+    cursor: pointer; text-decoration: underline; }
   .err { color: var(--ophq-danger); font-size: 0.9rem; }
   .ok-msg { color: var(--ophq-success); font-size: 0.9rem; }
 

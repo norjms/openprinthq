@@ -113,8 +113,8 @@
 <style>
   .shell { display: grid; grid-template-columns: 244px 1fr; min-height: 100vh; }
   .side { background: var(--ophq-bg-2); border-right: 1px solid var(--ophq-border); padding: 1.1rem 0.9rem; display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; }
-  .side-head { display: flex; align-items: center; justify-content: space-between; }
-  .brand { padding: 0.3rem 0.5rem 1.2rem; display: block; }
+  .side-head { display: flex; align-items: center; justify-content: center; }
+  .brand { flex: 1; padding: 0.3rem 0.5rem 1.2rem; display: block; text-align: center; }
   /* Hamburger: hidden on desktop, shown in the mobile top bar. */
   .menu-toggle { display: none; align-items: center; gap: 0.4rem; background: transparent; border: 1px solid var(--ophq-border); color: var(--ophq-text-2); border-radius: var(--radius-sm); padding: 0.4rem 0.6rem; font-size: 0.9rem; font-weight: 600; cursor: pointer; }
   .menu-toggle:hover { color: var(--ophq-text); background: var(--ophq-surface); }
@@ -145,7 +145,7 @@
     .shell { grid-template-columns: 1fr; }
     .side { position: sticky; top: 0; z-index: 40; height: auto; padding: 0.55rem 0.9rem; border-right: 0; border-bottom: 1px solid var(--ophq-border); }
     .side-head { justify-content: space-between; }
-    .brand { padding: 0.15rem 0.3rem; }
+    .brand { flex: 0 1 auto; padding: 0.15rem 0.3rem; text-align: left; }
     .menu-toggle { display: inline-flex; }
     .side-body { display: none; }
     .shell.menu-open .side-body { display: flex; padding-top: 0.7rem; max-height: calc(100vh - 60px); overflow-y: auto; }

@@ -43,12 +43,13 @@
 
 <style>
   .logo { display: inline-flex; align-items: center; gap: 0.55rem; }
-  /* Custom uploads are full lockups (mark + wordmark), so render them much taller
-     than the bare mark height so the wordmark stays readable. Height ≈ 3× the
-     passed size, capped at 84px; width scales freely. The marketing header grows
-     to fit (min-height), and the app sidebar has vertical room. */
+  /* Custom uploads are full lockups (mark + wordmark). Render every one at the
+     SAME fixed height (independent of the passed size) and centred, so the logo
+     behaves identically in the sidebar, header, footer and auth screens. Width
+     scales with aspect; it shrinks only if its container is narrower. */
+  .logo.custom { display: flex; width: 100%; justify-content: center; }
   .logo.custom img {
-    height: calc(var(--s) * 3); max-height: 84px; width: auto; max-width: 460px;
+    height: 100px; width: auto; max-width: 100%;
     object-fit: contain; display: block;
   }
   .logo img { width: auto; max-width: 240px; object-fit: contain; border-radius: 4px; display: block; }
