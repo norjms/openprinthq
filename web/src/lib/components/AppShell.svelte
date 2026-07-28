@@ -4,7 +4,8 @@
   import { page } from '$app/state';
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
-  import { branding } from '$lib/stores/appearance';
+  import { branding, appearance } from '$lib/stores/appearance';
+  import { NAV_ITEMS, GENFILAMENT_ITEM, mergeNav } from '$lib/nav';
 
   let { children } = $props();
 
@@ -38,20 +39,12 @@
   // On phones the sidebar collapses to a top bar with a slide-down menu.
   let menuOpen = $state(false);
 
-  const nav = [
-    { href: '/app', label: 'Overview', icon: '▚' },
-    { href: '/app/printers', label: 'Printers', icon: '🖨' },
-    { href: '/app/cameras', label: 'Cameras', icon: '📷' },
-    { href: '/app/timelapses', label: 'Timelapses', icon: '🎞' },
-    { href: '/app/queue', label: 'Print queue', icon: '≣' },
-    { href: '/app/files', label: 'Files', icon: '🗀' },
-    { href: '/app/slicer', label: 'Slicer', icon: '◈' },
-    { href: '/app/filament', label: 'Filament', icon: '🧵' },
-    { href: '/app/projects', label: 'Projects', icon: '📁' },
-    { href: '/app/statistics', label: 'Statistics', icon: '📈' },
-    { href: '/app/reports', label: 'Reports', icon: '🧾' },
-    { href: '/app/settings', label: 'Settings', icon: '⚙' }
-  ];
+  // Built-in items available to this user (GenFilament only when the instance
+  // enables it), then merged with the user's saved nav prefs (order / hidden /
+  // custom links). Settings always stays visible; external links open in a new
+  // tab. The `appearance` store drives this, so edits reflect live.
+  const builtins = $derived(features.genfilament ? [...NAV_ITEMS, GENFILAMENT_ITEM] : NAV_ITEMS);
+  const navItems = $derived(mergeNav(builtins, $appearance?.nav));
 
   const current = $derived(page.url.pathname);
   // Close the mobile menu whenever the route changes (i.e. after tapping a link).
@@ -76,18 +69,19 @@
 
     <div class="side-body">
       <nav>
-        {#each nav as item}
-          <a href={item.href}
-             class="navitem"
-             class:active={item.href === '/app' ? current === '/app' : current.startsWith(item.href)}>
-            <span class="ic" aria-hidden="true">{item.icon}</span>{item.label}
-          </a>
+        {#each navItems as item}
+          {#if item.external}
+            <a href={item.href} class="navitem" target="_blank" rel="noopener noreferrer">
+              <span class="ic" aria-hidden="true">{item.icon}</span>{item.label}
+            </a>
+          {:else}
+            <a href={item.href}
+               class="navitem"
+               class:active={item.href === '/app' ? current === '/app' : current.startsWith(item.href)}>
+              <span class="ic" aria-hidden="true">{item.icon}</span>{item.label}
+            </a>
+          {/if}
         {/each}
-        {#if features.genfilament}
-          <a href="/app/genfilament" class="navitem" class:active={current.startsWith('/app/genfilament')}>
-            <span class="ic" aria-hidden="true">🧪</span>GenFilament
-          </a>
-        {/if}
       </nav>
       <a href="/logout" class="navitem logout" data-sveltekit-preload-data="off">
         <span class="ic" aria-hidden="true">⎋</span>Sign out
