@@ -12,6 +12,7 @@
   let invites = $state([]);
   let users = $state([]);
   let instances = $state([]);
+  let featureCatalog = $state([]);
   let inviteEmail = $state('');
   let inviteNote = $state('');
   let busy = $state(false);
@@ -19,14 +20,22 @@
   let err = $state('');
 
   async function loadAll() {
-    const [inv, us, inst] = await Promise.all([
+    const [inv, us, inst, feat] = await Promise.all([
       api.adminInvites().catch(() => ({ invites: [] })),
       api.adminUsers().catch(() => ({ users: [] })),
-      api.adminInstances().catch(() => ({ instances: [] }))
+      api.adminInstances().catch(() => ({ instances: [] })),
+      api.adminFeatures().catch(() => ({ features: [] }))
     ]);
     invites = inv.invites || [];
     users = us.users || [];
     instances = inst.instances || [];
+    featureCatalog = feat.features || [];
+  }
+
+  async function toggleFeature(inst, f) {
+    const enabled = !(inst.features && inst.features[f.key]);
+    try { await api.setInstanceFeature(inst.id, f.key, enabled); await loadAll(); }
+    catch (e) { err = e.message || 'toggle failed'; }
   }
 
   onMount(async () => {
@@ -105,7 +114,7 @@
     <h2>Instances</h2>
     {#if instances.length}
       <table>
-        <thead><tr><th>Subdomain</th><th>Owner</th><th>Status</th><th>Printers</th><th>Online</th><th>Active</th><th>Created</th></tr></thead>
+        <thead><tr><th>Subdomain</th><th>Owner</th><th>Status</th><th>Printers</th><th>Online</th><th>Active</th><th>Features</th><th>Created</th></tr></thead>
         <tbody>
           {#each instances as i}
             <tr>
@@ -115,6 +124,13 @@
               <td>{i.stats?.printersTotal ?? 0}</td>
               <td>{i.stats?.printersOnline ?? 0}</td>
               <td>{i.stats?.activeJobs ?? 0}</td>
+              <td class="feats">
+                {#each featureCatalog as f}
+                  <button type="button" class="ftog" class:on={i.features && i.features[f.key]} onclick={() => toggleFeature(i, f)} title={f.desc}>
+                    {f.name}{#if f.paid}<span class="paidtag">PAID</span>{/if} · {i.features && i.features[f.key] ? 'ON' : 'OFF'}
+                  </button>
+                {/each}
+              </td>
               <td>{fmt(i.created_at)}</td>
             </tr>
           {/each}
@@ -147,6 +163,10 @@
 
 <style>
   .sub { margin-top: -0.4rem; }
+  .feats { white-space: nowrap; }
+  .ftog { font-size: 0.74rem; padding: 0.2rem 0.55rem; border: 1px solid var(--ophq-border); border-radius: 999px; background: var(--ophq-surface); color: var(--ophq-text-2); cursor: pointer; }
+  .ftog.on { border-color: var(--ophq-primary); color: var(--ophq-primary); background: var(--ophq-primary-dim); }
+  .paidtag { font-size: 0.6rem; font-weight: 700; color: var(--ophq-primary); margin: 0 0.25rem; letter-spacing: 0.04em; }
   .blk { margin-top: 1.4rem; }
   .blk h2 { margin: 0 0 0.3rem; font-size: 1.1rem; }
   .row { display: flex; gap: 0.6rem; flex-wrap: wrap; margin: 0.9rem 0; }
