@@ -14,15 +14,7 @@
 
 OpenPrintHQ uses an **instance-per-user** model. A small control-plane provisions an isolated engine instance (its own database + workspace) for each account.
 
-```
-                       ┌─────────────────────────── app host (Docker) ───────────────────────────┐
-  internal.example.com ─▶ router (nginx) ─┬─▶ web            (SvelteKit — landing + app shell)
-                                            └─▶ control-plane  (Fastify — accounts, provisioning)
-                                                     │  creates per-user…
-  <user>.internal.example.com ─────────────────────┴─▶ engine instance  (forked backend, 1 per user)
-                                                              │
-                                                    PostgreSQL (control DB + one DB per tenant)
-```
+![OpenPrintHQ architecture — instance-per-user, multi-brand 3D-print-farm platform](docs/architecture.png)
 
 | Component | Stack | Path |
 |---|---|---|
