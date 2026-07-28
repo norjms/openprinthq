@@ -729,6 +729,21 @@ app.put('/api/appearance', async (req, reply) => {
   for (const slot of ['light', 'dark', 'accessible']) {
     if (!validImageDataUri(logos[slot] || '')) return reply.code(400).send({ error: `${slot} logo must be an image data-URI under 512 KB` });
   }
+  // Light sanitation of per-user nav customization (best-effort coercion, not
+  // rejection): order/hidden become string arrays; links become {label,url} with
+  // http(s) urls only. Other config keys pass through unchanged.
+  if (config.nav !== undefined) {
+    const n = (config.nav && typeof config.nav === 'object' && !Array.isArray(config.nav)) ? config.nav : {};
+    const strArr = (a) => (Array.isArray(a) ? a.filter((x) => typeof x === 'string') : []);
+    const links = Array.isArray(n.links) ? n.links : [];
+    config.nav = {
+      order: strArr(n.order),
+      hidden: strArr(n.hidden),
+      links: links
+        .filter((l) => l && typeof l === 'object' && typeof l.url === 'string' && /^https?:\/\//i.test(l.url.trim()))
+        .map((l) => ({ label: typeof l.label === 'string' ? l.label : '', url: l.url.trim() }))
+    };
+  }
   if (JSON.stringify(config).length > MAX_APPEARANCE) return reply.code(413).send({ error: 'appearance config too large' });
   await setAppearance(user.id, config);
   return { ok: true };
