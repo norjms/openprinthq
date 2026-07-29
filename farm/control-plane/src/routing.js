@@ -99,7 +99,10 @@ export async function activateRoute(userId, printerId) {
   const inst = await getInstanceForUser(userId);
   const base = engineBase(inst);
   if (!base) return { ok: false, reason: 'no engine instance' };
-  if (!connectorOnline(userId)) return { ok: false, reason: 'connector offline — route saved, will activate when it connects' };
+  // Which site (connector) is this printer routed through?
+  const autoAll = await getAutomation(userId);
+  const connectorId = autoAll[printerId]?.connector_id ?? null;
+  if (!connectorOnline(userId, connectorId)) return { ok: false, reason: 'connector (site) offline — route saved, will activate when it connects' };
 
   let printer;
   try { printer = await eng(base, `/api/v1/printers/${printerId}`); }
@@ -111,18 +114,19 @@ export async function activateRoute(userId, printerId) {
   let directHost = printer.ip_address;
   let directPort = Number(printer.moonraker_port) || null;
   if (directHost === RELAY_HOST) {
-    const auto = (await getAutomation(userId))[printerId] || {};
+    const auto = autoAll[printerId] || {};
     directHost = auto.direct_host; directPort = auto.direct_port;
     if (!directHost) return { ok: false, reason: 'lost the printer\'s real address; set it to Direct and re-add' };
   } else {
     await setRouteDirect(userId, printerId, directHost, directPort);
   }
 
-  // One relay per endpoint (stable per-printer ports).
+  // One relay per endpoint (stable per-printer ports), tunnelled through the
+  // printer's assigned site (connector).
   const ports = {};
   prof.endpoints.forEach((ep, idx) => {
     const rp = relayPort(printerId, idx);
-    openTcpRelay(userId, directHost, ep.port, rp);
+    openTcpRelay(userId, directHost, ep.port, rp, connectorId);
     ports[ep.role] = rp;
   });
   await eng(base, `/api/v1/printers/${printerId}`, { method: 'PATCH', body: JSON.stringify(prof.apply(ports)) });
@@ -157,8 +161,8 @@ export async function reconcileRoutes() {
     let printer = null;
     try { if (base) printer = await eng(base, `/api/v1/printers/${r.printer_id}`); } catch { /* */ }
     const prof = printer ? profileFor(printer) : null;
-    if (prof) prof.endpoints.forEach((ep, idx) => openTcpRelay(r.user_id, r.direct_host, ep.port, relayPort(r.printer_id, idx)));
-    else openTcpRelay(r.user_id, r.direct_host, r.direct_port || 7125, relayPort(r.printer_id, 0));
+    if (prof) prof.endpoints.forEach((ep, idx) => openTcpRelay(r.user_id, r.direct_host, ep.port, relayPort(r.printer_id, idx), r.connector_id ?? null));
+    else openTcpRelay(r.user_id, r.direct_host, r.direct_port || 7125, relayPort(r.printer_id, 0), r.connector_id ?? null);
     n++;
   }
   if (n) console.log(`[routing] reconciled ${n} via-connector printer(s)`);
