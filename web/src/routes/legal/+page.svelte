@@ -72,6 +72,30 @@
     </p>
   </section>
 
+  <section id="slicers" class="card card-pad">
+    <h2>Open-source slicers</h2>
+    <p>OpenPrintHQ's slicing builds on the work of the open-source slicer community. OrcaSlicer is
+      integrated today; the engines below are planned. Their names and logos are used only to
+      identify each project, and each remains the property and copyright of its authors under its
+      own license:</p>
+    <ul class="credits">
+      <li><a href="https://github.com/SoftFever/OrcaSlicer" rel="noopener">OrcaSlicer</a>
+        (© SoftFever and contributors) — <strong>AGPL-3.0</strong>. Built in and used for slicing today.</li>
+      <li><a href="https://github.com/bambulab/BambuStudio" rel="noopener">BambuStudio</a>
+        (© Bambu Lab and contributors) — <strong>AGPL-3.0</strong>.</li>
+      <li><a href="https://github.com/prusa3d/PrusaSlicer" rel="noopener">PrusaSlicer</a>
+        (© Prusa Research and contributors) — <strong>AGPL-3.0</strong>.</li>
+      <li><a href="https://github.com/Ultimaker/Cura" rel="noopener">Ultimaker Cura</a>
+        (© Ultimaker and contributors) — <strong>LGPLv3</strong> (with some GPLv3 components).</li>
+      <li><a href="https://github.com/CrealityOfficial/CrealityPrint" rel="noopener">CrealityPrint</a>
+        (© Creality and contributors) — under its own license.</li>
+      <li><a href="https://github.com/ELEGOO-3D/ElegooSlicer" rel="noopener">ElegooSlicer</a>
+        (© ELEGOO and contributors) — under its own license.</li>
+    </ul>
+    <p>OrcaSlicer, BambuStudio and PrusaSlicer share a common lineage with Slic3r; each project's
+      copyright and full license text is retained in our source and in the third-party notices.</p>
+  </section>
+
   <section id="source" class="card card-pad">
     <h2>Source code</h2>
     <p>In keeping with AGPL-3.0 §13, the <strong>complete corresponding source</strong> for the version of
