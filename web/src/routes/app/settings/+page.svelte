@@ -57,7 +57,9 @@
       cloud = await api.cloudStatus().catch(() => null);
       await loadToken();
     } catch (e) { err = e.message; }
+    try { deploymentMode = (await api.pubConfig()).deployment_mode || 'cloud'; } catch { /* */ }
   });
+  let deploymentMode = $state('cloud');
 
   let cloud = $state(null);
 
@@ -301,7 +303,9 @@ scrape_configs:
 
 <ApiKeys />
 
-<Connectors />
+{#if deploymentMode === 'cloud'}
+  <Connectors />
+{/if}
 
 <div class="card card-pad more">
   <span class="eyebrow">Coming soon</span>
