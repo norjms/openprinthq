@@ -85,6 +85,34 @@
     catch { /* */ } finally { keyBusy = false; }
   }
 
+  // Trust-on-first-use: clear the locked client key so the next client to
+  // connect with this token pairs (locks) instead.
+  let confirmReset = $state(null);
+  let resetBusy = $state(false);
+  async function resetKey(c) {
+    resetBusy = true;
+    try { await api.resetConnectorKey(c.id); confirmReset = null; await load(); }
+    catch (e) { error = e.message || 'could not reset key'; }
+    finally { resetBusy = false; }
+  }
+
+  // LAN discovery through a specific site (connector).
+  let scanBusy = $state(null);       // connector id being scanned
+  let scanResults = $state({});      // connector id -> devices[]
+  let scanMsg = $state({});          // connector id -> message
+  async function scanSite(c) {
+    scanBusy = c.id; scanMsg = { ...scanMsg, [c.id]: '' };
+    try {
+      const r = await api.discoverConnector(c.id, 5000);
+      if (!r.connector_online) { scanMsg = { ...scanMsg, [c.id]: 'This connector is offline — start the Cloud Client on that site, then scan again.' }; scanResults = { ...scanResults, [c.id]: [] }; }
+      else {
+        scanResults = { ...scanResults, [c.id]: r.devices || [] };
+        scanMsg = { ...scanMsg, [c.id]: (r.devices?.length ? '' : 'No printers announced on that LAN during the scan window. Confirm the printers are on and in LAN mode, then retry.') };
+      }
+    } catch (e) { scanMsg = { ...scanMsg, [c.id]: e.message || 'scan failed' }; }
+    finally { scanBusy = null; }
+  }
+
   async function create() {
     if (!name.trim() || creating) return;
     creating = true; created = null;
@@ -109,7 +137,7 @@
 
 <div class="card card-pad conn">
   <div class="ch">
-    <div><span class="eyebrow">Local connectors</span><p class="muted">Reach printers on a private network — behind NAT, CGNAT, or a firewall — with no port-forwarding. Install a small agent on that LAN; it dials out to this instance.</p></div>
+    <div><span class="eyebrow">Local connectors</span><p class="muted">Reach printers on a private network — behind NAT, CGNAT, or a firewall — with no port-forwarding. Install the Cloud Client on that LAN; it dials out to this instance. Create <b>one connector per site</b> (home, shop, office) — you'll pick which site a printer lives on when you add it. The first client to connect with a connector's token <b>pairs</b> to it automatically (no key to copy); after that the connector only accepts that client until you Reset it.</p></div>
   </div>
 
   <div class="create">
@@ -165,11 +193,22 @@
       {#each list as c (c.id)}
         <div class="crow">
           <div class="cmain">
-            <div class="cname">{c.name} <span class="dot {c.online ? 'on' : ''}" title={c.online ? 'online' : 'offline'}></span><span class="st muted">{c.online ? 'online' : 'offline'}</span>{#if c.has_client_key}<span class="lock" title="Mutual key auth enabled">🔒 mutual auth</span>{/if}</div>
+            <div class="cname">{c.name} <span class="dot {c.online ? 'on' : ''}" title={c.online ? 'online' : 'offline'}></span><span class="st muted">{c.online ? 'online' : 'offline'}</span>
+              {#if c.has_client_key}<span class="lock" title="A client is paired. The connector is locked to that client's key; reset to pair a different one.">🔒 paired</span>
+              {:else}<span class="lock open" title="No client paired yet. The first Cloud Client that connects with this token locks onto its key (trust-on-first-use).">🔓 awaiting first client</span>{/if}
+            </div>
             <div class="cmeta muted mono">last seen {fmt(c.last_seen)}</div>
           </div>
           <div class="flex gap">
-            <button class="btn btn-ghost btn-xs" onclick={() => openKeyForm(c)} title="Register this connector's public key">{c.has_client_key ? 'Key ✓' : 'Key'}</button>
+            <button class="btn btn-ghost btn-xs" onclick={() => scanSite(c)} disabled={scanBusy === c.id || !c.online} title={c.online ? 'Scan this site’s LAN for printers' : 'Connector offline'}>{scanBusy === c.id ? 'Scanning…' : 'Scan LAN'}</button>
+            {#if c.has_client_key}
+              {#if confirmReset === c.id}
+                <button class="btn btn-danger btn-xs" onclick={() => resetKey(c)} disabled={resetBusy}>{resetBusy ? '…' : 'Reset key'}</button><button class="btn btn-ghost btn-xs" onclick={() => (confirmReset = null)} aria-label="Cancel">✕</button>
+              {:else}
+                <button class="btn btn-ghost btn-xs" onclick={() => (confirmReset = c.id)} title="Unpair the current client so a new one can connect">Reset key</button>
+              {/if}
+            {/if}
+            <button class="btn btn-ghost btn-xs" onclick={() => openKeyForm(c)} title="Advanced: paste a key manually">Key</button>
             {#if confirmDel === c.id}
               <button class="btn btn-danger btn-xs" onclick={() => del(c)}>Revoke</button><button class="btn btn-ghost btn-xs" onclick={() => (confirmDel = null)} aria-label="Cancel">✕</button>
             {:else}
@@ -177,6 +216,24 @@
             {/if}
           </div>
         </div>
+        {#if confirmReset === c.id}
+          <div class="keyform"><p class="muted tiny">Reset unpairs the current client. The <b>next</b> Cloud Client that connects with this connector's token will lock onto its key. Use this when you replace or reinstall the client.</p></div>
+        {/if}
+        {#if scanResults[c.id] || scanMsg[c.id]}
+          <div class="scanres">
+            {#if scanResults[c.id]?.length}
+              <div class="srhead muted tiny">Found on this site's LAN:</div>
+              {#each scanResults[c.id] as d}
+                <div class="srrow">
+                  <span class="srn">{d.name || 'Printer'}{#if d.model}<span class="muted mono"> · {d.model}</span>{/if}</span>
+                  <span class="muted mono tiny">{d.ip}{#if d.serial} · {d.serial}{/if} · {d.vendor}</span>
+                  <a class="btn btn-ghost btn-xs" href={`/app/printers/add?ip=${encodeURIComponent(d.ip)}&vendor=${encodeURIComponent(d.vendor)}&connector=${c.id}&serial=${encodeURIComponent(d.serial||'')}&model=${encodeURIComponent(d.model||'')}`}>Add</a>
+                </div>
+              {/each}
+            {/if}
+            {#if scanMsg[c.id]}<p class="muted tiny">{scanMsg[c.id]}</p>{/if}
+          </div>
+        {/if}
         {#if keyFormId === c.id}
           <div class="keyform">
             <p class="muted tiny">Paste this connector's <b>public</b> key (run <code>node src/agent.js --pubkey</code> on the connector, or copy it from the connector's startup log). Once set, the connector must prove it holds the matching private key on every connect.</p>
@@ -238,6 +295,12 @@
   .cmeta { font-size: 0.72rem; margin-top: 0.15rem; }
   .err { color: var(--ophq-danger); font-size: 0.88rem; }
   .lock { font-size: 0.68rem; color: var(--ophq-success); border: 1px solid rgba(53,196,107,0.3); background: rgba(53,196,107,0.08); padding: 0.05rem 0.4rem; border-radius: 999px; }
+  .lock.open { color: var(--ophq-muted); border-color: var(--ophq-border); background: transparent; }
+  .scanres { margin: -0.2rem 0 0.3rem; padding: 0.6rem 0.8rem; border: 1px solid var(--ophq-border); border-top: none; border-radius: 0 0 var(--radius-sm) var(--radius-sm); background: var(--ophq-bg-2); }
+  .srhead { margin-bottom: 0.3rem; }
+  .srrow { display: flex; align-items: center; gap: 0.6rem; padding: 0.35rem 0; border-top: 1px solid var(--ophq-border); }
+  .srrow:first-of-type { border-top: none; }
+  .srn { font-size: 0.86rem; flex: 1; }
   .keyform { margin: -0.2rem 0 0.3rem; padding: 0.7rem 0.8rem; border: 1px solid var(--ophq-border); border-top: none; border-radius: 0 0 var(--radius-sm) var(--radius-sm); background: var(--ophq-bg-2); }
   .kf { font-family: var(--font-mono); font-size: 0.76rem; margin: 0.3rem 0 0.5rem; resize: vertical; }
   .signing { margin-top: 1.2rem; border-top: 1px solid var(--ophq-border); padding-top: 0.9rem; }
