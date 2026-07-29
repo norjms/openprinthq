@@ -44,8 +44,10 @@
     }
   }
 
+  let deploymentMode = $state('cloud');
   onMount(() => {
     load(true);
+    api.pubConfig().then((c) => { deploymentMode = c.deployment_mode || 'cloud'; }).catch(() => {});
     timer = setInterval(() => load(false), 5000);
     // Camera snapshots refresh on a slow 60s cadence (independent of the 5s
     // status poll) to keep resource use low. CameraImg keeps the last frame.
@@ -158,7 +160,7 @@
     <p class="muted">Your engine is live and ready. Add your first printer — Bambu, Klipper (Mainsail/Fluidd), Prusa, Snapmaker and more are supported out of the box.</p>
     <a class="btn btn-primary" href="/app/printers/add">+ Add your first printer</a>
   </div>
-  <div class="card card-pad"><DownloadClient /></div>
+  {#if deploymentMode === 'cloud'}<div class="card card-pad"><DownloadClient /></div>{/if}
 {:else}
   <div class="grid printers">
     {#each printers as p (p.id)}

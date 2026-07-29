@@ -53,6 +53,9 @@ export const api = {
   stats: () => req('/instance/stats'),
   // Public signup (invite code -> Authentik user + instance).
   signupInfo: () => req('/pub/signup-info'),
+  pubConfig: () => req('/pub/config'),
+  adminSettings: () => req('/admin/settings'),
+  saveAdminSettings: (body) => req('/admin/settings', { method: 'PUT', body: JSON.stringify(body) }),
   signup: (body) => req('/pub/signup', { method: 'POST', body: JSON.stringify(body) }),
   // Owner-only admin (invites, users, instances, usage).
   adminSummary: () => req('/admin/summary'),
