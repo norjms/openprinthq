@@ -11,7 +11,6 @@ export const NAV_ITEMS = [
   { href: '/app', label: 'Overview', icon: '▚' },
   { href: '/app/printers', label: 'Printers', icon: '🖨' },
   { href: '/app/cameras', label: 'Cameras', icon: '📷' },
-  { href: '/app/timelapses', label: 'Timelapses', icon: '🎞' },
   { href: '/app/queue', label: 'Print queue', icon: '≣' },
   { href: '/app/files', label: 'Files', icon: '🗀' },
   { href: '/app/slicer', label: 'Slicer', icon: '◈' },
