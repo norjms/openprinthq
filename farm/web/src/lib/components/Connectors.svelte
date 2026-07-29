@@ -103,7 +103,7 @@
   async function scanSite(c) {
     scanBusy = c.id; scanMsg = { ...scanMsg, [c.id]: '' };
     try {
-      const r = await api.discoverConnector(c.id, 5000);
+      const r = await api.discoverConnector(c.id, 8000);
       if (!r.connector_online) { scanMsg = { ...scanMsg, [c.id]: 'This connector is offline — start the Cloud Client on that site, then scan again.' }; scanResults = { ...scanResults, [c.id]: [] }; }
       else {
         scanResults = { ...scanResults, [c.id]: r.devices || [] };
