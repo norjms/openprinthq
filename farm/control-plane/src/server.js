@@ -20,6 +20,7 @@ import { startBatch, activeBatchForUser, advanceBatch, cancelBatch, startOrchest
 import { activateRoute, deactivateRoute, reconcileRoutes } from './routing.js';
 import { generateKeyPair, encryptPrivate, invalidateSigningCache } from './signing.js';
 import { ensureStream, iceServers, GO2RTC_URL } from './go2rtc.js';
+import { dbg } from './debuglog.js';
 
 // Bambu HMS error dictionary (short_code "XXXX_YYYY" -> human description),
 // extracted from the engine's HMS table. Loaded once at startup and served to
@@ -798,6 +799,14 @@ app.all('/api/engine/*', async (req, reply) => {
   if (!base) return reply.code(409).send({ error: 'no running instance for this account' });
   const enginePath = req.url.replace(/^\/api\/engine/, '') || '/';
   const method = req.method;
+  // Trace: engine calls go to the user's CLOUD engine, not their LAN connector.
+  // A LAN-discovery scan hitting this route (e.g. /discovery/scan) is therefore
+  // scanning the cloud engine's network, not the user's — visible here.
+  if (/discover|scan/i.test(enginePath)) {
+    dbg('engine', 'LAN-discovery request routed to CLOUD engine (not connector)', { userId: user.id, method, enginePath, engineBase: base, connectorOnline: connectorOnline(user.id) });
+  } else {
+    dbg('engine', 'proxy -> cloud engine', { userId: user.id, method, enginePath });
+  }
   const headers = { accept: req.headers['accept'] || 'application/json' };
   let body;
   if (!['GET', 'HEAD'].includes(method) && req.body !== undefined) {
