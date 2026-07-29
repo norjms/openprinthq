@@ -3,6 +3,13 @@
   import { api } from '$lib/api';
   import PageTitle from '$lib/components/PageTitle.svelte';
   import CameraStream from '$lib/components/CameraStream.svelte';
+  import Timelapses from '$lib/components/Timelapses.svelte';
+
+  let tab = $state('cameras');   // 'cameras' | 'timelapses'
+  function setTab(t) {
+    tab = t;
+    try { const u = new URL(window.location.href); if (t === 'cameras') u.searchParams.delete('tab'); else u.searchParams.set('tab', t); window.history.replaceState({}, '', u); } catch { /* */ }
+  }
 
   let loading = $state(true);
   let error = $state(null);
@@ -30,6 +37,7 @@
     finally { loading = false; }
   }
   onMount(() => {
+    try { if (new URLSearchParams(window.location.search).get('tab') === 'timelapses') tab = 'timelapses'; } catch { /* */ }
     load();
     timer = setInterval(() => { camTick++; }, 4000);
     return () => clearInterval(timer);
@@ -51,10 +59,17 @@
 
 <div class="head">
   <div><h1>Cameras</h1><p class="muted">Every printer's live view in one grid.</p></div>
-  <button class="btn btn-ghost btn-sm" onclick={load}>Refresh</button>
+  {#if tab === 'cameras'}<button class="btn btn-ghost btn-sm" onclick={load}>Refresh</button>{/if}
 </div>
 
-{#if loading}
+<div class="camtabs">
+  <button class="camtab" class:on={tab === 'cameras'} onclick={() => setTab('cameras')}>Live cameras</button>
+  <button class="camtab" class:on={tab === 'timelapses'} onclick={() => setTab('timelapses')}>Timelapses</button>
+</div>
+
+{#if tab === 'timelapses'}
+  <Timelapses />
+{:else if loading}
   <div class="card card-pad muted">Loading cameras…</div>
 {:else if error === 'no-instance'}
   <div class="card card-pad"><p class="muted">Provision your instance from the <a href="/app">overview</a> first.</p></div>
@@ -94,8 +109,11 @@
 {/if}
 
 <style>
-  .head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 1.4rem; }
+  .head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 1rem; }
   .head h1 { margin: 0; }
+  .camtabs { display: flex; gap: 0.4rem; margin-bottom: 1.2rem; border-bottom: 1px solid var(--ophq-border); }
+  .camtab { padding: 0.5rem 0.9rem; font-size: 0.88rem; font-weight: 600; background: none; border: none; border-bottom: 2px solid transparent; color: var(--ophq-text-2); cursor: pointer; margin-bottom: -1px; }
+  .camtab.on { color: var(--ophq-primary-2); border-bottom-color: var(--ophq-primary); }
   .empty { text-align: center; padding: 2.6rem; } .empty .ic { font-size: 1.8rem; }
   .cams { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
   .cam { overflow: hidden; }
