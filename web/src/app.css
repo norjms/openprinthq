@@ -45,7 +45,7 @@
 }
 
 /* ---- palette: LIGHT is an explicit opt-in (dark is the :root default) --- */
-[data-theme='light'] {
+:root[data-theme='light'] {
   color-scheme: light;
   /* base surfaces — #999999 backdrop with light raised panels for contrast */
   --ophq-bg: #999999;
@@ -121,7 +121,7 @@
    AAA for white text on the button), thick borders. Accessible mode also turns
    on the a11y behaviours below by default (underline links, strong focus,
    larger targets) — the store sets the matching data-a11y-* attributes. */
-[data-theme='accessible'] {
+:root[data-theme='accessible'] {
   color-scheme: light;
   --ophq-bg: #ffffff;
   --ophq-bg-2: #f2f2f2;
