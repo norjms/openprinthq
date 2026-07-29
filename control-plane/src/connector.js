@@ -12,6 +12,7 @@ import net from 'node:net';
 import { EventEmitter } from 'node:events';
 import { getConnectorByToken, touchConnector } from './db.js';
 import { signJobIfKeyed } from './signing.js';
+import { dbg } from './debuglog.js';
 
 // connectorId -> { raw, userId, name, lastSeen, heartbeat }
 const streams = new Map();
@@ -64,11 +65,15 @@ function bearer(req) {
 export function proxyViaConnector(userId, job, timeoutMs = 22000) {
   let target = null;
   for (const s of streams.values()) if (s.userId === userId) { target = s; break; }
-  if (!target) return Promise.resolve({ status: 503, error: 'no connector online for this account' });
+  if (!target) {
+    dbg('connector', 'proxyViaConnector: NO connector online', { userId, job: { kind: job.kind, method: job.method, url: job.url, host: job.host, port: job.port } });
+    return Promise.resolve({ status: 503, error: 'no connector online for this account' });
+  }
   const id = crypto.randomUUID();
   const j = { id, ...job };
+  dbg('connector', 'proxyViaConnector: -> connector', { userId, connectorId: target.connectorId, id, kind: job.kind, method: job.method, url: job.url, host: job.host, port: job.port });
   return new Promise((resolve) => {
-    const timer = setTimeout(() => { pending.delete(id); resolve({ status: 504, error: 'connector timeout' }); }, timeoutMs);
+    const timer = setTimeout(() => { pending.delete(id); dbg('connector', 'proxyViaConnector: TIMEOUT', { id, userId }); resolve({ status: 504, error: 'connector timeout' }); }, timeoutMs);
     pending.set(id, { resolve, timer });
     signJobIfKeyed(userId, j).then(() => {
       try { target.raw.write(`data: ${JSON.stringify(j)}\n\n`); }
@@ -164,11 +169,13 @@ export function registerConnectorRoutes(app) {
     const name = (req.query?.name || conn.name || 'connector').toString();
     const heartbeat = setInterval(() => { try { raw.write(': ping\n\n'); } catch { /* closed */ } }, 20000);
     streams.set(conn.id, { raw, userId: conn.user_id, connectorId: conn.id, name, lastSeen: Date.now(), heartbeat });
+    dbg('connector', 'stream CONNECTED', { connectorId: conn.id, userId: conn.user_id, name, keyed: !!conn.client_public_pem });
     touchConnector(conn.id).catch(() => {});
     const cleanup = () => {
       clearInterval(heartbeat);
       const s = streams.get(conn.id);
       if (s && s.raw === raw) streams.delete(conn.id);
+      dbg('connector', 'stream CLOSED', { connectorId: conn.id, userId: conn.user_id });
       // Tear down any TCP tunnels that belonged to this connector.
       for (const [sid, t] of tcpStreams) if (t.connectorId === conn.id) { t.emitter.emit('close', 'connector disconnected'); tcpStreams.delete(sid); }
     };
@@ -195,7 +202,7 @@ export function registerConnectorRoutes(app) {
       return { ok: true };
     }
     const p = id && pending.get(id);
-    if (p) { clearTimeout(p.timer); pending.delete(id); p.resolve(body); }
+    if (p) { clearTimeout(p.timer); pending.delete(id); dbg('connector', 'result <- connector', { id, connectorId: conn.id, status: body.status, error: body.error }); p.resolve(body); }
     return { ok: true };
   });
 }
