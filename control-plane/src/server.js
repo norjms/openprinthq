@@ -12,7 +12,8 @@ import { migrate, upsertUser, getUserByEmail, getInstanceForUser, getCompatibleP
   getIntegrationToken, setIntegrationToken, getUserByIntegrationToken,
   getAppearance, setAppearance, getOwnerUserId,
   createInvite, getValidInvite, consumeInvite, listInvites, revokeInvite,
-  listUsers, listAllInstances, countUsers } from './db.js';
+  listUsers, listAllInstances, countUsers,
+  getAppSetting, setAppSetting } from './db.js';
 import { createAuthentikUser, linkAuthentikUser, authentikUserExists, authentikConfigured, OWNER_GROUP } from './authentik.js';
 import { registerConnectorRoutes, connectorOnline, isConnectorOnline, proxyViaConnector, openTcpStream } from './connector.js';
 import { provisionForUser } from './provisioner.js';
@@ -302,6 +303,21 @@ app.get('/api/admin/users', async (req, reply) => {
   const owner = await requireOwner(req, reply); if (!owner) return;
   return { users: await listUsers() };
 });
+// Deployment-wide settings (owner-only). Currently just deployment_mode.
+app.get('/api/admin/settings', async (req, reply) => {
+  const owner = await requireOwner(req, reply); if (!owner) return;
+  const mode = (await getAppSetting('deployment_mode', 'cloud')) || 'cloud';
+  return { deployment_mode: mode === 'local' ? 'local' : 'cloud' };
+});
+app.put('/api/admin/settings', async (req, reply) => {
+  const owner = await requireOwner(req, reply); if (!owner) return;
+  if ('deployment_mode' in (req.body || {})) {
+    const m = String(req.body.deployment_mode) === 'local' ? 'local' : 'cloud';
+    await setAppSetting('deployment_mode', m);
+  }
+  const mode = (await getAppSetting('deployment_mode', 'cloud')) || 'cloud';
+  return { ok: true, deployment_mode: mode };
+});
 const FEATURES = [
   { key: 'genfilament', name: 'GenFilament', desc: 'AI filament profile generator for OrcaSlicer / Bambu Studio', paid: true }
 ];
@@ -375,6 +391,14 @@ app.post('/api/admin/instances', async (req, reply) => {
 // (bootstrap) account never sees an invite field that would only confuse them.
 app.get('/api/pub/signup-info', async () => {
   return { inviteRequired: (await countUsers()) > 0, enabled: authentikConfigured() };
+});
+// Deployment-wide UI config. `deployment_mode` = 'cloud' | 'local'. Cloud shows
+// the Cloud Client downloads + local connectors and defaults printer-add to
+// "via connector"; local hides them (the engine is on the printers' LAN, so it
+// reaches them directly). Public so the UI can shape itself before login.
+app.get('/api/pub/config', async () => {
+  const mode = (await getAppSetting('deployment_mode', 'cloud')) || 'cloud';
+  return { deployment_mode: mode === 'local' ? 'local' : 'cloud' };
 });
 // Public SITE branding = the owner's branding, so the logged-out landing page can
 // show the host's configured logo / site name. Unauthenticated (npmplus /api/pub/,

@@ -22,17 +22,30 @@
   let quotaEdits = $state({});
   let quotaBusy = $state({});
 
+  // Deployment mode (cloud vs local).
+  let deploymentMode = $state('cloud');
+  let modeBusy = $state(false);
+  async function setMode(m) {
+    if (modeBusy || m === deploymentMode) return;
+    modeBusy = true;
+    try { const r = await api.saveAdminSettings({ deployment_mode: m }); deploymentMode = r.deployment_mode || m; msg = `Deployment mode set to ${deploymentMode}.`; }
+    catch (e) { err = e.message || 'could not change mode'; }
+    finally { modeBusy = false; }
+  }
+
   async function loadAll() {
-    const [inv, us, inst, feat] = await Promise.all([
+    const [inv, us, inst, feat, settings] = await Promise.all([
       api.adminInvites().catch(() => ({ invites: [] })),
       api.adminUsers().catch(() => ({ users: [] })),
       api.adminInstances().catch(() => ({ instances: [] })),
-      api.adminFeatures().catch(() => ({ features: [] }))
+      api.adminFeatures().catch(() => ({ features: [] })),
+      api.adminSettings().catch(() => ({ deployment_mode: 'cloud' }))
     ]);
     invites = inv.invites || [];
     users = us.users || [];
     instances = inst.instances || [];
     featureCatalog = feat.features || [];
+    deploymentMode = settings.deployment_mode || 'cloud';
     const q = {};
     for (const i of instances) q[i.id] = i.storage_quota_mb == null ? '' : String(i.storage_quota_mb);
     quotaEdits = q;
@@ -98,6 +111,17 @@
 {:else}
   {#if msg}<p class="ok">{msg}</p>{/if}
   {#if err}<p class="err" role="alert">{err}</p>{/if}
+
+  <!-- DEPLOYMENT MODE -->
+  <section class="card card-pad blk">
+    <h3>Deployment mode</h3>
+    <p class="muted small">Controls how this deployment presents itself. <b>Cloud</b>: this instance runs off-site, so it shows the Cloud Client downloads and local connectors, defaults new printers to “via connector”, and hides the server-side subnet scan (the server can’t see your LAN). <b>Local</b>: this instance runs on the same network as your printers, so it hides the Cloud Client / connectors and reaches printers directly.</p>
+    <div class="modetoggle">
+      <button class="modebtn" class:on={deploymentMode === 'cloud'} disabled={modeBusy} onclick={() => setMode('cloud')}>☁️ Cloud</button>
+      <button class="modebtn" class:on={deploymentMode === 'local'} disabled={modeBusy} onclick={() => setMode('local')}>🏠 Local</button>
+    </div>
+    <p class="muted tiny note">Running locally but want to manage printers at more than one site? Multi-site needs connectors, so set this to <b>Cloud</b> even on a local install — the Cloud Client at each remote site will tunnel back to this one.</p>
+  </section>
 
   <!-- INVITES -->
   <section class="card card-pad blk">
@@ -187,6 +211,11 @@
 {/if}
 
 <style>
+  .modetoggle { display: inline-flex; gap: 0; border: 1px solid var(--ophq-border); border-radius: 999px; overflow: hidden; margin: 0.3rem 0; }
+  .modebtn { padding: 0.4rem 1.1rem; font-size: 0.85rem; font-weight: 600; border: none; background: var(--ophq-surface); color: var(--ophq-text-2); cursor: pointer; }
+  .modebtn.on { background: var(--ophq-primary); color: #fff; }
+  .modebtn:disabled { opacity: 0.6; cursor: default; }
+  .note { margin-top: 0.4rem; }
   .feats { white-space: nowrap; }
   .ftog { font-size: 0.74rem; padding: 0.2rem 0.55rem; border: 1px solid var(--ophq-border); border-radius: 999px; background: var(--ophq-surface); color: var(--ophq-text-2); cursor: pointer; }
   .ftog.on { border-color: var(--ophq-primary); color: var(--ophq-primary); background: var(--ophq-primary-dim); }

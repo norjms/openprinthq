@@ -59,6 +59,7 @@
     try { const d = await api.printerCatalog({ limit: 2000 }); catalog = d.printers || []; }
     catch (e) { catalogErr = e.message || 'catalog unavailable'; }
     finally { catalogLoading = false; }
+    try { deploymentMode = (await api.pubConfig()).deployment_mode || 'cloud'; } catch { /* */ }
     try { const cs = await api.connectors(); connectors = Array.isArray(cs) ? cs : (cs?.items || []); } catch { /* */ }
     // Deep-link from the Connectors "Scan LAN → Add" flow.
     try {
@@ -116,6 +117,7 @@
   let hiddenCount = $state(0);
 
   // ---- sites (local connectors) ----
+  let deploymentMode = $state('cloud');
   let connectors = $state([]);           // [{id,name,online}]
   let siteConnectorId = $state('');      // '' = Direct (same network as the engine)
   let siteScanning = $state(false);
@@ -183,7 +185,7 @@
     siteScanning = true; siteScanMsg = ''; scanErr = null; discovered = []; scanned = false; hiddenCount = 0;
     try {
       try { existing = await api.printers() || []; } catch { /* */ }
-      const r = await api.discoverConnector(Number(siteConnectorId), 5000);
+      const r = await api.discoverConnector(Number(siteConnectorId), 8000);
       if (!r.connector_online) { siteScanMsg = 'That site’s connector is offline — start the Cloud Client there, then scan again.'; }
       else {
         const raw = (r.devices || []).map((d) => ({ name: d.name, model: d.model, ip_address: d.ip, serial: d.serial, vendor: d.vendor }));
@@ -305,6 +307,7 @@
       <button type="button" class="btn btn-ghost btn-sm" onclick={changeSel}>Change</button>
     </div>
 
+    {#if deploymentMode === 'cloud'}
     <div class="field">
       <label for="site">Site {#if connectors.length}<span class="muted tiny">— which network is this printer on?</span>{/if}</label>
       {#if connectors.length}
@@ -319,6 +322,7 @@
         <p class="muted tiny">No local connectors yet. Printers are reached directly on this instance’s network. To add printers on a remote site, set up a connector in <a href="/app/settings">Settings → Connectors</a>.</p>
       {/if}
     </div>
+    {/if}
 
     {#if siteConnectorId}
       <div class="discover">
@@ -341,7 +345,7 @@
           {#if hiddenCount}<p class="muted tiny">{hiddenCount} already-added hidden.</p>{/if}
         {/if}
       </div>
-    {:else if selected.ct === 'bambu' || selected.ct === 'klipper'}
+    {:else if deploymentMode === 'local' && (selected.ct === 'bambu' || selected.ct === 'klipper')}
       <div class="discover">
         <div class="dtitle"><b>Find printers on your network</b></div>
         {#if isKlipper}

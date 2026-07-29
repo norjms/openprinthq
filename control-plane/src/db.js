@@ -155,6 +155,15 @@ export async function migrate() {
     );
   `);
 
+  // Global (deployment-wide) key/value settings — e.g. deployment_mode.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key        TEXT PRIMARY KEY,
+      value      TEXT,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+
   // Invite codes: an owner mints single-use codes (2-day TTL). Redeeming a code
   // on the public signup page creates the login user in Authentik and provisions
   // that person their own instance. created_by / used_by reference users(id) but
@@ -297,6 +306,18 @@ export async function setConnectorClientKey(userId, id, pem) {
 
 export async function touchConnector(id) {
   await pool.query('UPDATE connectors SET last_seen = now() WHERE id = $1', [id]);
+}
+
+// ---- global app settings (deployment-wide key/value) --------------------
+export async function getAppSetting(key, fallback = null) {
+  const { rows } = await pool.query('SELECT value FROM app_settings WHERE key = $1', [key]);
+  return rows.length ? rows[0].value : fallback;
+}
+export async function setAppSetting(key, value) {
+  await pool.query(
+    `INSERT INTO app_settings (key, value, updated_at) VALUES ($1, $2, now())
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+    [key, value == null ? null : String(value)]);
 }
 
 export async function setRouteDirect(userId, printerId, host, port) {
