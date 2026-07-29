@@ -9,6 +9,20 @@
   let presetCats = $state([]);
   let connected = $state(false);
 
+  // Slicer engines. OrcaSlicer is the built-in default; the rest are planned
+  // (see the open-source credits on the legal page). Selecting a "soon" engine
+  // is disabled until its backend lands.
+  const ENGINES = [
+    { key: 'orca', name: 'OrcaSlicer', abbr: 'O', color: '#00a352', ready: true },
+    { key: 'bambu', name: 'BambuStudio', abbr: 'B', color: '#16b978', ready: false },
+    { key: 'prusa', name: 'PrusaSlicer', abbr: 'P', color: '#fa6831', ready: false },
+    { key: 'cura', name: 'Cura', abbr: 'C', color: '#14aaf5', ready: false },
+    { key: 'creality', name: 'CrealityPrint', abbr: 'CP', color: '#059b8f', ready: false },
+    { key: 'elegoo', name: 'ElegooSlicer', abbr: 'E', color: '#2b2b2b', ready: false }
+  ];
+  let engine = $state('orca');
+  function selectEngine(k) { const e = ENGINES.find((x) => x.key === k); if (e && e.ready) engine = k; }
+
   async function load() {
     loading = true; error = null;
     try {
@@ -42,6 +56,21 @@
 {:else if error}
   <div class="card card-pad"><h3>Slicer unreachable</h3><p class="muted">{error}</p><button class="btn btn-ghost btn-sm" onclick={load}>Retry</button></div>
 {:else}
+  <div class="card card-pad engwrap">
+    <span class="eyebrow">Slicer engine</span>
+    <p class="muted small">OrcaSlicer is built in and ready. More engines are on the way — <a href="/legal#slicers">credits & licenses</a>.</p>
+    <div class="engines">
+      {#each ENGINES as e}
+        <button type="button" class="engine" class:on={e.key === engine} class:soon={!e.ready} disabled={!e.ready}
+                onclick={() => selectEngine(e.key)} title={e.ready ? e.name : e.name + ' — coming soon'}>
+          <span class="ebadge" style="background:{e.color}">{e.abbr}</span>
+          <span class="ename">{e.name}</span>
+          {#if !e.ready}<span class="ribbon">Coming soon</span>{/if}
+        </button>
+      {/each}
+    </div>
+  </div>
+
   <div class="card card-pad status glow">
     <div class="flex between center">
       <div class="flex center gap">
@@ -82,6 +111,15 @@
 <style>
   .head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 1.4rem; }
   .head h1 { margin: 0; }
+  .engwrap { margin-bottom: 1.2rem; }
+  .engwrap .small { margin: 0.3rem 0 0; }
+  .engines { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.6rem; margin-top: 0.9rem; }
+  .engine { position: relative; display: flex; align-items: center; gap: 0.6rem; padding: 0.7rem 0.8rem; border: 1px solid var(--ophq-border); border-radius: var(--radius-sm); background: var(--ophq-surface); color: var(--ophq-text); cursor: pointer; overflow: hidden; text-align: left; }
+  .engine.on { border-color: var(--ophq-primary); box-shadow: 0 0 0 1px var(--ophq-primary); }
+  .engine.soon { opacity: 0.62; cursor: default; }
+  .ebadge { width: 30px; height: 30px; border-radius: 7px; display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 0.8rem; flex: none; }
+  .ename { font-weight: 600; font-size: 0.9rem; }
+  .ribbon { position: absolute; top: 7px; right: -26px; transform: rotate(35deg); background: var(--ophq-warn, #f0b429); color: #10131a; font-size: 0.56rem; font-weight: 800; letter-spacing: 0.03em; padding: 2px 26px; text-transform: uppercase; }
   .status { margin-bottom: 1.2rem; }
   .status h3 { margin: 0; font-size: 1.1rem; }
   .status p { margin: 0.2rem 0 0; font-size: 0.9rem; }
