@@ -59,6 +59,21 @@
     try { const d = await api.printerCatalog({ limit: 2000 }); catalog = d.printers || []; }
     catch (e) { catalogErr = e.message || 'catalog unavailable'; }
     finally { catalogLoading = false; }
+    try { const cs = await api.connectors(); connectors = Array.isArray(cs) ? cs : (cs?.items || []); } catch { /* */ }
+    // Deep-link from the Connectors "Scan LAN → Add" flow.
+    try {
+      const q = new URLSearchParams(window.location.search);
+      const vendor = q.get('vendor'); const ip = q.get('ip');
+      const conn = q.get('connector'); const serial = q.get('serial'); const model = q.get('model');
+      if (conn) siteConnectorId = conn;
+      if (vendor && vendorByKey[vendor]) {
+        pickVendor(vendorByKey[vendor]);
+        if (ip) values.ip_address = ip;
+        if (serial) values.serial_number = serial;
+        if (model) values.model = model;
+        if (ip) pickedIp = ip;
+      }
+    } catch { /* */ }
   });
 
   const results = $derived.by(() => {
@@ -99,6 +114,13 @@
   let pickedIp = $state(null);
   let existing = $state([]);
   let hiddenCount = $state(0);
+
+  // ---- sites (local connectors) ----
+  let connectors = $state([]);           // [{id,name,online}]
+  let siteConnectorId = $state('');      // '' = Direct (same network as the engine)
+  let siteScanning = $state(false);
+  let siteScanMsg = $state('');
+  const selectedSiteOnline = $derived(connectors.find((c) => String(c.id) === String(siteConnectorId))?.online ?? false);
 
   function alreadyAdded(p) {
     const serial = String(p.serial || '').trim().toUpperCase();
@@ -155,6 +177,25 @@
     }
   }
 
+  // Scan the selected site's LAN through its connector (not the cloud engine).
+  async function scanSiteLan() {
+    if (!siteConnectorId) return;
+    siteScanning = true; siteScanMsg = ''; scanErr = null; discovered = []; scanned = false; hiddenCount = 0;
+    try {
+      try { existing = await api.printers() || []; } catch { /* */ }
+      const r = await api.discoverConnector(Number(siteConnectorId), 5000);
+      if (!r.connector_online) { siteScanMsg = 'That site’s connector is offline — start the Cloud Client there, then scan again.'; }
+      else {
+        const raw = (r.devices || []).map((d) => ({ name: d.name, model: d.model, ip_address: d.ip, serial: d.serial, vendor: d.vendor }));
+        const fresh = raw.filter((p) => !alreadyAdded(p));
+        hiddenCount = raw.length - fresh.length;
+        discovered = fresh;
+        if (!raw.length) siteScanMsg = 'No printers announced on that LAN during the scan window. Confirm they’re on and in LAN mode.';
+      }
+    } catch (e) { siteScanMsg = e.message || 'scan failed'; }
+    finally { siteScanning = false; scanned = true; }
+  }
+
   function pickDiscovered(p) {
     values.name = values.name || p.name || p.model || (isKlipper ? 'Klipper printer' : 'Bambu printer');
     values.ip_address = p.ip_address;
@@ -176,7 +217,15 @@
       if (val !== undefined && val !== '') body[f.key] = f.type === 'number' ? Number(val) : val;
     }
     try {
-      await api.engine('/api/v1/printers/', { method: 'POST', body: JSON.stringify(body) });
+      const created = await api.engine('/api/v1/printers/', { method: 'POST', body: JSON.stringify(body) });
+      // Route this printer through the chosen site (connector). Empty = Direct.
+      if (siteConnectorId) {
+        const pid = created?.id ?? created?.printer_id;
+        if (pid != null) {
+          try { await api.savePrinterAutomation({ [pid]: { connector_id: Number(siteConnectorId) } }); }
+          catch { /* route can be set later from Settings → Connectors */ }
+        }
+      }
       goto('/app/printers');
     } catch (e2) {
       err = e2.message || 'failed to add printer';
@@ -256,7 +305,43 @@
       <button type="button" class="btn btn-ghost btn-sm" onclick={changeSel}>Change</button>
     </div>
 
-    {#if selected.ct === 'bambu' || selected.ct === 'klipper'}
+    <div class="field">
+      <label for="site">Site {#if connectors.length}<span class="muted tiny">— which network is this printer on?</span>{/if}</label>
+      {#if connectors.length}
+        <select id="site" class="input" bind:value={siteConnectorId}>
+          <option value="">Direct — same network as this instance</option>
+          {#each connectors as c}<option value={String(c.id)}>{c.name}{c.online ? '' : ' (offline)'}</option>{/each}
+        </select>
+        {#if siteConnectorId}
+          <p class="muted tiny">Reached through the <b>{connectors.find((c) => String(c.id) === String(siteConnectorId))?.name}</b> connector. {selectedSiteOnline ? '' : 'That connector is currently offline — the printer is saved and will connect when the Cloud Client is running there.'}</p>
+        {/if}
+      {:else}
+        <p class="muted tiny">No local connectors yet. Printers are reached directly on this instance’s network. To add printers on a remote site, set up a connector in <a href="/app/settings">Settings → Connectors</a>.</p>
+      {/if}
+    </div>
+
+    {#if siteConnectorId}
+      <div class="discover">
+        <div class="dtitle"><b>Find printers on this site’s network</b></div>
+        <p class="muted tiny">Scans the <b>{connectors.find((c) => String(c.id) === String(siteConnectorId))?.name}</b> LAN through its connector and fills in what it finds.</p>
+        <div class="scanrow">
+          <button type="button" class="btn btn-primary btn-sm" onclick={scanSiteLan} disabled={siteScanning || !selectedSiteOnline}>{siteScanning ? 'Scanning…' : 'Scan this site'}</button>
+          {#if !selectedSiteOnline}<span class="muted tiny">connector offline</span>{/if}
+        </div>
+        {#if siteScanMsg}<p class="muted tiny">{siteScanMsg}</p>{/if}
+        {#if discovered.length}
+          <div class="found">
+            {#each discovered as p}
+              <button type="button" class="foundrow" class:sel={pickedIp === p.ip_address} onclick={() => pickDiscovered(p)}>
+                <span class="fn">{p.name || prettyModel(p.model) || 'Printer'}{#if p.model}<span class="muted mono"> · {prettyModel(p.model)}</span>{/if}</span>
+                <span class="muted mono tiny">{p.ip_address}{#if p.serial} · {p.serial}{/if}</span>
+              </button>
+            {/each}
+          </div>
+          {#if hiddenCount}<p class="muted tiny">{hiddenCount} already-added hidden.</p>{/if}
+        {/if}
+      </div>
+    {:else if selected.ct === 'bambu' || selected.ct === 'klipper'}
       <div class="discover">
         <div class="dtitle"><b>Find printers on your network</b></div>
         {#if isKlipper}
