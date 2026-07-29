@@ -88,7 +88,7 @@
     try { await api.revokeInvite(code); await loadAll(); } catch (e) { err = e?.message || 'Revoke failed.'; }
   }
 
-  function fmt(ts) { return ts ? new Date(ts).toLocaleString() : '—'; }
+  function fmt(ts) { return ts ? new Date(ts).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '—'; }
 </script>
 
 {#if !checked}
@@ -109,7 +109,7 @@
       <button class="btn btn-primary" disabled={busy}>{busy ? 'Creating…' : 'Create invite'}</button>
     </form>
     {#if invites.length}
-      <table>
+      <div class="tblwrap"><table>
         <thead><tr><th>Code</th><th>Status</th><th>Email</th><th>Note</th><th>Expires</th><th>Used by</th><th></th></tr></thead>
         <tbody>
           {#each invites as i}
@@ -124,7 +124,7 @@
             </tr>
           {/each}
         </tbody>
-      </table>
+      </table></div>
     {:else}<p class="muted small">No invite codes yet.</p>{/if}
   </section>
 
@@ -132,7 +132,7 @@
   <section class="card card-pad blk">
     <h3>Instances</h3>
     {#if instances.length}
-      <table>
+      <div class="tblwrap"><table>
         <thead><tr><th>Subdomain</th><th>Owner</th><th>Status</th><th>Printers</th><th>Online</th><th>Active</th><th>Features</th><th>Storage quota</th><th>Created</th></tr></thead>
         <tbody>
           {#each instances as i}
@@ -160,7 +160,7 @@
             </tr>
           {/each}
         </tbody>
-      </table>
+      </table></div>
       <p class="muted small qhint">Storage quota is per instance in MB; leave blank for unlimited.</p>
     {:else}<p class="muted small">No instances yet.</p>{/if}
   </section>
@@ -169,7 +169,7 @@
   <section class="card card-pad blk">
     <h3>Users</h3>
     {#if users.length}
-      <table>
+      <div class="tblwrap"><table>
         <thead><tr><th>Email</th><th>Name</th><th>Instance</th><th>Status</th><th>Joined</th></tr></thead>
         <tbody>
           {#each users as u}
@@ -182,7 +182,7 @@
             </tr>
           {/each}
         </tbody>
-      </table>
+      </table></div>
     {:else}<p class="muted small">No users yet.</p>{/if}
   </section>
 {/if}
@@ -200,7 +200,9 @@
   .blk h3 { margin: 0 0 0.3rem; font-size: 1.1rem; }
   .row { display: flex; gap: 0.6rem; flex-wrap: wrap; margin: 0.9rem 0; }
   .row input { flex: 1; min-width: 180px; padding: 0.55rem 0.7rem; border-radius: var(--radius-sm); border: 1px solid var(--ophq-border); background: var(--ophq-bg-2); color: var(--ophq-text); }
+  .tblwrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   table { width: 100%; border-collapse: collapse; margin-top: 0.8rem; font-size: 0.9rem; }
+  td:last-child, th:last-child { white-space: nowrap; }
   th, td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--ophq-border); }
   th { color: var(--ophq-muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; }
   .chip.active { background: color-mix(in srgb, var(--ophq-ok, #16a34a) 18%, transparent); color: var(--ophq-ok, #16a34a); }
