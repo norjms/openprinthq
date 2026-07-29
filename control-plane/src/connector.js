@@ -10,7 +10,7 @@
 import crypto from 'node:crypto';
 import net from 'node:net';
 import { EventEmitter } from 'node:events';
-import { getConnectorByToken, touchConnector } from './db.js';
+import { getConnectorByToken, touchConnector, setConnectorClientKey } from './db.js';
 import { signJobIfKeyed } from './signing.js';
 import { dbg } from './debuglog.js';
 
@@ -48,7 +48,46 @@ function verifyClientAuth(conn, req) {
   } catch { return false; }
 }
 
-function connectorFor(userId) {
+// Trust-on-first-use ("sticky" key). If the connector already has a locked key,
+// the client must prove possession of it (verifyClientAuth) — a different key is
+// rejected until the key is reset in Settings → Connectors. If NO key is locked
+// yet, the first client to present a valid pubkey + self-signature over
+// `${token}.${ts}` locks onto it, so onboarding needs no manual key copy/paste.
+// A client that presents no key at all is a legacy token-only client (allowed,
+// not locked).
+async function ensureClientAuth(conn, req) {
+  if (conn.client_public_pem) return verifyClientAuth(conn, req);
+  const ts = req.headers['x-ophq-client-ts'];
+  const sig = req.headers['x-ophq-client-sig'];
+  const pubB64 = req.headers['x-ophq-client-pubkey'];
+  if (!(ts && sig && pubB64)) return true;                      // legacy token-only
+  if (Math.abs(Date.now() - Number(ts)) > 120000) return false;
+  let pem;
+  try { pem = Buffer.from(String(pubB64), 'base64').toString('utf8'); }
+  catch { return true; }
+  let ok = false;
+  try {
+    const key = crypto.createPublicKey(pem);
+    ok = crypto.verify('sha256', Buffer.from(`${conn.token}.${ts}`), { key, ...CLIENT_PSS }, Buffer.from(sig, 'base64'));
+  } catch { return true; }                                       // unparseable → treat as legacy
+  if (!ok) { dbg('connector', 'TOFU: rejected client — bad self-signature', { connectorId: conn.id }); return false; }
+  try { await setConnectorClientKey(conn.user_id, conn.id, pem); conn.client_public_pem = pem; }
+  catch (e) { dbg('connector', 'TOFU: could not persist key', { connectorId: conn.id, err: e.message }); }
+  dbg('connector', 'TOFU: locked client key on first connect', { connectorId: conn.id, userId: conn.user_id });
+  return true;
+}
+
+// Resolve the stream to use. With a connectorId (a specific "site"), return
+// exactly that connector's stream if it belongs to the user and is online —
+// this is what makes multi-site work: a printer routed to site B tunnels
+// through B, never through whichever happened to connect first. With no
+// connectorId, fall back to the first online connector (single-site default;
+// "first connector wins").
+function connectorFor(userId, connectorId = null) {
+  if (connectorId != null && connectorId !== '') {
+    const s = streams.get(Number(connectorId));
+    return (s && s.userId === userId) ? s : null;
+  }
   for (const s of streams.values()) if (s.userId === userId) return s;
   return null;
 }
@@ -62,12 +101,11 @@ function bearer(req) {
 
 // Push a job to the first live connector for this user; resolve when the agent
 // posts the result back (or on timeout). Returns { status, headers, body(b64) }.
-export function proxyViaConnector(userId, job, timeoutMs = 22000) {
-  let target = null;
-  for (const s of streams.values()) if (s.userId === userId) { target = s; break; }
+export function proxyViaConnector(userId, job, timeoutMs = 22000, connectorId = null) {
+  let target = connectorFor(userId, connectorId);
   if (!target) {
-    dbg('connector', 'proxyViaConnector: NO connector online', { userId, job: { kind: job.kind, method: job.method, url: job.url, host: job.host, port: job.port } });
-    return Promise.resolve({ status: 503, error: 'no connector online for this account' });
+    dbg('connector', 'proxyViaConnector: NO connector online', { userId, connectorId, job: { kind: job.kind, method: job.method, url: job.url, host: job.host, port: job.port } });
+    return Promise.resolve({ status: 503, error: connectorId != null ? 'the selected connector (site) is offline' : 'no connector online for this account' });
   }
   const id = crypto.randomUUID();
   const j = { id, ...job };
@@ -86,20 +124,20 @@ export function proxyViaConnector(userId, job, timeoutMs = 22000) {
 // connector. Returns an EventEmitter that emits 'open', 'data' (Buffer),
 // 'close' (error?), and exposes .write(buf) and .close(). Carries any TCP
 // protocol (Bambu MQTT 8883, FTP 990, …), not just HTTP.
-export function openTcpStream(userId, host, port) {
-  const target = connectorFor(userId);
+export function openTcpStream(userId, host, port, connectorId = null) {
+  const target = connectorFor(userId, connectorId);
   const em = new EventEmitter();
-  if (!target) { queueMicrotask(() => em.emit('close', 'no connector online')); return em; }
+  if (!target) { queueMicrotask(() => em.emit('close', connectorId != null ? 'selected connector (site) offline' : 'no connector online')); return em; }
   const id = crypto.randomUUID();
   tcpStreams.set(id, { userId, connectorId: target.connectorId, emitter: em });
   em.write = (buf) => {
-    const s = connectorFor(userId);
+    const s = connectorFor(userId, connectorId);
     if (!s) return false;
     try { writeToConnector(s, { id, kind: 'tcp-data', data: Buffer.from(buf).toString('base64') }); return true; }
     catch { return false; }
   };
   em.close = () => {
-    const s = connectorFor(userId);
+    const s = connectorFor(userId, connectorId);
     if (s) try { writeToConnector(s, { id, kind: 'tcp-close' }); } catch { /* */ }
     tcpStreams.delete(id);
   };
@@ -115,11 +153,12 @@ export function openTcpStream(userId, host, port) {
 // every accepted connection to `targetHost:targetPort` through the user's
 // connector. An engine pointed at RELAY_HOST:listenPort then reaches a printer
 // on a remote LAN transparently. Idempotent per listenPort.
-export function openTcpRelay(userId, targetHost, targetPort, listenPort) {
+export function openTcpRelay(userId, targetHost, targetPort, listenPort, connectorId = null) {
+  const ident = `${targetHost}:${targetPort}@${connectorId ?? '*'}`;
   const existing = relays.get(listenPort);
-  if (existing) { if (existing._ophqTarget === `${targetHost}:${targetPort}`) return listenPort; try { existing.close(); } catch { /* */ } relays.delete(listenPort); }
+  if (existing) { if (existing._ophqTarget === ident) return listenPort; try { existing.close(); } catch { /* */ } relays.delete(listenPort); }
   const server = net.createServer((socket) => {
-    const t = openTcpStream(userId, targetHost, targetPort);
+    const t = openTcpStream(userId, targetHost, targetPort, connectorId);
     let open = false; const preOpen = [];
     socket.on('data', (d) => { if (open) t.write(d); else preOpen.push(d); });
     t.on('open', () => { open = true; for (const d of preOpen.splice(0)) t.write(d); });
@@ -128,7 +167,7 @@ export function openTcpRelay(userId, targetHost, targetPort, listenPort) {
     socket.on('close', () => { try { t.close(); } catch { /* */ } });
     socket.on('error', () => { try { t.close(); } catch { /* */ } });
   });
-  server._ophqTarget = `${targetHost}:${targetPort}`;
+  server._ophqTarget = ident;
   server.on('error', (e) => console.error('relay', listenPort, e.message));
   server.listen(listenPort, '0.0.0.0');
   relays.set(listenPort, server);
@@ -139,7 +178,11 @@ export function closeRelay(listenPort) {
   if (s) { try { s.close(); } catch { /* */ } relays.delete(listenPort); }
 }
 
-export function connectorOnline(userId) {
+export function connectorOnline(userId, connectorId = null) {
+  if (connectorId != null && connectorId !== '') {
+    const s = streams.get(Number(connectorId));
+    return !!(s && s.userId === userId);
+  }
   for (const s of streams.values()) if (s.userId === userId) return true;
   return false;
 }
@@ -151,7 +194,7 @@ export function registerConnectorRoutes(app) {
   app.get('/api/connector/stream', async (req, reply) => {
     const conn = await getConnectorByToken(bearer(req));
     if (!conn) return reply.code(401).send({ error: 'invalid connector token' });
-    if (!verifyClientAuth(conn, req)) return reply.code(401).send({ error: 'client key authentication failed' });
+    if (!(await ensureClientAuth(conn, req))) return reply.code(401).send({ error: 'client key authentication failed — this connector is locked to a different client key; reset it in Settings → Connectors to pair a new client' });
     const raw = reply.raw;
     reply.hijack();
     // Keep the tunnel socket alive and never idle it out server-side; the agent

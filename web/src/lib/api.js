@@ -108,6 +108,10 @@ export const api = {
   deleteConnector: (id) => req('/connectors/' + id, { method: 'DELETE' }),
   // register (or clear) a connector's own public key for mutual auth
   setConnectorClientKey: (id, client_public_key) => req('/connectors/' + id, { method: 'PATCH', body: JSON.stringify({ client_public_key }) }),
+  // reset the locked (trust-on-first-use) client key so a new client can pair
+  resetConnectorKey: (id) => req('/connectors/' + id, { method: 'PATCH', body: JSON.stringify({ client_public_key: '' }) }),
+  // LAN printer discovery through a specific connector (site)
+  discoverConnector: (id, window_ms = 4000) => req('/connectors/' + id + '/discover', { method: 'POST', body: JSON.stringify({ window_ms }) }),
   testConnector: (body) => req('/connectors/test', { method: 'POST', body: JSON.stringify(body) }),
   // command-signing key pair (RSA-2048): control-plane holds the private key,
   // connector holds the public key and verifies every command.

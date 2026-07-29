@@ -513,6 +513,24 @@ app.patch('/api/connectors/:id', async (req, reply) => {
   return { ok: true, has_client_key: !!pem.trim() };
 });
 
+// LAN printer discovery through a specific connector (site). The scan runs on
+// that connector's own network — where the printers actually are — not on the
+// cloud engine, so it can see LAN-only printers the cloud never could.
+app.post('/api/connectors/:id/discover', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return reply.code(400).send({ error: 'bad id' });
+  if (!connectorOnline(user.id, id)) {
+    dbg('connector', 'discover requested but connector offline', { userId: user.id, connectorId: id });
+    return { connector_online: false, devices: [] };
+  }
+  const windowMs = Math.min(Math.max(Number(req.body?.window_ms) || 4000, 1000), 12000);
+  dbg('connector', 'discover -> connector', { userId: user.id, connectorId: id, window_ms: windowMs });
+  const r = await proxyViaConnector(user.id, { kind: 'discover', window_ms: windowMs }, windowMs + 8000, id);
+  dbg('connector', 'discover result', { userId: user.id, connectorId: id, found: (r.devices || []).length, error: r.error || null });
+  return { connector_online: true, devices: r.devices || [], error: r.error || null };
+});
+
 app.post('/api/connectors/test', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
   const b = req.body || {};
