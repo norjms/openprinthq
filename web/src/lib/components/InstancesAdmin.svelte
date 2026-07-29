@@ -133,11 +133,10 @@
     <h3>Instances</h3>
     {#if instances.length}
       <div class="tblwrap"><table>
-        <thead><tr><th>Subdomain</th><th>Owner</th><th>Status</th><th>Printers</th><th>Online</th><th>Active</th><th>Features</th><th>Storage quota</th><th>Created</th></tr></thead>
+        <thead><tr><th>Owner</th><th>Status</th><th>Printers</th><th>Online</th><th>Active</th><th>Features</th><th>Storage quota</th><th>Created</th></tr></thead>
         <tbody>
           {#each instances as i}
             <tr>
-              <td class="mono">{i.subdomain}</td>
               <td>{i.user_email}</td>
               <td><span class="chip {i.status === 'running' ? 'active' : ''}">{i.status}</span></td>
               <td>{i.stats?.printersTotal ?? 0}</td>
