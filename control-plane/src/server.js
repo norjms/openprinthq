@@ -8,6 +8,7 @@ import { randomBytes, createPublicKey } from 'node:crypto';
 import { migrate, upsertUser, getUserByEmail, getInstanceForUser, getCompatiblePresets,
   getCircuits, setCircuit, getAutomation, setAutomation,
   createConnector, listConnectors, deleteConnector, setConnectorClientKey,
+  getModelName, learnModelName, listModelNames, upsertModelNameForce, setModelNameLock, deleteModelName,
   getSigningPublic, setSigningKey, deleteSigningKey, getBatchById,
   getIntegrationToken, setIntegrationToken, getUserByIntegrationToken,
   getAppearance, setAppearance, getOwnerUserId,
@@ -569,10 +570,73 @@ app.post('/api/connectors/:id/discover', async (req, reply) => {
     return { connector_online: false, devices: [] };
   }
   const windowMs = Math.min(Math.max(Number(req.body?.window_ms) || 4000, 1000), 12000);
-  dbg('connector', 'discover -> connector', { userId: user.id, connectorId: id, window_ms: windowMs });
-  const r = await proxyViaConnector(user.id, { kind: 'discover', window_ms: windowMs }, windowMs + 8000, id);
-  dbg('connector', 'discover result', { userId: user.id, connectorId: id, found: (r.devices || []).length, error: r.error || null });
-  return { connector_online: true, devices: r.devices || [], error: r.error || null };
+  // Optional caller-supplied subnet to scan (defaults on the agent to its host
+  // LAN). Enforce a /24 max so a scan can't fan out across a huge range.
+  let subnet = (req.body?.subnet || '').toString().trim();
+  if (subnet) {
+    const m = subnet.match(/^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\/(\d{1,2})$/);
+    if (!m || Number(m[2]) < 24 || Number(m[2]) > 32) {
+      return reply.code(400).send({ error: 'subnet must be CIDR /24 or narrower (e.g. 192.168.1.0/24)' });
+    }
+  }
+  dbg('connector', 'discover -> connector', { userId: user.id, connectorId: id, window_ms: windowMs, subnet: subnet || 'auto' });
+  const job = { kind: 'discover', window_ms: windowMs };
+  if (subnet) job.subnet = subnet;
+  const r = await proxyViaConnector(user.id, job, windowMs + 8000, id);
+  // Apply the learned friendly-name mapping to discovered devices (display only).
+  const devices = await Promise.all((r.devices || []).map(async (d) => {
+    if (d.vendor && d.model) {
+      const hit = await getModelName(d.vendor, d.model);
+      if (hit?.friendly_name) return { ...d, friendly_model: hit.friendly_name };
+    }
+    return d;
+  }));
+  dbg('connector', 'discover result', { userId: user.id, connectorId: id, found: devices.length, error: r.error || null });
+  return { connector_online: true, devices, error: r.error || null };
+});
+
+// ---- printer model-name mapping (P4/P5) ---------------------------------
+// Public-ish lookup: given vendor+code, return the learned friendly name (used
+// by the add form to pre-fill Model). Requires an authenticated user.
+app.get('/api/model-names/lookup', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  const hit = await getModelName(req.query?.vendor, req.query?.code);
+  return { friendly_name: hit?.friendly_name || null, locked: !!hit?.locked };
+});
+// Learn a mapping when a user names a model on add (fill-when-empty; never
+// overwrites an existing or locked entry). Any authenticated user can teach.
+app.post('/api/model-names/learn', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  const { vendor, code, friendly_name } = req.body || {};
+  if (!vendor || !code || !friendly_name) return { ok: false };
+  const row = await learnModelName(vendor, code, friendly_name);
+  return { ok: true, mapping: row || null };
+});
+// Admin CRUD for the Printer Names tab (owner-only).
+app.get('/api/admin/model-names', async (req, reply) => {
+  const owner = await requireOwner(req, reply); if (!owner) return;
+  return { model_names: await listModelNames() };
+});
+app.put('/api/admin/model-names', async (req, reply) => {
+  const owner = await requireOwner(req, reply); if (!owner) return;
+  const { vendor, code, friendly_name, locked } = req.body || {};
+  if (!vendor || !code || !friendly_name) return reply.code(400).send({ error: 'vendor, code, friendly_name required' });
+  const row = await upsertModelNameForce(vendor, code, friendly_name, !!locked);
+  return { ok: true, mapping: row };
+});
+app.patch('/api/admin/model-names/lock', async (req, reply) => {
+  const owner = await requireOwner(req, reply); if (!owner) return;
+  const { vendor, code, locked } = req.body || {};
+  const row = await setModelNameLock(vendor, code, !!locked);
+  if (!row) return reply.code(404).send({ error: 'mapping not found' });
+  return { ok: true, mapping: row };
+});
+app.delete('/api/admin/model-names', async (req, reply) => {
+  const owner = await requireOwner(req, reply); if (!owner) return;
+  const { vendor, code } = req.body || {};
+  if (!vendor || !code) return reply.code(400).send({ error: 'vendor, code required' });
+  await deleteModelName(vendor, code);
+  return { ok: true };
 });
 
 app.post('/api/connectors/test', async (req, reply) => {

@@ -59,19 +59,26 @@
     try { const d = await api.printerCatalog({ limit: 2000 }); catalog = d.printers || []; }
     catch (e) { catalogErr = e.message || 'catalog unavailable'; }
     finally { catalogLoading = false; }
-    try { deploymentMode = (await api.pubConfig()).deployment_mode || 'cloud'; } catch { /* */ }
+    try { deploymentMode = (await api.pubConfig()).deployment_mode || 'both'; } catch { /* */ }
     try { const cs = await api.connectors(); connectors = Array.isArray(cs) ? cs : (cs?.items || []); } catch { /* */ }
     // Deep-link from the Connectors "Scan LAN → Add" flow.
     try {
       const q = new URLSearchParams(window.location.search);
       const vendor = q.get('vendor'); const ip = q.get('ip');
       const conn = q.get('connector'); const serial = q.get('serial'); const model = q.get('model');
+      const code = q.get('code');   // raw internal model code (e.g. Bambu 'O1D')
       if (conn) siteConnectorId = conn;
       if (vendor && vendorByKey[vendor]) {
         pickVendor(vendorByKey[vendor]);
         if (ip) values.ip_address = ip;
         if (serial) values.serial_number = serial;
-        if (model) values.model = model;
+        // Remember the raw code so we can learn code->friendly on submit.
+        modelCode = code || '';
+        // Prefer a learned friendly name; else use whatever came in (may be the raw code).
+        if (code) {
+          try { const r = await api.lookupModelName(vendor, code); if (r?.friendly_name) { values.model = r.friendly_name; } else if (model) { values.model = model; } }
+          catch { if (model) values.model = model; }
+        } else if (model) { values.model = model; }
         if (ip) pickedIp = ip;
       }
     } catch { /* */ }
@@ -113,11 +120,12 @@
   let scanned = $state(false);
   let scanErr = $state(null);
   let pickedIp = $state(null);
+  let modelCode = $state('');   // raw discovered model code, for learning code->friendly on add
   let existing = $state([]);
   let hiddenCount = $state(0);
 
   // ---- sites (local connectors) ----
-  let deploymentMode = $state('cloud');
+  let deploymentMode = $state('both');
   let connectors = $state([]);           // [{id,name,online}]
   let siteConnectorId = $state('');      // '' = Direct (same network as the engine)
   let siteScanning = $state(false);
@@ -220,6 +228,11 @@
     }
     try {
       const created = await api.engine('/api/v1/printers/', { method: 'POST', body: JSON.stringify(body) });
+      // Teach the platform this vendor+code -> friendly-name mapping (fill-when-empty;
+      // never overwrites a locked or existing entry). Only when we know the raw code.
+      if (modelCode && values.model && selected?.ct) {
+        try { await api.learnModelName(selected.ct, modelCode, values.model); } catch { /* non-fatal */ }
+      }
       // Route this printer through the chosen site (connector). Empty = Direct.
       if (siteConnectorId) {
         const pid = created?.id ?? created?.printer_id;
