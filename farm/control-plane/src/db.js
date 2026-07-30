@@ -133,6 +133,22 @@ export async function migrate() {
     );
   `);
   await pool.query(`ALTER TABLE connectors ADD COLUMN IF NOT EXISTS client_public_pem TEXT;`);
+  await pool.query(`ALTER TABLE connectors ADD COLUMN IF NOT EXISTS host_cidr TEXT;`);
+
+  // Platform-wide learned mapping of a vendor's internal model code (e.g. Bambu
+  // SSDP devmodel "O1D") to a friendly marketing name ("H2D"). Filled when a user
+  // types a name on add (fill-when-empty), and lockable by a global admin so user
+  // input can't overwrite a curated name. Keyed by (vendor, code).
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS printer_model_names (
+      vendor       TEXT NOT NULL,
+      code         TEXT NOT NULL,
+      friendly_name TEXT NOT NULL,
+      locked       BOOLEAN NOT NULL DEFAULT false,
+      updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (vendor, code)
+    );
+  `);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS signing_keys (
@@ -286,9 +302,63 @@ export async function createConnector(userId, name) {
      RETURNING id, name, token, created_at`, [userId, (name || 'connector').slice(0, 60), token]);
   return rows[0];
 }
+// ---- connector host CIDR (P2: reported host LAN subnet) ------------------
+export async function setConnectorHostCidr(connectorId, cidr) {
+  await pool.query('UPDATE connectors SET host_cidr = $2 WHERE id = $1', [connectorId, cidr || null]);
+}
+
+// ---- printer model-name mapping (P4/P5) ---------------------------------
+function normModelKey(vendor, code) {
+  return [String(vendor || '').trim().toLowerCase(), String(code || '').trim().toUpperCase()];
+}
+export async function listModelNames() {
+  const { rows } = await pool.query('SELECT vendor, code, friendly_name, locked, updated_at FROM printer_model_names ORDER BY vendor, code');
+  return rows;
+}
+export async function getModelName(vendor, code) {
+  const [v, c] = normModelKey(vendor, code);
+  if (!v || !c) return null;
+  const { rows } = await pool.query('SELECT friendly_name, locked FROM printer_model_names WHERE vendor = $1 AND code = $2', [v, c]);
+  return rows[0] || null;
+}
+// Fill-when-empty: only inserts a mapping if none exists (and never overwrites a
+// locked one). Returns the effective row. Admin edits use upsertModelNameForce.
+export async function learnModelName(vendor, code, friendly) {
+  const [v, c] = normModelKey(vendor, code);
+  const f = String(friendly || '').trim();
+  if (!v || !c || !f) return null;
+  const { rows } = await pool.query(
+    `INSERT INTO printer_model_names (vendor, code, friendly_name)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (vendor, code) DO NOTHING
+     RETURNING vendor, code, friendly_name, locked`, [v, c, f]);
+  if (rows[0]) return rows[0];
+  return (await getModelName(v, c));
+}
+export async function upsertModelNameForce(vendor, code, friendly, locked) {
+  const [v, c] = normModelKey(vendor, code);
+  const f = String(friendly || '').trim();
+  if (!v || !c || !f) return null;
+  const { rows } = await pool.query(
+    `INSERT INTO printer_model_names (vendor, code, friendly_name, locked, updated_at)
+     VALUES ($1, $2, $3, $4, now())
+     ON CONFLICT (vendor, code) DO UPDATE SET friendly_name = EXCLUDED.friendly_name, locked = EXCLUDED.locked, updated_at = now()
+     RETURNING vendor, code, friendly_name, locked`, [v, c, f, !!locked]);
+  return rows[0];
+}
+export async function setModelNameLock(vendor, code, locked) {
+  const [v, c] = normModelKey(vendor, code);
+  const { rows } = await pool.query('UPDATE printer_model_names SET locked = $3, updated_at = now() WHERE vendor = $1 AND code = $2 RETURNING vendor, code, friendly_name, locked', [v, c, !!locked]);
+  return rows[0] || null;
+}
+export async function deleteModelName(vendor, code) {
+  const [v, c] = normModelKey(vendor, code);
+  await pool.query('DELETE FROM printer_model_names WHERE vendor = $1 AND code = $2', [v, c]);
+}
+
 export async function listConnectors(userId) {
   const { rows } = await pool.query(
-    'SELECT id, name, last_seen, created_at, (client_public_pem IS NOT NULL) AS has_client_key FROM connectors WHERE user_id = $1 ORDER BY id', [userId]);
+    'SELECT id, name, last_seen, created_at, host_cidr, (client_public_pem IS NOT NULL) AS has_client_key FROM connectors WHERE user_id = $1 ORDER BY id', [userId]);
   return rows;
 }
 export async function deleteConnector(userId, id) {
