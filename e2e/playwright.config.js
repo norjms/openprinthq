@@ -28,5 +28,17 @@ export default defineConfig({
     viewport: { width: 1280, height: 800 },
     launchOptions: process.env.PW_CHROMIUM ? { executablePath: process.env.PW_CHROMIUM } : {}
   },
-  projects: [{ name: 'chromium' }]
+  projects: [
+    // Public, unauthenticated surface (existing coverage).
+    { name: 'chromium', testIgnore: /.*\.auth\.spec\.js/ },
+    // One-time programmatic login, produces the shared storage state.
+    { name: 'setup', testMatch: /auth\.setup\.js/ },
+    // Authenticated app flows: reuse the dev-login session, depend on setup.
+    {
+      name: 'authenticated',
+      testMatch: /.*\.auth\.spec\.js/,
+      dependencies: ['setup'],
+      use: { storageState: 'playwright/.auth/user.json' }
+    }
+  ]
 });

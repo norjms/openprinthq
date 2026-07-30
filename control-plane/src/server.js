@@ -44,6 +44,11 @@ const ENGINE_HOST = process.env.OPHQ_ENGINE_HOST || '10.10.10.109';
 const GATEWAY_SECRET = process.env.OPHQ_GATEWAY_SECRET || '';
 // Dev sign-in is disabled unless explicitly enabled (production = SSO only).
 const ALLOW_DEV_LOGIN = !!process.env.OPHQ_ALLOW_DEV_LOGIN;
+// Optional shared secret for dev-login. When set, /api/auth/dev-login also
+// requires a matching `x-ophq-dev-login` header, so enabling dev sign-in on a
+// reachable non-prod tier is "bypass WITH a test key" rather than wide open.
+// Empty = no extra gate (backward compatible). Never enable dev-login on prod.
+const DEV_LOGIN_SECRET = process.env.OPHQ_DEV_LOGIN_SECRET || '';
 
 function engineBase(inst) {
   // Engines are on the internal Docker network, not published to the host —
@@ -130,6 +135,9 @@ app.get('/api/auth/login', async (req, reply) => {
 app.post('/api/auth/dev-login', async (req, reply) => {
   if (!ALLOW_DEV_LOGIN) {
     return reply.code(403).send({ error: 'dev sign-in is disabled — use SSO' });
+  }
+  if (DEV_LOGIN_SECRET && req.headers['x-ophq-dev-login'] !== DEV_LOGIN_SECRET) {
+    return reply.code(403).send({ error: 'dev sign-in requires a valid test key' });
   }
   const email = (req.body?.email || '').trim().toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
