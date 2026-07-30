@@ -226,6 +226,11 @@
       const val = values[f.key];
       if (val !== undefined && val !== '') body[f.key] = f.type === 'number' ? Number(val) : val;
     }
+    // Connector-routed (remote-LAN) printers aren't reachable directly from a
+    // cloud-hosted engine at create time — the relay is stood up AFTER creation.
+    // Tell the engine to skip its connect pre-flight so the add can succeed; the
+    // connection is validated once the route is active below.
+    if (siteConnectorId) body.defer_connection_test = true;
     try {
       const created = await api.engine('/api/v1/printers/', { method: 'POST', body: JSON.stringify(body) });
       // Teach the platform this vendor+code -> friendly-name mapping (fill-when-empty;
