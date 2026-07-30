@@ -56,6 +56,13 @@ export const api = {
   pubConfig: () => req('/pub/config'),
   adminSettings: () => req('/admin/settings'),
   saveAdminSettings: (body) => req('/admin/settings', { method: 'PUT', body: JSON.stringify(body) }),
+  // ---- printer model-name mapping (friendly names for internal codes) ----
+  lookupModelName: (vendor, code) => req('/model-names/lookup?vendor=' + encodeURIComponent(vendor) + '&code=' + encodeURIComponent(code)),
+  learnModelName: (vendor, code, friendly_name) => req('/model-names/learn', { method: 'POST', body: JSON.stringify({ vendor, code, friendly_name }) }),
+  adminModelNames: () => req('/admin/model-names'),
+  saveModelName: (body) => req('/admin/model-names', { method: 'PUT', body: JSON.stringify(body) }),
+  lockModelName: (vendor, code, locked) => req('/admin/model-names/lock', { method: 'PATCH', body: JSON.stringify({ vendor, code, locked }) }),
+  deleteModelName: (vendor, code) => req('/admin/model-names', { method: 'DELETE', body: JSON.stringify({ vendor, code }) }),
   signup: (body) => req('/pub/signup', { method: 'POST', body: JSON.stringify(body) }),
   // Owner-only admin (invites, users, instances, usage).
   adminSummary: () => req('/admin/summary'),
@@ -114,7 +121,7 @@ export const api = {
   // reset the locked (trust-on-first-use) client key so a new client can pair
   resetConnectorKey: (id) => req('/connectors/' + id, { method: 'PATCH', body: JSON.stringify({ client_public_key: '' }) }),
   // LAN printer discovery through a specific connector (site)
-  discoverConnector: (id, window_ms = 4000) => req('/connectors/' + id + '/discover', { method: 'POST', body: JSON.stringify({ window_ms }) }),
+  discoverConnector: (id, window_ms = 4000, subnet = '') => req('/connectors/' + id + '/discover', { method: 'POST', body: JSON.stringify(subnet ? { window_ms, subnet } : { window_ms }) }),
   testConnector: (body) => req('/connectors/test', { method: 'POST', body: JSON.stringify(body) }),
   // command-signing key pair (RSA-2048): control-plane holds the private key,
   // connector holds the public key and verifies every command.

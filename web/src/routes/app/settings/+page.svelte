@@ -7,6 +7,7 @@
   import Connectors from '$lib/components/Connectors.svelte';
   import LookAndFeel from '$lib/components/LookAndFeel.svelte';
   import GlobalAdmin from '$lib/components/GlobalAdmin.svelte';
+  import PrinterNames from '$lib/components/PrinterNames.svelte';
   import PageTitle from '$lib/components/PageTitle.svelte';
 
   // Top-level settings tab (General account/instance settings vs Look & Feel).
@@ -57,9 +58,9 @@
       cloud = await api.cloudStatus().catch(() => null);
       await loadToken();
     } catch (e) { err = e.message; }
-    try { deploymentMode = (await api.pubConfig()).deployment_mode || 'cloud'; } catch { /* */ }
+    try { deploymentMode = (await api.pubConfig()).deployment_mode || 'both'; } catch { /* */ }
   });
-  let deploymentMode = $state('cloud');
+  let deploymentMode = $state('both');
 
   let cloud = $state(null);
 
@@ -172,13 +173,19 @@ scrape_configs:
 
 <div class="pagetabs" role="tablist" aria-label="Settings sections">
   <button role="tab" aria-selected={tab === 'general'} class:on={tab === 'general'} onclick={() => (tab = 'general')}>General</button>
+  <button role="tab" aria-selected={tab === 'printers'} class:on={tab === 'printers'} onclick={() => (tab = 'printers')}>Printers</button>
   <button role="tab" aria-selected={tab === 'look'} class:on={tab === 'look'} onclick={() => (tab = 'look')}>Look &amp; Feel</button>
   {#if isOwner}
     <button role="tab" aria-selected={tab === 'admin'} class:on={tab === 'admin'} onclick={() => (tab = 'admin')}>Global Admin</button>
+    <button role="tab" aria-selected={tab === 'names'} class:on={tab === 'names'} onclick={() => (tab = 'names')}>Printer Names</button>
   {/if}
 </div>
 
-{#if tab === 'look'}
+{#if tab === 'printers'}
+  <Connectors />
+{:else if tab === 'names' && isOwner}
+  <PrinterNames />
+{:else if tab === 'look'}
   <LookAndFeel />
 {:else if tab === 'admin' && isOwner}
   <GlobalAdmin />
@@ -303,9 +310,7 @@ scrape_configs:
 
 <ApiKeys />
 
-{#if deploymentMode === 'cloud'}
-  <Connectors />
-{/if}
+
 
 <div class="card card-pad more">
   <span class="eyebrow">Coming soon</span>
