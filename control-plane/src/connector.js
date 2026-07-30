@@ -10,7 +10,7 @@
 import crypto from 'node:crypto';
 import net from 'node:net';
 import { EventEmitter } from 'node:events';
-import { getConnectorByToken, touchConnector, setConnectorClientKey } from './db.js';
+import { getConnectorByToken, touchConnector, setConnectorClientKey, setConnectorHostCidr } from './db.js';
 import { signJobIfKeyed } from './signing.js';
 import { dbg } from './debuglog.js';
 
@@ -210,6 +210,11 @@ export function registerConnectorRoutes(app) {
     });
     raw.write(': connected\n\n');
     const name = (req.query?.name || conn.name || 'connector').toString();
+    // The agent reports its Docker host's LAN CIDR (network_mode: host, so it
+    // sees the real host interfaces). Persist it so the UI can default the scan
+    // subnet field. Validated loosely here; the UI enforces the /24 cap.
+    const hostCidr = (req.query?.host_cidr || '').toString().slice(0, 64);
+    if (hostCidr) { setConnectorHostCidr(conn.id, hostCidr).catch(() => {}); }
     const heartbeat = setInterval(() => { try { raw.write(': ping\n\n'); } catch { /* closed */ } }, 20000);
     streams.set(conn.id, { raw, userId: conn.user_id, connectorId: conn.id, name, lastSeen: Date.now(), heartbeat });
     dbg('connector', 'stream CONNECTED', { connectorId: conn.id, userId: conn.user_id, name, keyed: !!conn.client_public_pem });
