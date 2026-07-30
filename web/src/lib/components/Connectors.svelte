@@ -101,10 +101,28 @@
   let scanBusy = $state(null);       // connector id being scanned
   let scanResults = $state({});      // connector id -> devices[]
   let scanMsg = $state({});          // connector id -> message
+  let subnets = $state({});          // connector id -> editable subnet CIDR
+
+  // Default the subnet field to the connector's reported host /24 (falls back to
+  // a friendly example). Only computed once per connector; the user can edit it.
+  function subnetFor(c) {
+    if (subnets[c.id] != null) return subnets[c.id];
+    const def = normalizeCidr(c.host_cidr) || '';
+    return def;
+  }
+  function normalizeCidr(v) {
+    if (!v) return '';
+    const m = String(v).match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?:\/(\d{1,2}))?$/);
+    if (!m) return '';
+    // force a /24 base regardless of what was reported (scan is capped at /24)
+    return `${m[1]}.${m[2]}.${m[3]}.0/24`;
+  }
   async function scanSite(c) {
+    const subnet = normalizeCidr(subnetFor(c)) || '';
+    if (subnetFor(c) && !subnet) { scanMsg = { ...scanMsg, [c.id]: 'Enter a subnet like 192.168.1.0/24 (/24 max).' }; return; }
     scanBusy = c.id; scanMsg = { ...scanMsg, [c.id]: '' };
     try {
-      const r = await api.discoverConnector(c.id, 8000);
+      const r = await api.discoverConnector(c.id, 8000, subnet);
       if (!r.connector_online) { scanMsg = { ...scanMsg, [c.id]: 'This connector is offline — start the Cloud Client on that site, then scan again.' }; scanResults = { ...scanResults, [c.id]: [] }; }
       else {
         scanResults = { ...scanResults, [c.id]: r.devices || [] };
@@ -213,7 +231,8 @@
             <div class="cmeta muted mono">last seen {fmt(c.last_seen)}</div>
           </div>
           <div class="flex gap">
-            <button class="btn btn-ghost btn-xs" onclick={() => scanSite(c)} disabled={scanBusy === c.id || !c.online} title={c.online ? 'Scan this site’s LAN for printers' : 'Connector offline'}>{scanBusy === c.id ? 'Scanning…' : 'Scan LAN'}</button>
+            <input class="input subnet mono" placeholder="192.168.1.0/24" value={subnetFor(c)} oninput={(e) => (subnets = { ...subnets, [c.id]: e.target.value })} title="Subnet to scan (defaults to the client's host network; /24 max)" disabled={!c.online} />
+            <button class="btn btn-ghost btn-xs" onclick={() => scanSite(c)} disabled={scanBusy === c.id || !c.online} title={c.online ? 'Scan the selected subnet for printers' : 'Connector offline'}>{scanBusy === c.id ? 'Scanning…' : 'Scan LAN'}</button>
             {#if c.has_client_key}
               {#if confirmReset === c.id}
                 <button class="btn btn-danger btn-xs" onclick={() => resetKey(c)} disabled={resetBusy}>{resetBusy ? '…' : 'Reset key'}</button><button class="btn btn-ghost btn-xs" onclick={() => (confirmReset = null)} aria-label="Cancel">✕</button>
@@ -238,9 +257,9 @@
               <div class="srhead muted tiny">Found on this site's LAN:</div>
               {#each scanResults[c.id] as d}
                 <div class="srrow">
-                  <span class="srn">{d.name || 'Printer'}{#if d.model}<span class="muted mono"> · {d.model}</span>{/if}</span>
+                  <span class="srn">{d.name || 'Printer'}</span>
                   <span class="muted mono tiny">{d.ip}{#if d.serial} · {d.serial}{/if} · {d.vendor}</span>
-                  <a class="btn btn-ghost btn-xs" href={`/app/printers/add?ip=${encodeURIComponent(d.ip)}&vendor=${encodeURIComponent(d.vendor)}&connector=${c.id}&serial=${encodeURIComponent(d.serial||'')}&model=${encodeURIComponent(d.model||'')}`}>Add</a>
+                  <a class="btn btn-ghost btn-xs" href={`/app/printers/add?ip=${encodeURIComponent(d.ip)}&vendor=${encodeURIComponent(d.vendor)}&connector=${c.id}&serial=${encodeURIComponent(d.serial||'')}&model=${encodeURIComponent(d.friendly_model||d.model||'')}&code=${encodeURIComponent(d.model||'')}`}>Add</a>
                 </div>
               {/each}
             {/if}
@@ -307,6 +326,7 @@
   .st { font-size: 0.78rem; font-weight: 400; }
   .cmeta { font-size: 0.72rem; margin-top: 0.15rem; }
   .err { color: var(--ophq-danger); font-size: 0.88rem; }
+  .subnet { width: 9.5rem; font-size: 0.78rem; padding: 0.2rem 0.45rem; }
   .input.invalid { border-color: var(--ophq-danger); }
   .lock { font-size: 0.68rem; color: var(--ophq-success); border: 1px solid rgba(53,196,107,0.3); background: rgba(53,196,107,0.08); padding: 0.05rem 0.4rem; border-radius: 999px; }
   .lock.open { color: var(--ophq-muted); border-color: var(--ophq-border); background: transparent; }
