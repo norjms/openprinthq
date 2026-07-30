@@ -11,6 +11,7 @@
   let loading = $state(true);
   let error = $state(null);
   let name = $state('');
+  let nameError = $state(null);
   let creating = $state(false);
   let created = $state(null);   // { name, token } shown once
   let copied = $state(false);
@@ -114,7 +115,9 @@
   }
 
   async function create() {
-    if (!name.trim() || creating) return;
+    if (creating) return;
+    if (!name.trim()) { nameError = 'Name is required'; return; }
+    nameError = null;
     creating = true; created = null;
     try { created = await api.createConnector(name.trim()); name = ''; await load(); }
     catch (e) { error = e.message || 'could not create connector'; }
@@ -141,9 +144,19 @@
   </div>
 
   <div class="create">
-    <input class="input" placeholder="Connector name (e.g. home-lab)" bind:value={name} onkeydown={(e) => e.key === 'Enter' && create()} />
-    <button class="btn btn-primary btn-sm" onclick={create} disabled={creating || !name.trim()}>{creating ? 'Creating…' : '+ New connector'}</button>
+    <input
+      class="input"
+      class:invalid={nameError}
+      placeholder="Connector name (e.g. home-lab)"
+      bind:value={name}
+      aria-invalid={nameError ? 'true' : undefined}
+      aria-describedby={nameError ? 'connector-name-error' : undefined}
+      oninput={() => { if (nameError) nameError = null; }}
+      onkeydown={(e) => e.key === 'Enter' && create()}
+    />
+    <button class="btn btn-primary btn-sm" onclick={create} disabled={creating}>{creating ? 'Creating…' : '+ New connector'}</button>
   </div>
+  {#if nameError}<p class="err" id="connector-name-error" role="alert">{nameError}</p>{/if}
 
   {#if created}
     <div class="newtok">
@@ -294,6 +307,7 @@
   .st { font-size: 0.78rem; font-weight: 400; }
   .cmeta { font-size: 0.72rem; margin-top: 0.15rem; }
   .err { color: var(--ophq-danger); font-size: 0.88rem; }
+  .input.invalid { border-color: var(--ophq-danger); }
   .lock { font-size: 0.68rem; color: var(--ophq-success); border: 1px solid rgba(53,196,107,0.3); background: rgba(53,196,107,0.08); padding: 0.05rem 0.4rem; border-radius: 999px; }
   .lock.open { color: var(--ophq-muted); border-color: var(--ophq-border); background: transparent; }
   .scanres { margin: -0.2rem 0 0.3rem; padding: 0.6rem 0.8rem; border: 1px solid var(--ophq-border); border-top: none; border-radius: 0 0 var(--radius-sm) var(--radius-sm); background: var(--ophq-bg-2); }
