@@ -3,6 +3,10 @@
 // Requires owner auth (dev-login user is the first user => owner on a fresh tier).
 import { test, expect } from '@playwright/test';
 
+// deployment_mode is platform-wide global state, so these tests must not race:
+// run them serially and each sets the mode it needs immediately before asserting.
+test.describe.configure({ mode: 'serial' });
+
 // Restore the mode to 'both' after the suite so manual testing isn't disturbed.
 test.afterAll(async ({ request }) => {
   await request.put('/api/admin/settings', { data: { deployment_mode: 'both' } }).catch(() => {});
@@ -34,17 +38,22 @@ test.describe('hosting mode — Printers page layout', () => {
   test('local mode hides the connect section behind a reveal', async ({ request, page }) => {
     await setMode(request, 'local');
     await page.goto('/app/printers');
+    // Wait for the SPA to hydrate + fetch deployment_mode (async) before asserting
+    // the mode-specific layout. The heading confirms the page shell is up.
+    await expect(page.getByRole('heading', { name: 'Printers', exact: true })).toBeVisible();
+    // The connect/download section must be hidden in local mode.
+    await expect(page.getByText(/Download .msi installer/i)).toHaveCount(0);
     // The reveal button is the local-mode affordance for remote printers.
     const reveal = page.getByRole('button', { name: /not on the same network/i });
-    await expect(reveal).toBeVisible();
+    await expect(reveal).toBeVisible({ timeout: 15000 });
     await reveal.click();
-    // After revealing, a Hide button appears.
     await expect(page.getByRole('button', { name: /^Hide$/ })).toBeVisible();
   });
 
   test('remote mode gates the add button until a client pairs', async ({ request, page }) => {
     await setMode(request, 'remote');
     await page.goto('/app/printers');
+    await expect(page.getByRole('heading', { name: 'Printers', exact: true })).toBeVisible();
     // Whether add is enabled depends on paired clients. Assert the two coherent
     // states rather than a fixed one, since dev may or may not have a paired client.
     const connectors = await (await request.get('/api/connectors')).json();
@@ -60,6 +69,7 @@ test.describe('hosting mode — Printers page layout', () => {
   test('both mode exposes both add and connect paths', async ({ request, page }) => {
     await setMode(request, 'both');
     await page.goto('/app/printers');
-    await expect(page.getByRole('link', { name: /Add (printer|your first printer)/i }).first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Printers', exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: /Add (printer|your first printer)/i }).first()).toBeVisible({ timeout: 15000 });
   });
 });
