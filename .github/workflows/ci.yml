@@ -1,0 +1,79 @@
+name: ci
+
+on:
+  push:
+    branches: [dev, test, main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: Web (SvelteKit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install
+        working-directory: web
+        run: npm ci --no-audit --no-fund
+      - name: Build
+        working-directory: web
+        run: npm run build
+
+  control-plane:
+    name: Control plane (Fastify)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      # No package-lock.json committed, so npm ci is not usable here.
+      - name: Install
+        working-directory: control-plane
+        run: npm install --no-audit --no-fund
+      - name: Syntax check
+        working-directory: control-plane
+        run: |
+          set -euo pipefail
+          find src -name '*.js' -o -name '*.mjs' -print0 \
+            | xargs -0 -r -n1 node --check
+      - name: Boot check
+        working-directory: control-plane
+        run: node --check src/server.js
+
+  images:
+    name: Images build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: web
+            context: web
+          - name: control-plane
+            context: control-plane
+          - name: router
+            context: infra/router
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build ${{ matrix.name }}
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          push: false
+          tags: openprinthq/${{ matrix.name }}:ci
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
