@@ -303,20 +303,33 @@ app.get('/api/admin/users', async (req, reply) => {
   const owner = await requireOwner(req, reply); if (!owner) return;
   return { users: await listUsers() };
 });
-// Deployment-wide settings (owner-only). Currently just deployment_mode.
+// Deployment-wide settings (owner-only). `deployment_mode` is one of:
+//   'local'  - printers are reached directly on the engine's own LAN; the Cloud
+//              Client download + connectors UI are hidden.
+//   'remote' - printers live on a different network reached via a Cloud Client
+//              connector; add-printer is gated until a client pairs.
+//   'both'   - both local and remote printers can be added.
+// Legacy value 'cloud' is treated as 'remote'; anything else falls back to 'both'.
+const DEPLOYMENT_MODES = ['local', 'remote', 'both'];
+function normalizeDeploymentMode(v) {
+  const m = String(v || '').toLowerCase();
+  if (m === 'cloud') return 'remote';
+  return DEPLOYMENT_MODES.includes(m) ? m : 'both';
+}
+async function getDeploymentMode() {
+  return normalizeDeploymentMode(await getAppSetting('deployment_mode', 'both'));
+}
+
 app.get('/api/admin/settings', async (req, reply) => {
   const owner = await requireOwner(req, reply); if (!owner) return;
-  const mode = (await getAppSetting('deployment_mode', 'cloud')) || 'cloud';
-  return { deployment_mode: mode === 'local' ? 'local' : 'cloud' };
+  return { deployment_mode: await getDeploymentMode() };
 });
 app.put('/api/admin/settings', async (req, reply) => {
   const owner = await requireOwner(req, reply); if (!owner) return;
   if ('deployment_mode' in (req.body || {})) {
-    const m = String(req.body.deployment_mode) === 'local' ? 'local' : 'cloud';
-    await setAppSetting('deployment_mode', m);
+    await setAppSetting('deployment_mode', normalizeDeploymentMode(req.body.deployment_mode));
   }
-  const mode = (await getAppSetting('deployment_mode', 'cloud')) || 'cloud';
-  return { ok: true, deployment_mode: mode };
+  return { ok: true, deployment_mode: await getDeploymentMode() };
 });
 const FEATURES = [
   { key: 'genfilament', name: 'GenFilament', desc: 'AI filament profile generator for OrcaSlicer / Bambu Studio', paid: true }
@@ -397,8 +410,7 @@ app.get('/api/pub/signup-info', async () => {
 // "via connector"; local hides them (the engine is on the printers' LAN, so it
 // reaches them directly). Public so the UI can shape itself before login.
 app.get('/api/pub/config', async () => {
-  const mode = (await getAppSetting('deployment_mode', 'cloud')) || 'cloud';
-  return { deployment_mode: mode === 'local' ? 'local' : 'cloud' };
+  return { deployment_mode: await getDeploymentMode() };
 });
 // Public SITE branding = the owner's branding, so the logged-out landing page can
 // show the host's configured logo / site name. Unauthenticated (npmplus /api/pub/,
