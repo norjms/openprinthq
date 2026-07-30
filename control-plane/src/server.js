@@ -887,6 +887,52 @@ app.get('/api/camera/ice', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
   return { iceServers: await iceServers() };
 });
+// ---- agent-local camera relay (Option A; OctoEverywhere-style) ----------
+// For connector-routed printers the cloud engine can't reach the printer's LAN
+// camera. Instead the on-LAN agent runs go2rtc locally (Bambu RTSPS) or fetches
+// the webcam URL locally (Klipper), and relays a JPEG frame up through the
+// connector tunnel. The engine's external_camera_url is pointed at the INTERNAL
+// endpoint below (gateway-secret gated, keyed by userId+printerId) so the
+// engine's existing external-camera path just works. Architecture credit:
+// OctoEverywhere (https://github.com/QuinnDamerell/OctoPrint-OctoEverywhere, AGPL-3.0).
+async function relayCameraFrame(userId, pid, reply) {
+  const autoAll = await getAutomation(userId);
+  const connectorId = autoAll[pid]?.connector_id ?? null;
+  if (!connectorId) return reply.code(409).send({ error: 'printer is not connector-routed' });
+  const inst = await getInstanceForUser(userId);
+  const base = engineBase(inst);
+  if (!base) return reply.code(409).send({ error: 'no running instance' });
+  let printer;
+  try { printer = await (await fetch(`${base}/api/v1/printers/${pid}`)).json(); }
+  catch { return reply.code(404).send({ error: 'printer not found' }); }
+  const vendor = printer.connection_type;
+  const directHost = autoAll[pid]?.direct_host || printer.ip_address;
+  const job = vendor === 'bambu'
+    ? { kind: 'camera-frame', vendor, name: `p${pid}`, printer_id: pid }
+    : { kind: 'camera-frame', vendor, snapshot_url: `http://${directHost}/webcam/?action=snapshot`, printer_id: pid };
+  const r = await proxyViaConnector(userId, job, 12000, connectorId);
+  if (!r || r.status !== 200 || !r.body) return reply.code(r?.status || 502).send({ error: r?.error || 'frame relay failed' });
+  reply.header('content-type', (r.headers && r.headers['content-type']) || 'image/jpeg');
+  reply.header('cache-control', 'no-cache, no-store, must-revalidate');
+  return reply.send(Buffer.from(r.body, 'base64'));
+}
+// Internal (engine-facing): the printer's external_camera_url points here.
+app.get('/api/internal/camera-relay/:userId/:printerId/frame', async (req, reply) => {
+  const gatewayOk = !GATEWAY_SECRET || req.headers['x-ophq-gateway'] === GATEWAY_SECRET;
+  if (!gatewayOk) return reply.code(403).send({ error: 'forbidden' });
+  const userId = Number(String(req.params.userId).replace(/[^0-9]/g, ''));
+  const pid = Number(String(req.params.printerId).replace(/[^0-9]/g, ''));
+  if (!userId || !pid) return reply.code(400).send({ error: 'bad id' });
+  return relayCameraFrame(userId, pid, reply);
+});
+// Browser-facing (authed): direct frame fetch for the logged-in user.
+app.get('/api/camera-relay/:printerId/frame', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  const pid = Number(String(req.params.printerId).replace(/[^0-9]/g, ''));
+  if (!pid) return reply.code(400).send({ error: 'bad printer id' });
+  return relayCameraFrame(user.id, pid, reply);
+});
+
 app.post('/api/camera/webrtc/:printerId', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
   const pid = String(req.params.printerId).replace(/[^0-9]/g, '');
