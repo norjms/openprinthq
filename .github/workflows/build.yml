@@ -1,0 +1,88 @@
+# Build the product images once on dev and publish them to GHCR.
+#
+# Images are multi-arch (amd64 + arm64) so the arm64 production host can pull
+# the same artifact instead of rebuilding natively. Promotion retags this exact
+# digest dev -> test -> prod; nothing is ever rebuilt per tier.
+name: build
+
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: build-dev
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: ${{ matrix.name }} -> GHCR
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: web
+            context: web
+          - name: control-plane
+            context: control-plane
+          - name: router
+            context: infra/router
+    outputs:
+      sha: ${{ steps.meta.outputs.short }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: meta
+        run: echo "short=$(echo ${GITHUB_SHA} | cut -c1-7)" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: false
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/openprinthq-${{ matrix.name }}:dev
+            ghcr.io/${{ github.repository_owner }}/openprinthq-${{ matrix.name }}:sha-${{ steps.meta.outputs.short }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+  notify:
+    name: Trigger dev deploy
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      TOKEN: ${{ secrets.DEPLOY_DISPATCH_TOKEN }}
+    steps:
+      # No-ops until a fine-grained PAT scoped to openprinthq-terraform
+      # (contents:read + actions:write) is added as DEPLOY_DISPATCH_TOKEN.
+      - name: Dispatch to deploy pipeline
+        if: env.TOKEN != ''
+        run: |
+          set -euo pipefail
+          curl -fsS -X POST \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/${{ github.repository_owner }}/openprinthq-terraform/dispatches \
+            -d "{\"event_type\":\"deploy-dev\",\"client_payload\":{\"sha\":\"${GITHUB_SHA}\",\"short\":\"${{ needs.build.outputs.sha }}\"}}"
+          echo "Dispatched deploy-dev for ${GITHUB_SHA}"
+
+      - name: Skipped
+        if: env.TOKEN == ''
+        run: echo "::notice::DEPLOY_DISPATCH_TOKEN not set - images published, deploy not triggered."
