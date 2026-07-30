@@ -44,11 +44,27 @@
     }
   }
 
-  let deploymentMode = $state('cloud');
+  let deploymentMode = $state('both');
+  let connectors = $state([]);            // OpenPrintHQ client apps paired to this instance
+  let showRemoteConnect = $state(false);  // local mode: user chose to reveal the connect-a-remote-printer section
+
+  // At least one Cloud Client has paired (has_client_key) with this instance.
+  // In 'remote' mode this gates whether printers can be added at all.
+  const hasPairedClient = $derived(connectors.some((c) => c.has_client_key));
+  // Any connector currently online (live tunnel up).
+  const anyClientOnline = $derived(connectors.some((c) => c.online));
+
+  async function loadConnectors() {
+    try { const r = await api.connectors(); connectors = Array.isArray(r) ? r : (r?.connectors || []); }
+    catch { /* connectors are optional; ignore */ }
+  }
+  function fmtSeen(v) { if (!v) return 'never'; const d = new Date(v); return isNaN(d) ? 'never' : d.toLocaleString(); }
+
   onMount(() => {
     load(true);
-    api.pubConfig().then((c) => { deploymentMode = c.deployment_mode || 'cloud'; }).catch(() => {});
-    timer = setInterval(() => load(false), 5000);
+    loadConnectors();
+    api.pubConfig().then((c) => { deploymentMode = c.deployment_mode || 'both'; }).catch(() => {});
+    timer = setInterval(() => { load(false); loadConnectors(); }, 5000);
     // Camera snapshots refresh on a slow 60s cadence (independent of the 5s
     // status poll) to keep resource use low. CameraImg keeps the last frame.
     camTimer = setInterval(() => camTick++, 60000);
@@ -129,6 +145,28 @@
 
 <PageTitle page="Printers" />
 
+{#snippet clientStatus()}
+  {#if connectors.length}
+    <div class="card card-pad clients">
+      <div class="clients-h">
+        <span class="clabel">Connected clients</span>
+        <span class="muted tiny">OpenPrintHQ Cloud Client apps paired to this instance</span>
+      </div>
+      <ul class="clist">
+        {#each connectors as c (c.id)}
+          <li>
+            <span class="cn">{c.name}</span>
+            <span class="dot {c.online ? 'on' : ''}" title={c.online ? 'online' : 'offline'}></span>
+            <span class="cs muted">{c.online ? 'online' : 'offline'}</span>
+            {#if c.has_client_key}<span class="cpair" title="A client has paired with this connector.">paired</span>{/if}
+            <span class="cseen muted tiny mono">last seen {fmtSeen(c.last_seen)}</span>
+          </li>
+        {/each}
+      </ul>
+    </div>
+  {/if}
+{/snippet}
+
 <div class="head">
   <div>
     <h1>Printers</h1>
@@ -136,7 +174,11 @@
   </div>
   <div class="flex gap">
     <button class="btn btn-ghost btn-sm" onclick={() => load(false)}>Refresh</button>
-    <a class="btn btn-primary btn-sm" href="/app/printers/add">+ Add printer</a>
+    {#if deploymentMode === 'remote' && !hasPairedClient}
+      <span class="btn btn-primary btn-sm disabled" aria-disabled="true" title="Install and pair a Cloud Client on your printers' network first — then you can add printers.">+ Add printer</span>
+    {:else}
+      <a class="btn btn-primary btn-sm" href="/app/printers/add">+ Add printer</a>
+    {/if}
   </div>
 </div>
 
@@ -154,14 +196,48 @@
     <button class="btn btn-ghost btn-sm" onclick={() => load()}>Retry</button>
   </div>
 {:else if printers.length === 0}
-  <div class="card card-pad empty">
-    <div class="ic">🖨️</div>
-    <h3>No printers yet</h3>
-    <p class="muted">Your engine is live and ready. Add your first printer — Bambu, Klipper (Mainsail/Fluidd), Prusa, Snapmaker and more are supported out of the box.</p>
-    <a class="btn btn-primary" href="/app/printers/add">+ Add your first printer</a>
-  </div>
-  {#if deploymentMode === 'cloud'}<div class="card card-pad"><DownloadClient /></div>{/if}
+  {@render clientStatus()}
+
+  {#if deploymentMode === 'remote'}
+    <!-- Remote: you must install + pair a client before adding printers. The
+         connect/download section sits ABOVE the empty state, and the add
+         buttons stay disabled until at least one client pairs. -->
+    <div class="card card-pad"><DownloadClient /></div>
+    <div class="card card-pad empty">
+      <div class="ic">🖨️</div>
+      <h3>No printers yet</h3>
+      {#if hasPairedClient}
+        <p class="muted">A client is paired. Add your first printer — Bambu, Klipper (Mainsail/Fluidd), Prusa, Snapmaker and more are supported out of the box.</p>
+        <a class="btn btn-primary" href="/app/printers/add">+ Add your first printer</a>
+      {:else}
+        <p class="muted">Install the Cloud Client on your printers' network and pair it (above). Once a client connects, you can add printers here.</p>
+        <span class="btn btn-primary disabled" aria-disabled="true" title="Waiting for a Cloud Client to pair.">+ Add your first printer</span>
+      {/if}
+    </div>
+  {:else}
+    <!-- Local or Both: add directly. -->
+    <div class="card card-pad empty">
+      <div class="ic">🖨️</div>
+      <h3>No printers yet</h3>
+      <p class="muted">Your engine is live and ready. Add your first printer — Bambu, Klipper (Mainsail/Fluidd), Prusa, Snapmaker and more are supported out of the box.</p>
+      <a class="btn btn-primary" href="/app/printers/add">+ Add your first printer</a>
+    </div>
+    {#if deploymentMode === 'both'}
+      <div class="card card-pad"><DownloadClient /></div>
+    {:else}
+      <!-- Local: connect-a-remote-printer section hidden behind a toggle. -->
+      {#if showRemoteConnect}
+        <div class="card card-pad">
+          <DownloadClient />
+          <button class="btn btn-ghost btn-sm" onclick={() => (showRemoteConnect = false)}>Hide</button>
+        </div>
+      {:else}
+        <button class="btn btn-ghost btn-sm reveal" onclick={() => (showRemoteConnect = true)}>Want to add a printer not on the same network as OpenPrintHQ?</button>
+      {/if}
+    {/if}
+  {/if}
 {:else}
+  {@render clientStatus()}
   <div class="grid printers">
     {#each printers as p (p.id)}
       {@const st = statusOf(p)}
@@ -255,14 +331,28 @@
     {/if}
   </div>
 
-  <details class="card card-pad connect-more">
-    <summary>Connect printers on another network</summary>
-    <div class="connect-more-body"><DownloadClient /></div>
-  </details>
+  {#if deploymentMode !== 'local'}
+    <details class="card card-pad connect-more">
+      <summary>Connect printers on another network</summary>
+      <div class="connect-more-body"><DownloadClient /></div>
+    </details>
+  {/if}
 {/if}
 
 <style>
   .connect-more { margin-top: 1.2rem; }
+  .clients { margin-bottom: 1rem; }
+  .clients-h { display: flex; align-items: baseline; gap: 0.6rem; margin-bottom: 0.5rem; flex-wrap: wrap; }
+  .clabel { font-weight: 600; }
+  .clist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+  .clist li { display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; }
+  .clist .dot { width: 0.55rem; height: 0.55rem; border-radius: 999px; background: var(--ophq-danger); display: inline-block; }
+  .clist .dot.on { background: var(--ophq-success); }
+  .clist .cn { font-weight: 600; }
+  .clist .cpair { font-size: 0.68rem; color: var(--ophq-success); border: 1px solid rgba(53,196,107,0.3); background: rgba(53,196,107,0.08); padding: 0.05rem 0.4rem; border-radius: 999px; }
+  .clist .cseen { margin-left: auto; }
+  .btn.disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
+  .reveal { margin-top: 0.2rem; }
   .connect-more summary { cursor: pointer; font-weight: 600; }
   .connect-more-body { margin-top: 1rem; }
   .head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 1.4rem; gap: 1rem; }

@@ -22,8 +22,8 @@
   let quotaEdits = $state({});
   let quotaBusy = $state({});
 
-  // Deployment mode (cloud vs local).
-  let deploymentMode = $state('cloud');
+  // Deployment mode (local | remote | both).
+  let deploymentMode = $state('both');
   let modeBusy = $state(false);
   async function setMode(m) {
     if (modeBusy || m === deploymentMode) return;
@@ -39,13 +39,13 @@
       api.adminUsers().catch(() => ({ users: [] })),
       api.adminInstances().catch(() => ({ instances: [] })),
       api.adminFeatures().catch(() => ({ features: [] })),
-      api.adminSettings().catch(() => ({ deployment_mode: 'cloud' }))
+      api.adminSettings().catch(() => ({ deployment_mode: 'both' }))
     ]);
     invites = inv.invites || [];
     users = us.users || [];
     instances = inst.instances || [];
     featureCatalog = feat.features || [];
-    deploymentMode = settings.deployment_mode || 'cloud';
+    deploymentMode = settings.deployment_mode || 'both';
     const q = {};
     for (const i of instances) q[i.id] = i.storage_quota_mb == null ? '' : String(i.storage_quota_mb);
     quotaEdits = q;
@@ -114,13 +114,18 @@
 
   <!-- DEPLOYMENT MODE -->
   <section class="card card-pad blk">
-    <h3>Deployment mode</h3>
-    <p class="muted small">Controls how this deployment presents itself. <b>Cloud</b>: this instance runs off-site, so it shows the Cloud Client downloads and local connectors, defaults new printers to “via connector”, and hides the server-side subnet scan (the server can’t see your LAN). <b>Local</b>: this instance runs on the same network as your printers, so it hides the Cloud Client / connectors and reaches printers directly.</p>
+    <h3>Printer hosting mode</h3>
+    <p class="muted small">Controls which kinds of printers this deployment can manage, and how the Printers page presents adding them.</p>
+    <ul class="muted small modelist">
+      <li><b>Local</b> — printers live on the <em>same network as OpenPrintHQ</em> and are reached directly. The Cloud Client download and connectors UI are hidden. (You can still reveal them from the Printers page if you have a printer on another network.)</li>
+      <li><b>Remote</b> — printers live on a <em>different network</em>, reached through a Cloud Client connector installed on that LAN. Adding printers is disabled until at least one client has paired; once one does, the page unlocks.</li>
+      <li><b>Both</b> — manage local and remote printers together. Everything is available: add directly on this network <em>and</em> add via a connector.</li>
+    </ul>
     <div class="modetoggle">
-      <button class="modebtn" class:on={deploymentMode === 'cloud'} disabled={modeBusy} onclick={() => setMode('cloud')}>☁️ Cloud</button>
       <button class="modebtn" class:on={deploymentMode === 'local'} disabled={modeBusy} onclick={() => setMode('local')}>🏠 Local</button>
+      <button class="modebtn" class:on={deploymentMode === 'remote'} disabled={modeBusy} onclick={() => setMode('remote')}>☁️ Remote</button>
+      <button class="modebtn" class:on={deploymentMode === 'both'} disabled={modeBusy} onclick={() => setMode('both')}>🔄 Both</button>
     </div>
-    <p class="muted tiny note">Running locally but want to manage printers at more than one site? Multi-site needs connectors, so set this to <b>Cloud</b> even on a local install — the Cloud Client at each remote site will tunnel back to this one.</p>
   </section>
 
   <!-- INVITES -->
@@ -211,6 +216,8 @@
 {/if}
 
 <style>
+  .modelist { margin: 0.3rem 0 0.5rem 1rem; padding: 0; line-height: 1.5; }
+  .modelist li { margin-bottom: 0.25rem; }
   .modetoggle { display: inline-flex; gap: 0; border: 1px solid var(--ophq-border); border-radius: 999px; overflow: hidden; margin: 0.3rem 0; }
   .modebtn { padding: 0.4rem 1.1rem; font-size: 0.85rem; font-weight: 600; border: none; background: var(--ophq-surface); color: var(--ophq-text-2); cursor: pointer; }
   .modebtn.on { background: var(--ophq-primary); color: #fff; }
