@@ -14,11 +14,12 @@
 // engine keeps `ip_address` as the (relay) host and reads a per-role PORT from
 // `endpoint_overrides`, so a single relay host serves every port a printer uses.
 import { getInstanceForUser, getAutomation, setRouteDirect, listActiveRoutes } from './db.js';
-import { openTcpRelay, closeRelay, connectorOnline, RELAY_HOST, relayPort } from './connector.js';
+import { openTcpRelay, closeRelay, connectorOnline, RELAY_HOST, relayPort, proxyViaConnector } from './connector.js';
 
 const ENGINE_PORT = 8000;
 const engineBase = (inst) => (inst && inst.subdomain ? `http://ophq-${inst.subdomain}:${ENGINE_PORT}` : null);
 const MAX_ENDPOINTS = 8;   // relay-port slots reserved per printer
+const CP_PORT = Number(process.env.PORT || 8080);   // control-plane port on the docker net
 
 async function eng(base, path, opts = {}) {
   const headers = { accept: 'application/json' };
@@ -130,7 +131,40 @@ export async function activateRoute(userId, printerId) {
     ports[ep.role] = rp;
   });
   await eng(base, `/api/v1/printers/${printerId}`, { method: 'PATCH', body: JSON.stringify(prof.apply(ports)) });
+
+  // Agent-local camera relay (OctoEverywhere-style): ask the connector to hold
+  // the camera locally, then point the engine's external_camera_url at our
+  // internal relay so its existing external-camera path fetches frames through
+  // the connector. Best-effort — a camera failure never blocks routing.
+  try {
+    await setupCameraRelay(userId, printerId, printer, directHost, connectorId, base);
+  } catch (e) { /* camera relay is non-fatal */ }
+
   return { ok: true, vendor: prof.key, endpoints: prof.endpoints.map((ep, i) => ({ role: ep.role, relayPort: relayPort(printerId, i) })) };
+}
+
+// Register the printer's camera with its connector and wire external_camera_url.
+async function setupCameraRelay(userId, printerId, printer, directHost, connectorId, base) {
+  const vendor = printer.connection_type;
+  if (vendor === 'bambu') {
+    const reg = await proxyViaConnector(userId, {
+      kind: 'camera-register', vendor, ip: directHost,
+      access_code: printer.access_code, model: printer.model, name: `p${printerId}`, printer_id: printerId
+    }, 15000, connectorId);
+    if (!reg || !reg.ok) return; // model may not support RTSPS (A1/P1) — leave camera off
+  }
+  // Point the engine at our internal relay endpoint. RELAY_HOST is the
+  // control-plane's docker hostname, reachable from the engine.
+  const relayUrl = `http://${RELAY_HOST}:${CP_PORT}/api/internal/camera-relay/${userId}/${printerId}/frame`;
+  await eng(base, `/api/v1/printers/${printerId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({
+      external_camera_enabled: true,
+      external_camera_type: 'snapshot',
+      external_camera_url: relayUrl,
+      external_camera_snapshot_url: relayUrl
+    })
+  });
 }
 
 // Disable "via connector": restore the real address and drop every relay.
