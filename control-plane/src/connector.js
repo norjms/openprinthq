@@ -24,6 +24,10 @@ const tcpStreams = new Map();
 const relays = new Map();
 // Broker/rendezvous: client endpoint registry (connectorId -> {userId,host,port,gatewayPort,secret,ts}).
 const brokerEndpoints = new Map();
+// Late-bound hook (set by server.js) to re-activate routes when a client
+// (re)registers its endpoint. Avoids a circular import with routing.js.
+let onEndpointRegistered = null;
+export function setOnEndpointRegistered(fn) { onEndpointRegistered = fn; }
 const BROKER_ENDPOINT_TTL_MS = 90_000;   // stale endpoints expire (heartbeat is ~30s)
 
 // The control-plane's own hostname on the docker network — engines connect here
@@ -209,10 +213,23 @@ export function registerConnectorRoutes(app) {
     if (!rec) rec = { secret: crypto.randomBytes(32).toString('base64url') };
     rec.userId = conn.user_id; rec.host = host; rec.port = port;
     rec.gatewayPort = Number(b.gateway_port) || port; rec.ts = Date.now();
+    rec.tcpPort = Number(b.tcp_port) || null;
+    rec.forwardBasePort = Number(b.forward_base_port) || null;
+    // forward_mapping: [{printer_id, local_port, target_port}] - the per-printer
+    // raw forward ports on the client. Index by printer_id for engine routing.
+    rec.forwardByPrinter = {};
+    for (const fm of (Array.isArray(b.forward_mapping) ? b.forward_mapping : [])) {
+      const pid = String(fm.printer_id);
+      (rec.forwardByPrinter[pid] = rec.forwardByPrinter[pid] || []).push({ local_port: Number(fm.local_port), target_port: Number(fm.target_port) });
+    }
     brokerEndpoints.set(conn.id, rec);
     touchConnector(conn.id).catch(() => {});
     let printers = [];
     try { printers = await brokerPrintersForConnector(conn.user_id, conn.id); } catch { /* best effort */ }
+    // Re-activate routes so the engine is pointed at this fresh endpoint. Do it
+    // after we respond (the client needs the printer list first to open its raw
+    // forwarders; the NEXT heartbeat carries the forward_mapping we activate on).
+    if (onEndpointRegistered) { setImmediate(() => onEndpointRegistered(conn.user_id, conn.id).catch(() => {})); }
     return { gateway_secret: rec.secret, public_host: host, public_port: port, printers };
   });
 
@@ -317,3 +334,16 @@ export async function brokerEndpointForPrinter(userId, printerId) {
 
 // Expose the map for the registration route (same module scope).
 export function _brokerEndpoints() { return brokerEndpoints; }
+
+// Broker forward info for a printer, for the ENGINE zero-change path: the client
+// public host + the per-endpoint mapped forward ports. Returns
+//   { host, ports: [{ target_port, local_port }] }  or null if no fresh endpoint.
+// The engine connects to host:local_port and the client raw-forwards to the
+// printer's target_port (Moonraker 7125 / Bambu 8883,990). TLS end-to-end.
+export function brokerForwardForPrinter(connectorId, printerId) {
+  const rec = brokerEndpoints.get(connectorId);
+  if (!brokerEndpointFresh(rec)) return null;
+  const list = (rec.forwardByPrinter && rec.forwardByPrinter[String(printerId)]) || [];
+  if (!list.length) return null;
+  return { host: rec.host, ports: list };
+}

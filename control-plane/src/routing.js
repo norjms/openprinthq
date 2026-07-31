@@ -14,7 +14,7 @@
 // engine keeps `ip_address` as the (relay) host and reads a per-role PORT from
 // `endpoint_overrides`, so a single relay host serves every port a printer uses.
 import { getInstanceForUser, getAutomation, setRouteDirect, listActiveRoutes } from './db.js';
-import { openTcpRelay, closeRelay, connectorOnline, RELAY_HOST, relayPort, proxyViaConnector } from './connector.js';
+import { openTcpRelay, closeRelay, connectorOnline, RELAY_HOST, relayPort, proxyViaConnector, brokerForwardForPrinter } from './connector.js';
 
 const ENGINE_PORT = 8000;
 const engineBase = (inst) => (inst && inst.subdomain ? `http://ophq-${inst.subdomain}:${ENGINE_PORT}` : null);
@@ -122,8 +122,37 @@ export async function activateRoute(userId, printerId) {
     await setRouteDirect(userId, printerId, directHost, directPort);
   }
 
-  // One relay per endpoint (stable per-printer ports), tunnelled through the
-  // printer's assigned site (connector).
+  // BROKER PATH (docs/broker-architecture.md): if the connector registered a
+  // direct client endpoint with per-printer raw forward ports, point the engine
+  // straight at the client's public host:port. No cloud relay. TLS end-to-end.
+  const fwd = brokerForwardForPrinter(connectorId, printerId);
+  if (fwd && fwd.host && fwd.ports.length) {
+    const byTarget = {};
+    for (const f of fwd.ports) byTarget[Number(f.target_port)] = Number(f.local_port);
+    const ports = {};
+    let mappedAll = true;
+    prof.endpoints.forEach((ep) => {
+      const lp = byTarget[Number(ep.port)];
+      if (lp) ports[ep.role] = lp; else mappedAll = false;
+    });
+    if (mappedAll) {
+      const applied = prof.apply(ports);
+      applied.ip_address = fwd.host;                    // apply() hardcodes RELAY_HOST; override
+      if (applied.endpoint_overrides) {
+        for (const k of Object.keys(applied.endpoint_overrides)) {
+          const portOnly = String(applied.endpoint_overrides[k]).split(':').pop();
+          applied.endpoint_overrides[k] = `${fwd.host}:${portOnly}`;
+        }
+      }
+      await eng(base, `/api/v1/printers/${printerId}`, { method: 'PATCH', body: JSON.stringify(applied) });
+      try { await setupCameraRelay(userId, printerId, printer, directHost, connectorId, base); } catch (e) { /* non-fatal */ }
+      return { ok: true, vendor: prof.key, mode: 'broker-direct', host: fwd.host,
+               endpoints: prof.endpoints.map((ep) => ({ role: ep.role, port: byTarget[Number(ep.port)] })) };
+    }
+  }
+
+  // RELAY PATH (legacy cloud-proxied - parked, see relay-tunnel-no-data.md):
+  // one relay per endpoint, tunnelled through the connector.
   const ports = {};
   prof.endpoints.forEach((ep, idx) => {
     const rp = relayPort(printerId, idx);
@@ -185,6 +214,23 @@ export async function deactivateRoute(userId, printerId) {
 }
 
 // On boot, re-open every routed printer's relays (engine addresses are stable).
+export async function reactivateRoutesForConnector(userId, connectorId) {
+  // Called when a client (re)registers its broker endpoint: re-activate every
+  // printer routed through this connector so the engine gets pointed at the
+  // fresh client endpoint. Closes the "routes only activate at boot" gap.
+  let auto = {};
+  try { auto = await getAutomation(userId); } catch { return { ok: false }; }
+  const results = {};
+  for (const [pid, cfg] of Object.entries(auto)) {
+    if ((cfg.connector_id ?? null) !== connectorId) continue;
+    try { results[pid] = await activateRoute(userId, Number(pid)); }
+    catch (e) { results[pid] = { ok: false, reason: e?.message }; }
+  }
+  const n = Object.values(results).filter((r) => r && r.ok).length;
+  if (n) console.log(`[routing] reactivated ${n} route(s) for connector ${connectorId} (broker register)`);
+  return { ok: true, results };
+}
+
 export async function reconcileRoutes() {
   let rows = [];
   try { rows = await listActiveRoutes(); } catch { return; }
