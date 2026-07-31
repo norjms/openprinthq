@@ -213,22 +213,17 @@ export function registerConnectorRoutes(app) {
     if (!rec) rec = { secret: crypto.randomBytes(32).toString('base64url') };
     rec.userId = conn.user_id; rec.host = host; rec.port = port;
     rec.gatewayPort = Number(b.gateway_port) || port; rec.ts = Date.now();
-    rec.tcpPort = Number(b.tcp_port) || null;
-    rec.forwardBasePort = Number(b.forward_base_port) || null;
-    // forward_mapping: [{printer_id, local_port, target_port}] - the per-printer
-    // raw forward ports on the client. Index by printer_id for engine routing.
-    rec.forwardByPrinter = {};
-    for (const fm of (Array.isArray(b.forward_mapping) ? b.forward_mapping : [])) {
-      const pid = String(fm.printer_id);
-      (rec.forwardByPrinter[pid] = rec.forwardByPrinter[pid] || []).push({ local_port: Number(fm.local_port), target_port: Number(fm.target_port) });
-    }
+    // Single-port model: the client fronts EVERY printer behind one gateway port
+    // (host:port above). No per-printer forward ports, no separate passthrough
+    // port - so nothing else to record here. The engine reaches a printer by
+    // opening an OPHQ1 tunnel to that one port (see brokerEngineEndpoint).
     brokerEndpoints.set(conn.id, rec);
     touchConnector(conn.id).catch(() => {});
     let printers = [];
     try { printers = await brokerPrintersForConnector(conn.user_id, conn.id); } catch { /* best effort */ }
-    // Re-activate routes so the engine is pointed at this fresh endpoint. Do it
-    // after we respond (the client needs the printer list first to open its raw
-    // forwarders; the NEXT heartbeat carries the forward_mapping we activate on).
+    // Re-activate routes so the engine is pointed at this fresh endpoint. The
+    // engine reaches each printer through the client's single gateway port via an
+    // in-engine loopback shim, so there's no forward map to wait for.
     if (onEndpointRegistered) { setImmediate(() => onEndpointRegistered(conn.user_id, conn.id).catch(() => {})); }
     return { gateway_secret: rec.secret, public_host: host, public_port: port, printers };
   });
@@ -335,15 +330,19 @@ export async function brokerEndpointForPrinter(userId, printerId) {
 // Expose the map for the registration route (same module scope).
 export function _brokerEndpoints() { return brokerEndpoints; }
 
-// Broker forward info for a printer, for the ENGINE zero-change path: the client
-// public host + the per-endpoint mapped forward ports. Returns
-//   { host, ports: [{ target_port, local_port }] }  or null if no fresh endpoint.
-// The engine connects to host:local_port and the client raw-forwards to the
-// printer's target_port (Moonraker 7125 / Bambu 8883,990). TLS end-to-end.
-export function brokerForwardForPrinter(connectorId, printerId) {
+// Single-port broker endpoint for a printer's ENGINE path (docs/broker-architecture.md).
+// There are no per-printer forward ports anymore: every printer is reached through
+// the client's ONE gateway port. Returns the client public host+port, plus a
+// short-lived token the client verifies on the raw OPHQ1 engine tunnel. The engine
+// shim opens that tunnel (client_host:client_port) with the preamble
+//   OPHQ1 <token> <printerId> <targetPort>
+// and TLS (Bambu MQTT/FTPS) rides through end-to-end.
+//   Returns { host, port, token }  or null if no fresh endpoint fronts it.
+export function brokerEngineEndpoint(connectorId, printerId) {
   const rec = brokerEndpoints.get(connectorId);
-  if (!brokerEndpointFresh(rec)) return null;
-  const list = (rec.forwardByPrinter && rec.forwardByPrinter[String(printerId)]) || [];
-  if (!list.length) return null;
-  return { host: rec.host, ports: list };
+  if (!brokerEndpointFresh(rec) || !rec.host) return null;
+  const claims = { printer_id: String(printerId), exp: Date.now() + 10 * 60 * 1000, scope: 'engine' };
+  const b64 = Buffer.from(JSON.stringify(claims)).toString('base64url');
+  const sig = crypto.createHmac('sha256', rec.secret).update(b64).digest('base64url');
+  return { host: rec.host, port: rec.port, token: b64 + '.' + sig };
 }
