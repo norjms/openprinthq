@@ -10,7 +10,7 @@
 import crypto from 'node:crypto';
 import net from 'node:net';
 import { EventEmitter } from 'node:events';
-import { getConnectorByToken, touchConnector, setConnectorClientKey, setConnectorHostCidr } from './db.js';
+import { getConnectorByToken, touchConnector, setConnectorClientKey, setConnectorHostCidr, getAutomation } from './db.js';
 import { signJobIfKeyed } from './signing.js';
 import { dbg } from './debuglog.js';
 
@@ -22,6 +22,9 @@ const pending = new Map();
 const tcpStreams = new Map();
 // listenPort -> net.Server   (auto-activation relays; see openTcpRelay)
 const relays = new Map();
+// Broker/rendezvous: client endpoint registry (connectorId -> {userId,host,port,gatewayPort,secret,ts}).
+const brokerEndpoints = new Map();
+const BROKER_ENDPOINT_TTL_MS = 90_000;   // stale endpoints expire (heartbeat is ~30s)
 
 // The control-plane's own hostname on the docker network — engines connect here
 // when a printer is routed "via connector". A stable, per-printer relay port
@@ -190,6 +193,29 @@ export function connectorOnline(userId, connectorId = null) {
 export function isConnectorOnline(connectorId) { return streams.has(connectorId); }
 
 export function registerConnectorRoutes(app) {
+  // ==== Broker registration (docs/broker-architecture.md) ==================
+  // Client posts its public endpoint; we store it, hand back a per-connector
+  // gateway secret (for browser-token verification) + the printer inventory it
+  // fronts. Printer bytes never transit here - browsers talk to the client directly.
+  app.post('/api/connector/register-endpoint', async (req, reply) => {
+    const conn = await getConnectorByToken(bearer(req));
+    if (!conn) return reply.code(401).send({ error: 'invalid connector token' });
+    if (!(await ensureClientAuth(conn, req))) return reply.code(401).send({ error: 'client key authentication failed' });
+    const b = req.body || {};
+    const srcIp = (req.headers['x-forwarded-for'] || req.ip || '').toString().split(',')[0].trim();
+    const host = (b.public_host && String(b.public_host).trim()) || srcIp;
+    const port = Number(b.public_port) || Number(b.gateway_port) || 8787;
+    let rec = brokerEndpoints.get(conn.id);
+    if (!rec) rec = { secret: crypto.randomBytes(32).toString('base64url') };
+    rec.userId = conn.user_id; rec.host = host; rec.port = port;
+    rec.gatewayPort = Number(b.gateway_port) || port; rec.ts = Date.now();
+    brokerEndpoints.set(conn.id, rec);
+    touchConnector(conn.id).catch(() => {});
+    let printers = [];
+    try { printers = await brokerPrintersForConnector(conn.user_id, conn.id); } catch { /* best effort */ }
+    return { gateway_secret: rec.secret, public_host: host, public_port: port, printers };
+  });
+
   // Agent → cloud: long-lived SSE stream carrying jobs down to the LAN.
   app.get('/api/connector/stream', async (req, reply) => {
     const conn = await getConnectorByToken(bearer(req));
@@ -254,3 +280,40 @@ export function registerConnectorRoutes(app) {
     return { ok: true };
   });
 }
+
+// ---- Broker helpers (docs/broker-architecture.md) ------------------------
+// Expire stale endpoints (client stopped heartbeating).
+function brokerEndpointFresh(rec) { return rec && (Date.now() - rec.ts) < BROKER_ENDPOINT_TTL_MS; }
+
+// The printers a connector fronts, as bridge targets for the client gateway.
+// Derived from automation rows assigned to this connector. direct_host is the
+// printer's real LAN IP (activateRoute stored it); direct_port its API port.
+export async function brokerPrintersForConnector(userId, connectorId) {
+  const auto = await getAutomation(userId);
+  const out = [];
+  for (const [pid, cfg] of Object.entries(auto || {})) {
+    if ((cfg.connector_id ?? null) !== connectorId) continue;
+    if (!cfg.direct_host) continue;                       // no real address known yet
+    out.push({
+      id: Number(pid),
+      ip: cfg.direct_host,
+      moonraker_port: Number(cfg.direct_port) || 7125,
+      vendor: cfg.vendor || null                          // enriched by caller if available
+    });
+  }
+  return out;
+}
+
+// Look up the client endpoint that fronts a given printer, for a browser.
+// Returns { host, port, secret } or null if no fresh endpoint fronts it.
+export async function brokerEndpointForPrinter(userId, printerId) {
+  const auto = await getAutomation(userId);
+  const cfg = auto[printerId];
+  if (!cfg || cfg.connector_id == null) return null;
+  const rec = brokerEndpoints.get(cfg.connector_id);
+  if (!brokerEndpointFresh(rec) || rec.userId !== userId) return null;
+  return { host: rec.host, port: rec.port, secret: rec.secret };
+}
+
+// Expose the map for the registration route (same module scope).
+export function _brokerEndpoints() { return brokerEndpoints; }
