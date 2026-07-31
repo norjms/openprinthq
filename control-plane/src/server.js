@@ -16,10 +16,11 @@ import { migrate, upsertUser, getUserByEmail, getInstanceForUser, getCompatibleP
   listUsers, listAllInstances, countUsers,
   getAppSetting, setAppSetting } from './db.js';
 import { createAuthentikUser, linkAuthentikUser, authentikUserExists, authentikConfigured, OWNER_GROUP } from './authentik.js';
-import { registerConnectorRoutes, connectorOnline, isConnectorOnline, proxyViaConnector, openTcpStream } from './connector.js';
+import { registerConnectorRoutes, connectorOnline, isConnectorOnline, proxyViaConnector, openTcpStream, brokerEndpointForPrinter, setOnEndpointRegistered } from './connector.js';
+import crypto from 'node:crypto';
 import { provisionForUser } from './provisioner.js';
 import { startBatch, activeBatchForUser, advanceBatch, cancelBatch, startOrchestrator } from './batch.js';
-import { activateRoute, deactivateRoute, reconcileRoutes } from './routing.js';
+import { activateRoute, deactivateRoute, reconcileRoutes, reactivateRoutesForConnector } from './routing.js';
 import { generateKeyPair, encryptPrivate, invalidateSigningCache } from './signing.js';
 import { ensureStream, iceServers, GO2RTC_URL } from './go2rtc.js';
 import { dbg } from './debuglog.js';
@@ -527,6 +528,21 @@ app.put('/api/printer-automation', async (req, reply) => {
 
 // ---- local connectors: outbound tunnel for LAN printers (#28/#29) --------
 registerConnectorRoutes(app);
+setOnEndpointRegistered((userId, connectorId) => reactivateRoutesForConnector(userId, connectorId));
+
+// GET /api/broker/endpoint/:printerId  (browser/web-app -> broker)
+// Returns the client endpoint + a short-lived token to reach that printer
+// directly. The cloud brokers connection info only (docs/broker-architecture.md).
+app.get('/api/broker/endpoint/:printerId', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  const printerId = String(req.params.printerId);
+  const info = await brokerEndpointForPrinter(user.id, printerId);
+  if (!info) return reply.code(404).send({ error: 'no reachable client for this printer (is the client app running and its port forwarded?)' });
+  const claims = { printer_id: printerId, exp: Date.now() + 5 * 60 * 1000 };  // 5 min
+  const b64 = Buffer.from(JSON.stringify(claims)).toString('base64url');
+  const sig = crypto.createHmac('sha256', info.secret).update(b64).digest('base64url');
+  return { host: info.host, port: info.port, token: b64 + '.' + sig, printer_id: printerId };
+});
 app.get('/api/connectors', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
   const list = await listConnectors(user.id);
