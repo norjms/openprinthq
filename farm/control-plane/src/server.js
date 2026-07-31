@@ -16,11 +16,11 @@ import { migrate, upsertUser, getUserByEmail, getInstanceForUser, getCompatibleP
   listUsers, listAllInstances, countUsers,
   getAppSetting, setAppSetting } from './db.js';
 import { createAuthentikUser, linkAuthentikUser, authentikUserExists, authentikConfigured, OWNER_GROUP } from './authentik.js';
-import { registerConnectorRoutes, connectorOnline, isConnectorOnline, proxyViaConnector, openTcpStream, brokerEndpointForPrinter } from './connector.js';
+import { registerConnectorRoutes, connectorOnline, isConnectorOnline, proxyViaConnector, openTcpStream, brokerEndpointForPrinter, setOnEndpointRegistered } from './connector.js';
 import crypto from 'node:crypto';
 import { provisionForUser } from './provisioner.js';
 import { startBatch, activeBatchForUser, advanceBatch, cancelBatch, startOrchestrator } from './batch.js';
-import { activateRoute, deactivateRoute, reconcileRoutes } from './routing.js';
+import { activateRoute, deactivateRoute, reconcileRoutes, reactivateRoutesForConnector } from './routing.js';
 import { generateKeyPair, encryptPrivate, invalidateSigningCache } from './signing.js';
 import { ensureStream, iceServers, GO2RTC_URL } from './go2rtc.js';
 import { dbg } from './debuglog.js';
@@ -528,6 +528,7 @@ app.put('/api/printer-automation', async (req, reply) => {
 
 // ---- local connectors: outbound tunnel for LAN printers (#28/#29) --------
 registerConnectorRoutes(app);
+setOnEndpointRegistered((userId, connectorId) => reactivateRoutesForConnector(userId, connectorId));
 
 // GET /api/broker/endpoint/:printerId  (browser/web-app -> broker)
 // Returns the client endpoint + a short-lived token to reach that printer
