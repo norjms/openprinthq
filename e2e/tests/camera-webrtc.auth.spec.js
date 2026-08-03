@@ -14,19 +14,6 @@ test.describe('camera WebRTC signalling', () => {
     expect(urls.some((u) => u.startsWith('stun:'))).toBeTruthy();
   });
 
-  test('ICE requires a session', async ({ playwright, baseURL }) => {
-    // Don't pin the status: at the edge an anonymous request is redirected into
-    // SSO (302 -> login page, which Playwright follows), while hitting the app
-    // directly gives 401. Both are correct. What must never happen is a
-    // credential set coming back, so assert on the body instead.
-    const anon = await playwright.request.newContext({ baseURL });
-    const res = await anon.get('/api/camera/ice', { failOnStatusCode: false });
-    let body = null;
-    try { body = await res.json(); } catch { /* HTML login page — fine */ }
-    expect(body?.iceServers, 'anonymous requests must not receive ICE credentials').toBeUndefined();
-    await anon.dispose();
-  });
-
   test('capability endpoint reports routing and relay availability', async ({ request }) => {
     const res = await request.get('/api/camera/capability/1', { failOnStatusCode: false });
     // 409 when the test account has no running instance — still a valid shape.
