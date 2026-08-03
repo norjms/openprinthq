@@ -971,19 +971,56 @@ app.post('/api/camera/webrtc/:printerId', async (req, reply) => {
   if (!pid) return reply.code(400).send({ error: 'bad printer id' });
   const inst = await getInstanceForUser(user.id);
   if (!inst) return reply.code(409).send({ error: 'no running instance' });
-  // Register (idempotent) the printer's camera as a go2rtc stream, read straight
-  // from this user's engine DB. Returns null for non-RTSP printers -> 404 -> the
-  // browser falls back to snapshot polling. Also scopes access to the user's own
-  // engine, so no separate ownership check is needed.
+  const offer = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+
+  // Connector-routed printers: the camera is on a LAN this server cannot reach,
+  // so the cloud go2rtc could never pull it. Hand the offer to the connector's
+  // OWN go2rtc instead. Only the SDP crosses this server; the media then flows
+  // browser <-> connector directly, which is the whole point — it keeps camera
+  // bandwidth off the cloud host and works without any inbound port forward.
+  const autoAll = await getAutomation(user.id);
+  const connectorId = autoAll[pid]?.connector_id ?? null;
+  if (connectorId) {
+    const base = engineBase(inst);
+    if (!base) return reply.code(409).send({ error: 'no running instance' });
+    let printer;
+    try { printer = await (await fetch(`${base}/api/v1/printers/${pid}`)).json(); }
+    catch { return reply.code(404).send({ error: 'printer not found' }); }
+    if (printer.connection_type !== 'bambu') {
+      // Klipper and friends have no RTSPS source; the browser falls back to the
+      // snapshot relay, which already works.
+      return reply.code(404).send({ error: 'no WebRTC camera stream for this printer' });
+    }
+    const job = {
+      kind: 'camera-webrtc',
+      vendor: 'bambu',
+      ip: autoAll[pid]?.direct_host || printer.ip_address,
+      access_code: printer.access_code,
+      model: printer.model,
+      name: `p${pid}`,
+      printer_id: Number(pid),
+      offer,
+      // Long TTL: go2rtc reads ICE servers at startup, and every rotation costs
+      // it a restart. A day is well inside Cloudflare's allowed range and keeps
+      // restarts rare.
+      ice_servers: await iceServers(86400)
+    };
+    const r = await proxyViaConnector(user.id, job, 20000, connectorId);
+    if (!r || !r.ok || !r.answer) {
+      return reply.code(502).send({ error: r?.error || 'connector did not answer the WebRTC offer' });
+    }
+    reply.header('content-type', 'application/json');
+    return reply.send(r.answer);
+  }
+
+  // Local (same-network) printers: the cloud go2rtc can reach them directly.
   const name = await ensureStream(inst, user.id, pid);
   if (!name) return reply.code(404).send({ error: 'no WebRTC camera stream for this printer' });
-  // Relay the SDP offer to go2rtc and return its answer verbatim.
   try {
-    const body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
     const res = await fetch(`${GO2RTC_URL}/api/webrtc?src=${encodeURIComponent(name)}`, {
       method: 'POST',
       headers: { 'content-type': req.headers['content-type'] || 'application/json' },
-      body
+      body: offer
     });
     reply.code(res.status);
     const ct = res.headers.get('content-type'); if (ct) reply.header('content-type', ct);
@@ -991,6 +1028,32 @@ app.post('/api/camera/webrtc/:printerId', async (req, reply) => {
   } catch (e) {
     return reply.code(502).send({ error: 'signaling relay failed: ' + e.message });
   }
+});
+
+// Tells the UI whether a printer can do direct WebRTC video, so it can choose
+// between the peer-to-peer player and the snapshot fallback without probing.
+app.get('/api/camera/capability/:printerId', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  const pid = Number(String(req.params.printerId).replace(/[^0-9]/g, ''));
+  if (!pid) return reply.code(400).send({ error: 'bad printer id' });
+  const inst = await getInstanceForUser(user.id);
+  if (!inst) return reply.code(409).send({ error: 'no running instance' });
+  const autoAll = await getAutomation(user.id);
+  const connectorId = autoAll[pid]?.connector_id ?? null;
+  const base = engineBase(inst);
+  let printer = null;
+  try { printer = await (await fetch(`${base}/api/v1/printers/${pid}`)).json(); } catch { /* best effort */ }
+  const bambu = printer?.connection_type === 'bambu';
+  const turn = await turnCredentials();
+  return {
+    printer_id: pid,
+    routed_via_connector: Boolean(connectorId),
+    webrtc: bambu,
+    // Direct video across CGNAT usually needs a relay; say so plainly rather
+    // than letting the camera fail silently on a strict network.
+    relay_available: Boolean(turn.keyId && turn.token),
+    fallback: 'snapshot'
+  };
 });
 
 // Authenticated gateway: proxy the logged-in user's request to THEIR engine.
