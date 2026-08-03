@@ -3,6 +3,7 @@ import { setInstanceFeature, setInstanceQuota } from './db.js';
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
+import websocket from '@fastify/websocket';
 import { readFileSync } from 'node:fs';
 import { randomBytes, createPublicKey } from 'node:crypto';
 import { migrate, upsertUser, getUserByEmail, getInstanceForUser, getCompatiblePresets,
@@ -59,6 +60,9 @@ function engineBase(inst) {
 
 const app = Fastify({ logger: true, trustProxy: true, bodyLimit: 1024 * 1024 * 1024 });
 await app.register(cookie, { secret: SESSION_SECRET });
+// Needed for the connector's multiplexed tunnel (/api/connector/ws). Registered
+// before routes so the upgrade handler is in place when they're declared.
+await app.register(websocket, { options: { maxPayload: 4 * 1024 * 1024 } });
 
 // Buffer non-JSON bodies raw so the engine gateway can forward file uploads
 // (multipart) and binary verbatim, preserving the original content-type/boundary.
@@ -451,7 +455,7 @@ app.get('/api/pub/signup-info', async () => {
 // "via connector"; local hides them (the engine is on the printers' LAN, so it
 // reaches them directly). Public so the UI can shape itself before login.
 app.get('/api/pub/config', async () => {
-  return { deployment_mode: await getDeploymentMode() };
+  return { connector_ws: true, deployment_mode: await getDeploymentMode() };
 });
 // Public SITE branding = the owner's branding, so the logged-out landing page can
 // show the host's configured logo / site name. Unauthenticated (npmplus /api/pub/,

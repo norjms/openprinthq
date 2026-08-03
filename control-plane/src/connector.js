@@ -91,7 +91,27 @@ function connectorFor(userId, connectorId = null) {
   for (const s of streams.values()) if (s.userId === userId) return s;
   return null;
 }
-function writeToConnector(target, obj) { target.raw.write(`data: ${JSON.stringify(obj)}\n\n`); }
+// Transport-agnostic send. An SSE session writes an event frame; a WebSocket
+// session sends a text frame. Everything above this line is unaware of which.
+function writeToConnector(target, obj) { target.send(obj); }
+
+// Bulk TCP payloads go as BINARY WebSocket frames when the transport supports
+// it. On SSE they had to be base64 inside JSON, which inflated every byte by a
+// third and forced the whole transfer through one ordered event stream — a
+// large FTP upload would sit in front of a status poll and the UI would decide
+// the printer had gone offline. Binary frames are chunked (see WS_CHUNK) so a
+// big transfer interleaves with control traffic instead of blocking it.
+const WS_CHUNK = 16 * 1024;
+function sendTcpData(target, id, buf) {
+  const b = Buffer.from(buf);
+  if (target.sendData) {
+    for (let off = 0; off < b.length; off += WS_CHUNK) {
+      target.sendData(id, b.subarray(off, Math.min(off + WS_CHUNK, b.length)));
+    }
+    return;
+  }
+  writeToConnector(target, { id, kind: 'tcp-data', data: b.toString('base64') });
+}
 
 function bearer(req) {
   const h = req.headers['authorization'] || '';
@@ -133,7 +153,7 @@ export function openTcpStream(userId, host, port, connectorId = null) {
   em.write = (buf) => {
     const s = connectorFor(userId, connectorId);
     if (!s) return false;
-    try { writeToConnector(s, { id, kind: 'tcp-data', data: Buffer.from(buf).toString('base64') }); return true; }
+    try { sendTcpData(s, id, buf); return true; }
     catch { return false; }
   };
   em.close = () => {
@@ -141,7 +161,11 @@ export function openTcpStream(userId, host, port, connectorId = null) {
     if (s) try { writeToConnector(s, { id, kind: 'tcp-close' }); } catch { /* */ }
     tcpStreams.delete(id);
   };
+  // On a WebSocket session, hand the agent the compact stream index up front so
+  // its upstream payloads can be binary too. Absent on SSE, where the agent
+  // falls back to base64 JSON.
   const openJob = { id, kind: 'tcp-open', host, port };
+  if (target.idxFor) openJob.sidx = target.idxFor(id);
   signJobIfKeyed(userId, openJob).then(() => {
     try { writeToConnector(target, openJob); }
     catch { tcpStreams.delete(id); em.emit('close', 'connector write failed'); }
@@ -201,7 +225,7 @@ export function registerConnectorRoutes(app) {
     // reconnects on drop-outs, and we replace any stale stream on reconnect.
     try { raw.socket.setKeepAlive(true, 15000); raw.socket.setTimeout(0); } catch { /* */ }
     const prev = streams.get(conn.id);
-    if (prev) { try { clearInterval(prev.heartbeat); prev.raw.end(); } catch { /* */ } }
+    if (prev) { try { clearInterval(prev.heartbeat); prev.closeSession?.(); } catch { /* */ } }
     raw.writeHead(200, {
       'content-type': 'text/event-stream',
       'cache-control': 'no-cache, no-transform',
@@ -216,7 +240,13 @@ export function registerConnectorRoutes(app) {
     const hostCidr = (req.query?.host_cidr || '').toString().slice(0, 64);
     if (hostCidr) { setConnectorHostCidr(conn.id, hostCidr).catch(() => {}); }
     const heartbeat = setInterval(() => { try { raw.write(': ping\n\n'); } catch { /* closed */ } }, 20000);
-    streams.set(conn.id, { raw, userId: conn.user_id, connectorId: conn.id, name, lastSeen: Date.now(), heartbeat });
+    streams.set(conn.id, {
+      raw, userId: conn.user_id, connectorId: conn.id, name, lastSeen: Date.now(), heartbeat,
+      transport: 'sse',
+      send: (obj) => raw.write(`data: ${JSON.stringify(obj)}\n\n`),
+      sendData: null, // SSE has no binary channel; falls back to base64 JSON
+      closeSession: () => { try { raw.end(); } catch { /* already gone */ } }
+    });
     dbg('connector', 'stream CONNECTED', { connectorId: conn.id, userId: conn.user_id, name, keyed: !!conn.client_public_pem });
     touchConnector(conn.id).catch(() => {});
     const cleanup = () => {
@@ -231,26 +261,118 @@ export function registerConnectorRoutes(app) {
     raw.on('error', cleanup);
   });
 
-  // Agent → cloud: the result of a job it performed on the LAN. Handles both
-  // one-shot HTTP jobs (resolve a pending promise) and raw-TCP stream events.
-  app.post('/api/connector/result', async (req, reply) => {
-    const conn = await getConnectorByToken(bearer(req));
-    if (!conn) return reply.code(401).send({ error: 'invalid connector token' });
-    const body = req.body || {};
-    const { id, event } = body;
-    touchConnector(conn.id).catch(() => {});
+  // Shared inbound handling for both transports: an agent message is the same
+  // shape whether it arrived as a POST body or a WebSocket text frame.
+  function handleAgentMessage(connId, body) {
+    const { id, event } = body || {};
     if (event) {
-      // Raw TCP tunnel event.
       const t = id && tcpStreams.get(id);
       if (t) {
         if (event === 'open') t.emitter.emit('open');
         else if (event === 'data') t.emitter.emit('data', Buffer.from(body.data || '', 'base64'));
         else if (event === 'close') { t.emitter.emit('close', body.error || null); tcpStreams.delete(id); }
       }
-      return { ok: true };
+      return;
     }
     const p = id && pending.get(id);
-    if (p) { clearTimeout(p.timer); pending.delete(id); dbg('connector', 'result <- connector', { id, connectorId: conn.id, status: body.status, error: body.error }); p.resolve(body); }
+    if (p) { clearTimeout(p.timer); pending.delete(id); dbg('connector', 'result <- connector', { id, connectorId: connId, status: body.status, error: body.error }); p.resolve(body); }
+  }
+
+  // Agent → cloud: multiplexed WebSocket tunnel. Same auth as the SSE stream.
+  //
+  // This exists because the SSE + POST-per-result pairing had two costs that
+  // showed up as "the connector keeps dropping": every upstream message opened a
+  // fresh TCP+TLS connection, and every byte of printer traffic — MQTT, FTP,
+  // camera frames — was base64'd into one ordered event stream, so a large
+  // transfer stalled small status polls behind it until the UI's own timeout
+  // fired and declared the printer offline.
+  //
+  // Here, control messages are JSON text frames and bulk TCP payloads are binary
+  // frames chunked to 16KB, so transfers interleave with polls, nothing is
+  // base64'd, and the connection is reused.
+  //
+  // Frame layout (binary): [uint8 type][uint32be streamIndex][payload]
+  //   type 1 = TCP data
+  // Stream indexes are per-session; the canonical id stays the UUID so the SSE
+  // path and this one share all the logic above.
+  app.get('/api/connector/ws', { websocket: true }, async (socket, req) => {
+    const conn = await getConnectorByToken(bearer(req));
+    if (!conn) { try { socket.close(4401, 'invalid connector token'); } catch { /* */ } return; }
+    if (!(await ensureClientAuth(conn, req))) {
+      try { socket.close(4401, 'client key authentication failed — reset this connector in Settings → Connectors to pair a new client'); } catch { /* */ }
+      return;
+    }
+    const prev = streams.get(conn.id);
+    if (prev) { try { clearInterval(prev.heartbeat); prev.closeSession?.(); } catch { /* */ } }
+
+    const name = (req.query?.name || conn.name || 'connector').toString();
+    const hostCidr = (req.query?.host_cidr || '').toString().slice(0, 64);
+    if (hostCidr) { setConnectorHostCidr(conn.id, hostCidr).catch(() => {}); }
+
+    // Per-session UUID <-> compact index mapping for binary frames.
+    let nextIdx = 1;
+    const idxByUuid = new Map();
+    const uuidByIdx = new Map();
+    const idxFor = (uuid) => {
+      let i = idxByUuid.get(uuid);
+      if (i === undefined) { i = nextIdx++; idxByUuid.set(uuid, i); uuidByIdx.set(i, uuid); }
+      return i;
+    };
+
+    const heartbeat = setInterval(() => { try { socket.ping(); } catch { /* closed */ } }, 20000);
+    streams.set(conn.id, {
+      raw: null, userId: conn.user_id, connectorId: conn.id, name, lastSeen: Date.now(), heartbeat,
+      transport: 'ws',
+      send: (obj) => socket.send(JSON.stringify(obj)),
+      sendData: (uuid, chunk) => {
+        const head = Buffer.alloc(5);
+        head.writeUInt8(1, 0);
+        head.writeUInt32BE(idxFor(uuid), 1);
+        socket.send(Buffer.concat([head, Buffer.from(chunk)]), { binary: true });
+      },
+      // Lets openTcpStream stamp the compact index on the open job, so the agent
+      // can send binary frames upstream for the same stream.
+      idxFor,
+      closeSession: () => { try { socket.close(1000, 'replaced by a newer session'); } catch { /* */ } }
+    });
+    dbg('connector', 'ws CONNECTED', { connectorId: conn.id, userId: conn.user_id, name, keyed: !!conn.client_public_pem });
+    touchConnector(conn.id).catch(() => {});
+
+    socket.on('message', (raw, isBinary) => {
+      touchConnector(conn.id).catch(() => {});
+      try {
+        if (isBinary) {
+          const buf = Buffer.from(raw);
+          if (buf.length < 5) return;
+          const type = buf.readUInt8(0);
+          const uuid = uuidByIdx.get(buf.readUInt32BE(1));
+          if (type !== 1 || !uuid) return;
+          const t = tcpStreams.get(uuid);
+          if (t) t.emitter.emit('data', buf.subarray(5));
+          return;
+        }
+        handleAgentMessage(conn.id, JSON.parse(raw.toString()));
+      } catch (e) { dbg('connector', 'ws message error', { connectorId: conn.id, error: e.message }); }
+    });
+
+    const cleanup = () => {
+      clearInterval(heartbeat);
+      const cur = streams.get(conn.id);
+      if (cur && cur.transport === 'ws' && cur.send && cur.name === name) streams.delete(conn.id);
+      dbg('connector', 'ws CLOSED', { connectorId: conn.id, userId: conn.user_id });
+      for (const [sid, t] of tcpStreams) if (t.connectorId === conn.id) { t.emitter.emit('close', 'connector disconnected'); tcpStreams.delete(sid); }
+    };
+    socket.on('close', cleanup);
+    socket.on('error', cleanup);
+  });
+
+  // Agent → cloud: the result of a job it performed on the LAN. Handles both
+  // one-shot HTTP jobs (resolve a pending promise) and raw-TCP stream events.
+  app.post('/api/connector/result', async (req, reply) => {
+    const conn = await getConnectorByToken(bearer(req));
+    if (!conn) return reply.code(401).send({ error: 'invalid connector token' });
+    touchConnector(conn.id).catch(() => {});
+    handleAgentMessage(conn.id, req.body || {});
     return { ok: true };
   });
 }
