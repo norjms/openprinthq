@@ -14,7 +14,7 @@
 // engine keeps `ip_address` as the (relay) host and reads a per-role PORT from
 // `endpoint_overrides`, so a single relay host serves every port a printer uses.
 import { getInstanceForUser, getAutomation, setRouteDirect, listActiveRoutes } from './db.js';
-import { openTcpRelay, closeRelay, connectorOnline, RELAY_HOST, relayPort, proxyViaConnector, brokerEngineEndpoint } from './connector.js';
+import { openTcpRelay, closeRelay, connectorOnline, RELAY_HOST, relayPort, proxyViaConnector } from './connector.js';
 
 const ENGINE_PORT = 8000;
 const engineBase = (inst) => (inst && inst.subdomain ? `http://ophq-${inst.subdomain}:${ENGINE_PORT}` : null);
@@ -122,53 +122,8 @@ export async function activateRoute(userId, printerId) {
     await setRouteDirect(userId, printerId, directHost, directPort);
   }
 
-  // BROKER PATH (docs/broker-architecture.md): the connector fronts every printer
-  // behind ONE gateway port. We do NOT point the engine at the client directly;
-  // instead the engine dials a LOOPBACK shim inside its own container, and the
-  // shim opens a single OPHQ1 tunnel to client_host:client_port per connection.
-  // This is what keeps the router to ONE forwarded port. Per-tenant by container.
-  const be = brokerEngineEndpoint(connectorId, printerId);
-  if (be && be.host && be.port) {
-    // Deterministic loopback ports for this printer's shim listeners. These live
-    // ONLY on 127.0.0.1 inside the engine container - never forwarded, never on
-    // the docker net - so any stable scheme is fine.
-    const shimPort = (slot) => 40000 + Number(printerId) * 10 + slot;
-    const shimPorts = {};                 // shimPort -> real printer target port
-    let applied;
-    if (prof.key === 'bambu') {
-      const mqttShim = shimPort(0), ftpShim = shimPort(1);
-      shimPorts[mqttShim] = 8883; shimPorts[ftpShim] = 990;
-      applied = {
-        ip_address: '127.0.0.1',
-        endpoint_overrides: {
-          mqtt: `127.0.0.1:${mqttShim}`,
-          ftp: `127.0.0.1:${ftpShim}`
-        }
-      };
-    } else {
-      const apiShim = shimPort(0);
-      const realApi = Number(printer.moonraker_port) || prof.endpoints[0].port;
-      shimPorts[apiShim] = realApi;
-      applied = { ip_address: '127.0.0.1', moonraker_port: apiShim, endpoint_overrides: {} };
-    }
-    // Shim-only routing block. The engine's own consumers read mqtt/ftp/
-    // moonraker_port; they ignore `_broker`. The in-engine shim reads `_broker`
-    // to know where to listen and where to tunnel. TLS terminates at the printer.
-    applied.endpoint_overrides._broker = {
-      client_host: be.host,
-      client_port: be.port,
-      token: be.token,
-      printer_id: String(printerId),
-      ports: shimPorts               // { "<loopbackPort>": <realPrinterPort> }
-    };
-    await eng(base, `/api/v1/printers/${printerId}`, { method: 'PATCH', body: JSON.stringify(applied) });
-    try { await setupCameraRelay(userId, printerId, printer, directHost, connectorId, base); } catch (e) { /* non-fatal */ }
-    return { ok: true, vendor: prof.key, mode: 'broker-direct-1port', host: be.host, port: be.port,
-             endpoints: Object.entries(shimPorts).map(([loopback, real]) => ({ loopback: Number(loopback), target: real })) };
-  }
-
-  // RELAY PATH (legacy cloud-proxied - parked, see relay-tunnel-no-data.md):
-  // one relay per endpoint, tunnelled through the connector.
+  // One relay per endpoint (stable per-printer ports), tunnelled through the
+  // printer's assigned site (connector).
   const ports = {};
   prof.endpoints.forEach((ep, idx) => {
     const rp = relayPort(printerId, idx);
@@ -230,23 +185,6 @@ export async function deactivateRoute(userId, printerId) {
 }
 
 // On boot, re-open every routed printer's relays (engine addresses are stable).
-export async function reactivateRoutesForConnector(userId, connectorId) {
-  // Called when a client (re)registers its broker endpoint: re-activate every
-  // printer routed through this connector so the engine gets pointed at the
-  // fresh client endpoint. Closes the "routes only activate at boot" gap.
-  let auto = {};
-  try { auto = await getAutomation(userId); } catch { return { ok: false }; }
-  const results = {};
-  for (const [pid, cfg] of Object.entries(auto)) {
-    if ((cfg.connector_id ?? null) !== connectorId) continue;
-    try { results[pid] = await activateRoute(userId, Number(pid)); }
-    catch (e) { results[pid] = { ok: false, reason: e?.message }; }
-  }
-  const n = Object.values(results).filter((r) => r && r.ok).length;
-  if (n) console.log(`[routing] reactivated ${n} route(s) for connector ${connectorId} (broker register)`);
-  return { ok: true, results };
-}
-
 export async function reconcileRoutes() {
   let rows = [];
   try { rows = await listActiveRoutes(); } catch { return; }
