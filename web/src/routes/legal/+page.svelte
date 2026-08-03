@@ -10,9 +10,9 @@
   // AGPL §13 source offer — the complete corresponding source is published in the
   // public repositories (the app + the print engine). Linking them satisfies the
   // network-use source requirement and stays current with the deployed version.
-  const APP_REPO = 'https://git.nnlink.org/OpenPrintHQ/openprinthq';
-  const ENGINE_REPO = 'https://git.nnlink.org/OpenPrintHQ/openprinthq-engine';
-  const CLIENT_REPO = 'https://git.nnlink.org/OpenPrintHQ/openprinthq-cloud-client';
+  const APP_REPO = 'https://github.com/norjms/openprinthq';
+  const ENGINE_REPO = 'https://github.com/norjms/openprinthq-engine';
+  const CLIENT_REPO = 'https://github.com/norjms/openprinthq-cloud-client';
   // Deployed commit SHAs (injected at build time via vite `define`). When present,
   // link to the exact running version; otherwise fall back to the repo default branch.
   const appCommit = (typeof __OPHQ_APP_COMMIT__ === 'string') ? __OPHQ_APP_COMMIT__ : '';

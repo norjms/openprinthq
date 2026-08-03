@@ -2,7 +2,7 @@
   // Download + install instructions for the OpenPrintHQ Cloud Client — the
   // outbound-only connector that bridges this cloud instance to printers on a
   // private LAN. Buttons point at the public release page; Docker runs inline.
-  const CLIENT_REPO = 'https://git.nnlink.org/OpenPrintHQ/openprinthq-cloud-client';
+  const CLIENT_REPO = 'https://github.com/norjms/openprinthq-cloud-client';
   const RELEASES = `${CLIENT_REPO}/releases`;
 
   const origin = (typeof window !== 'undefined' && window.location?.origin)
