@@ -29,7 +29,11 @@
   function waitForIce(peer) {
     return new Promise((resolve) => {
       if (peer.iceGatheringState === 'complete') return resolve();
-      const t = setTimeout(resolve, 2500);
+      // 2.5s was enough when only host and STUN candidates were in play. TURN
+      // allocation adds a round trip to Cloudflare, and on the CGNAT networks
+      // where the relay is the ONLY workable path, cutting gathering short
+      // discards the candidate that would actually have connected.
+      const t = setTimeout(resolve, 6000);
       peer.addEventListener('icegatheringstatechange', () => {
         if (peer.iceGatheringState === 'complete') { clearTimeout(t); resolve(); }
       });
@@ -41,7 +45,7 @@
     try {
       // Fresh ICE servers (STUN + short-lived TURN for remote/CGNAT) from the
       // control-plane; STUN-only fallback if that call fails.
-      let ice = [{ urls: 'stun:stun.l.google.com:19302' }];
+      let ice = [{ urls: 'stun:stun.cloudflare.com:3478' }, { urls: 'stun:stun.l.google.com:19302' }];
       try {
         const r = await fetch('/api/camera/ice', { credentials: 'include' });
         if (r.ok) { const j = await r.json(); if (Array.isArray(j.iceServers) && j.iceServers.length) ice = j.iceServers; }
