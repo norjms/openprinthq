@@ -383,6 +383,45 @@ export async function getAppSetting(key, fallback = null) {
   const { rows } = await pool.query('SELECT value FROM app_settings WHERE key = $1', [key]);
   return rows.length ? rows[0].value : fallback;
 }
+// Secrets stored in app_settings (e.g. the Cloudflare TURN API token) are
+// encrypted at rest with a key derived from SESSION_SECRET, so a database dump
+// or a stray pg_dump in a backup directory does not hand over live credentials.
+// AES-256-GCM; the tag is stored alongside so tampering is detected on read.
+const SETTINGS_KEY = crypto.hkdfSync(
+  'sha256',
+  Buffer.from(process.env.SESSION_SECRET || 'dev-insecure-secret-change-me-in-prod-000000'),
+  Buffer.from('ophq-app-settings-v1'),
+  Buffer.from('aes-256-gcm'),
+  32
+);
+function encryptSetting(plain) {
+  const iv = crypto.randomBytes(12);
+  const c = crypto.createCipheriv('aes-256-gcm', Buffer.from(SETTINGS_KEY), iv);
+  const ct = Buffer.concat([c.update(String(plain), 'utf8'), c.final()]);
+  return `enc:v1:${iv.toString('base64')}:${c.getAuthTag().toString('base64')}:${ct.toString('base64')}`;
+}
+function decryptSetting(stored) {
+  if (typeof stored !== 'string' || !stored.startsWith('enc:v1:')) return stored; // plaintext legacy value
+  try {
+    const [, , iv, tag, ct] = stored.split(':');
+    const d = crypto.createDecipheriv('aes-256-gcm', Buffer.from(SETTINGS_KEY), Buffer.from(iv, 'base64'));
+    d.setAuthTag(Buffer.from(tag, 'base64'));
+    return Buffer.concat([d.update(Buffer.from(ct, 'base64')), d.final()]).toString('utf8');
+  } catch {
+    // Wrong key (SESSION_SECRET rotated) or tampered ciphertext. Treat as unset
+    // rather than throwing, so one bad row can't take the control-plane down.
+    return null;
+  }
+}
+export async function getSecretSetting(key) {
+  const raw = await getAppSetting(key, null);
+  return raw == null ? null : decryptSetting(raw);
+}
+export async function setSecretSetting(key, value) {
+  if (value == null || value === '') return setAppSetting(key, null);
+  return setAppSetting(key, encryptSetting(value));
+}
+
 export async function setAppSetting(key, value) {
   await pool.query(
     `INSERT INTO app_settings (key, value, updated_at) VALUES ($1, $2, now())
