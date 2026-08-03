@@ -14,14 +14,14 @@ import { migrate, upsertUser, getUserByEmail, getInstanceForUser, getCompatibleP
   getAppearance, setAppearance, getOwnerUserId,
   createInvite, getValidInvite, consumeInvite, listInvites, revokeInvite,
   listUsers, listAllInstances, countUsers,
-  getAppSetting, setAppSetting } from './db.js';
+  getAppSetting, setAppSetting, setSecretSetting } from './db.js';
 import { createAuthentikUser, linkAuthentikUser, authentikUserExists, authentikConfigured, OWNER_GROUP } from './authentik.js';
 import { registerConnectorRoutes, connectorOnline, isConnectorOnline, proxyViaConnector, openTcpStream } from './connector.js';
 import { provisionForUser } from './provisioner.js';
 import { startBatch, activeBatchForUser, advanceBatch, cancelBatch, startOrchestrator } from './batch.js';
 import { activateRoute, deactivateRoute, reconcileRoutes } from './routing.js';
 import { generateKeyPair, encryptPrivate, invalidateSigningCache } from './signing.js';
-import { ensureStream, iceServers, GO2RTC_URL } from './go2rtc.js';
+import { ensureStream, iceServers, turnCredentials, mintTurn, GO2RTC_URL } from './go2rtc.js';
 import { dbg } from './debuglog.js';
 
 // Bambu HMS error dictionary (short_code "XXXX_YYYY" -> human description),
@@ -329,16 +329,48 @@ async function getDeploymentMode() {
   return normalizeDeploymentMode(await getAppSetting('deployment_mode', 'both'));
 }
 
+// Never return the TURN token, only whether one is set and enough of the key id
+// to recognise which credential is in use. The token is write-only over the API:
+// there is no code path that reads it back out to a browser.
+async function turnStatus() {
+  const { keyId, token } = await turnCredentials();
+  return {
+    configured: Boolean(keyId && token),
+    key_id_hint: keyId ? `…${keyId.slice(-4)}` : null
+  };
+}
 app.get('/api/admin/settings', async (req, reply) => {
   const owner = await requireOwner(req, reply); if (!owner) return;
-  return { deployment_mode: await getDeploymentMode() };
+  return { deployment_mode: await getDeploymentMode(), cf_turn: await turnStatus() };
 });
 app.put('/api/admin/settings', async (req, reply) => {
   const owner = await requireOwner(req, reply); if (!owner) return;
-  if ('deployment_mode' in (req.body || {})) {
-    await setAppSetting('deployment_mode', normalizeDeploymentMode(req.body.deployment_mode));
+  const body = req.body || {};
+  if ('deployment_mode' in body) {
+    await setAppSetting('deployment_mode', normalizeDeploymentMode(body.deployment_mode));
   }
-  return { ok: true, deployment_mode: await getDeploymentMode() };
+  // Cloudflare TURN credentials. Empty string clears; absent leaves unchanged,
+  // so the UI can save other settings without having to re-enter the token.
+  if ('cf_turn_key_id' in body) {
+    await setSecretSetting('cf_turn_key_id', String(body.cf_turn_key_id || '').trim());
+  }
+  if ('cf_turn_api_token' in body) {
+    await setSecretSetting('cf_turn_api_token', String(body.cf_turn_api_token || '').trim());
+  }
+  return { ok: true, deployment_mode: await getDeploymentMode(), cf_turn: await turnStatus() };
+});
+// Ask Cloudflare to mint a throwaway credential so the owner finds out the
+// token is wrong here, rather than from a camera that silently fails to
+// connect for one user on one network three weeks later.
+app.post('/api/admin/settings/turn-test', async (req, reply) => {
+  const owner = await requireOwner(req, reply); if (!owner) return;
+  const { keyId, token } = await turnCredentials();
+  if (!keyId || !token) return reply.code(400).send({ ok: false, error: 'No TURN key id / token saved yet.' });
+  const r = await mintTurn(60);
+  if (!r) return reply.code(400).send({ ok: false, error: 'TURN is not configured.' });
+  if (r.error) return reply.code(502).send({ ok: false, error: `Cloudflare rejected the credentials: ${r.error}` });
+  const urls = [].concat(r.iceServers?.urls || []);
+  return { ok: true, relay_urls: urls.length, sample: urls.slice(0, 3) };
 });
 const FEATURES = [
   { key: 'genfilament', name: 'GenFilament', desc: 'AI filament profile generator for OrcaSlicer / Bambu Studio', paid: true }

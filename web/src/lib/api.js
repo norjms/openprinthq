@@ -56,6 +56,7 @@ export const api = {
   pubConfig: () => req('/pub/config'),
   adminSettings: () => req('/admin/settings'),
   saveAdminSettings: (body) => req('/admin/settings', { method: 'PUT', body: JSON.stringify(body) }),
+  testTurn: () => req('/admin/settings/turn-test', { method: 'POST' }),
   // ---- printer model-name mapping (friendly names for internal codes) ----
   lookupModelName: (vendor, code) => req('/model-names/lookup?vendor=' + encodeURIComponent(vendor) + '&code=' + encodeURIComponent(code)),
   learnModelName: (vendor, code, friendly_name) => req('/model-names/learn', { method: 'POST', body: JSON.stringify({ vendor, code, friendly_name }) }),
