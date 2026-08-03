@@ -16,6 +16,7 @@
 // tenants never collide on a shared go2rtc.
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { getSecretSetting } from './db.js';
 
 const pexec = promisify(execFile);
 const GO2RTC_URL = process.env.OPHQ_GO2RTC_URL || 'http://openprinthq-go2rtc:1984';
@@ -72,24 +73,52 @@ export { GO2RTC_URL };
 // ---- ICE servers (STUN always; Cloudflare TURN for remote/CGNAT) ----------
 // Cloudflare issues SHORT-LIVED TURN credentials, so the control-plane mints a
 // fresh set per session and hands them to the browser (no static secret that
-// expires). Configured via env; returns STUN-only when TURN isn't set up.
-const CF_TURN_KEY = process.env.OPHQ_CF_TURN_KEY_ID || '';
-const CF_TURN_TOKEN = process.env.OPHQ_CF_TURN_API_TOKEN || '';
+// expires).
+//
+// Credentials come from the owner's admin settings (encrypted at rest), falling
+// back to env for existing deployments. Settings win so the owner can rotate a
+// leaked token from the UI without a redeploy.
+//
+// Why TURN matters here: printers behind CGNAT are exactly the population where
+// hole-punching fails, so the browser<->connector leg needs a relay to fall back
+// to. Cloudflare's STUN is free and their TURN has a free monthly allowance, and
+// it can relay over TLS/443, which survives networks that block UDP outright.
+const CF_TURN_KEY_ENV = process.env.OPHQ_CF_TURN_KEY_ID || '';
+const CF_TURN_TOKEN_ENV = process.env.OPHQ_CF_TURN_API_TOKEN || '';
+
+export async function turnCredentials() {
+  const keyId = (await getSecretSetting('cf_turn_key_id')) || CF_TURN_KEY_ENV;
+  const token = (await getSecretSetting('cf_turn_api_token')) || CF_TURN_TOKEN_ENV;
+  return { keyId: keyId || '', token: token || '' };
+}
+
+// Ask Cloudflare for a short-lived credential set. Returns null when TURN is not
+// configured or Cloudflare rejects us; callers degrade to STUN-only.
+export async function mintTurn(ttl = 3600) {
+  const { keyId, token } = await turnCredentials();
+  if (!keyId || !token) return null;
+  try {
+    const r = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${keyId}/credentials/generate`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ ttl })
+    });
+    if (!r.ok) return { error: `Cloudflare returned HTTP ${r.status}` };
+    const j = await r.json();
+    return j && j.iceServers ? { iceServers: j.iceServers } : { error: 'no iceServers in response' };
+  } catch (e) {
+    return { error: e.message || 'request failed' };
+  }
+}
 
 export async function iceServers(ttl = 3600) {
-  const list = [{ urls: 'stun:stun.l.google.com:19302' }];
-  if (CF_TURN_KEY && CF_TURN_TOKEN) {
-    try {
-      const r = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${CF_TURN_KEY}/credentials/generate`, {
-        method: 'POST',
-        headers: { authorization: `Bearer ${CF_TURN_TOKEN}`, 'content-type': 'application/json' },
-        body: JSON.stringify({ ttl })
-      });
-      if (r.ok) {
-        const j = await r.json();
-        if (j && j.iceServers) list.push(j.iceServers); // {urls:[...], username, credential}
-      }
-    } catch { /* fall back to STUN only */ }
-  }
+  const list = [
+    // Cloudflare's STUN is free and unmetered; Google's is the historical
+    // fallback and costs nothing to keep as a second option.
+    { urls: 'stun:stun.cloudflare.com:3478' },
+    { urls: 'stun:stun.l.google.com:19302' }
+  ];
+  const t = await mintTurn(ttl);
+  if (t && t.iceServers) list.push(t.iceServers);
   return list;
 }

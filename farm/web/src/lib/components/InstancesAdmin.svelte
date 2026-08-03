@@ -33,6 +33,49 @@
     finally { modeBusy = false; }
   }
 
+  // Cloudflare TURN credentials for remote camera (WebRTC) relay. The token is
+  // write-only: the server never returns it, so the field starts blank and an
+  // empty submit means "leave unchanged".
+  let turn = $state({ configured: false, key_id_hint: null });
+  let turnKeyId = $state('');
+  let turnToken = $state('');
+  let turnBusy = $state(false);
+  let turnMsg = $state('');
+  async function saveTurn() {
+    if (turnBusy) return;
+    turnBusy = true; turnMsg = ''; err = '';
+    try {
+      const body = {};
+      if (turnKeyId.trim()) body.cf_turn_key_id = turnKeyId.trim();
+      if (turnToken.trim()) body.cf_turn_api_token = turnToken.trim();
+      if (!Object.keys(body).length) { turnMsg = 'Nothing to save.'; return; }
+      const r = await api.saveAdminSettings(body);
+      turn = r.cf_turn || turn;
+      turnKeyId = ''; turnToken = '';
+      turnMsg = 'Saved. Credentials are encrypted at rest and never sent back to the browser.';
+    } catch (e) { err = e.message || 'could not save TURN credentials'; }
+    finally { turnBusy = false; }
+  }
+  async function clearTurn() {
+    if (turnBusy) return;
+    turnBusy = true; turnMsg = ''; err = '';
+    try {
+      const r = await api.saveAdminSettings({ cf_turn_key_id: '', cf_turn_api_token: '' });
+      turn = r.cf_turn || { configured: false, key_id_hint: null };
+      turnMsg = 'TURN credentials removed. Remote cameras will fall back to STUN only.';
+    } catch (e) { err = e.message || 'could not clear TURN credentials'; }
+    finally { turnBusy = false; }
+  }
+  async function testTurn() {
+    if (turnBusy) return;
+    turnBusy = true; turnMsg = ''; err = '';
+    try {
+      const r = await api.testTurn();
+      turnMsg = `Cloudflare issued a credential with ${r.relay_urls} relay URL(s). TURN is working.`;
+    } catch (e) { err = e.message || 'TURN test failed'; }
+    finally { turnBusy = false; }
+  }
+
   async function loadAll() {
     const [inv, us, inst, feat, settings] = await Promise.all([
       api.adminInvites().catch(() => ({ invites: [] })),
@@ -46,6 +89,7 @@
     instances = inst.instances || [];
     featureCatalog = feat.features || [];
     deploymentMode = settings.deployment_mode || 'both';
+    turn = settings.cf_turn || { configured: false, key_id_hint: null };
     const q = {};
     for (const i of instances) q[i.id] = i.storage_quota_mb == null ? '' : String(i.storage_quota_mb);
     quotaEdits = q;
@@ -126,6 +170,51 @@
       <button class="modebtn" class:on={deploymentMode === 'remote'} disabled={modeBusy} onclick={() => setMode('remote')}>☁️ Remote</button>
       <button class="modebtn" class:on={deploymentMode === 'both'} disabled={modeBusy} onclick={() => setMode('both')}>🔄 Both</button>
     </div>
+  </section>
+
+  <!-- REMOTE CAMERA RELAY (TURN) -->
+  <section class="card card-pad blk">
+    <h3>Remote camera relay (TURN)</h3>
+    <p class="muted small">
+      Remote camera video goes straight from the viewer's browser to the Cloud Client on the
+      printer's network, so it never passes through this server. When both ends sit behind
+      restrictive NAT — which is normal on CGNAT connections — that direct path can't be
+      established and the video needs a relay to fall back to.
+    </p>
+    <p class="muted small">
+      Cloudflare's STUN service is used always and costs nothing. Adding Cloudflare Realtime
+      TURN credentials below enables the relay fallback, which also works over TLS on port 443
+      for networks that block UDP. Without it, cameras will work on permissive networks and
+      fail on strict ones.
+    </p>
+    <p class="small">
+      Status:
+      {#if turn.configured}
+        <b class="ok">configured</b> <span class="muted">(key {turn.key_id_hint})</span>
+      {:else}
+        <b class="warn">not configured</b> <span class="muted">— STUN only</span>
+      {/if}
+    </p>
+    <div class="turnform">
+      <label class="small">
+        TURN key ID
+        <input type="text" bind:value={turnKeyId} placeholder={turn.configured ? 'unchanged' : 'Cloudflare Realtime TURN key ID'} autocomplete="off" />
+      </label>
+      <label class="small">
+        API token
+        <input type="password" bind:value={turnToken} placeholder={turn.configured ? 'unchanged' : 'Cloudflare API token'} autocomplete="off" />
+      </label>
+    </div>
+    <div class="turnbtns">
+      <button class="btn" disabled={turnBusy} onclick={saveTurn}>Save</button>
+      <button class="btn" disabled={turnBusy || !turn.configured} onclick={testTurn}>Test</button>
+      <button class="btn danger" disabled={turnBusy || !turn.configured} onclick={clearTurn}>Remove</button>
+    </div>
+    {#if turnMsg}<p class="small ok">{turnMsg}</p>{/if}
+    <p class="muted small">
+      The token is stored encrypted and is never returned by the API, so it cannot be read back
+      here once saved — rotate it in Cloudflare and re-enter it if it is ever exposed.
+    </p>
   </section>
 
   <!-- INVITES -->
@@ -246,4 +335,10 @@
   .ok { color: var(--ophq-ok, #16a34a); font-size: 0.9rem; }
   .err { color: var(--ophq-danger); font-size: 0.9rem; }
   .small { font-size: 0.85rem; }
+  .turnform { display: grid; gap: .6rem; margin: .6rem 0; max-width: 32rem; }
+  .turnform label { display: grid; gap: .25rem; }
+  .turnform input { width: 100%; }
+  .turnbtns { display: flex; gap: .5rem; flex-wrap: wrap; }
+  .ok { color: var(--ok, #3aa657); }
+  .warn { color: var(--warn, #b8860b); }
 </style>
