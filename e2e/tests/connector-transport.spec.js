@@ -18,4 +18,7 @@ test('the tunnel endpoint rejects an unauthenticated upgrade', async ({ request 
     failOnStatusCode: false
   });
   expect(res.status(), 'unauthenticated upgrade must not be accepted').not.toBe(101);
+  // And it should be refused before the handshake, not after: 401 from the app,
+  // or a redirect if an SSO edge sits in front on this tier.
+  expect([301, 302, 401, 403]).toContain(res.status());
 });
