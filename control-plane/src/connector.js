@@ -134,7 +134,10 @@ export function proxyViaConnector(userId, job, timeoutMs = 22000, connectorId = 
     const timer = setTimeout(() => { pending.delete(id); dbg('connector', 'proxyViaConnector: TIMEOUT', { id, userId }); resolve({ status: 504, error: 'connector timeout' }); }, timeoutMs);
     pending.set(id, { resolve, timer });
     signJobIfKeyed(userId, j).then(() => {
-      try { target.raw.write(`data: ${JSON.stringify(j)}\n\n`); }
+      // Must go through the transport, not target.raw: a WebSocket session has
+      // no raw stream, so writing directly here failed every job on the
+      // multiplexed tunnel while the SSE path kept working.
+      try { writeToConnector(target, j); }
       catch { clearTimeout(timer); pending.delete(id); resolve({ status: 502, error: 'connector write failed' }); }
     }).catch(() => { clearTimeout(timer); pending.delete(id); resolve({ status: 500, error: 'signing failed' }); });
   });
