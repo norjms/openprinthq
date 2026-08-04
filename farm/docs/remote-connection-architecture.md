@@ -53,3 +53,92 @@ printer and relays UP:
 The cloud engine consumes relayed state/frames instead of dialing the LAN. Raw
 per-port TCP relays are retired for migrated paths (FTP file transfer may remain
 tunneled as before).
+
+---
+
+## Transport (added 2026-08)
+
+The agent-local model above says *what* runs where. This section is *how* the
+agent and the cloud talk, and why the first two attempts were wrong.
+
+### What was tried and rejected
+
+**Broker / rendezvous (31 July, reverted).** The connector listened on an
+inbound port (default 16384) and the cloud engine dialled it. That reads well on
+a whiteboard and cannot work for the deployment this product exists to serve:
+printers on a home LAN behind CGNAT have no inbound path and the user cannot
+forward a port they don't control. Reverted in full; the implementation remains
+reachable at `2c368fa` (control-plane) and `5332302` (client) if the stream
+framing is ever wanted.
+
+**SSE + POST-per-result (the original).** Workable but two costs showed up as
+"the connector keeps dropping":
+
+1. Every upstream message opened a fresh TCP+TLS connection. A single discovery
+   scan made ~250 of them in about a second.
+2. Every byte of printer traffic — MQTT, FTP, camera frames — was base64'd into
+   one ordered event stream. A large transfer sat in front of a status poll until
+   the engine's staleness threshold fired and the UI declared the printer offline.
+
+### Current: one multiplexed WebSocket
+
+`GET /api/connector/ws` carries the same job protocol over one reused,
+**outbound-only** connection. Control messages are JSON text frames; bulk TCP
+payloads are binary frames chunked to 16 KB, so transfers interleave with polls
+instead of blocking them and nothing pays the base64 tax.
+
+Both transports share `connectorFor` / `proxyViaConnector` / `openTcpStream`
+unchanged — a session exposes `send()` and an optional `sendData()`, and SSE
+supplies only the former. One code path for routing, signing and multi-site
+selection rather than two that drift.
+
+Backwards compatible by design: SSE and `/api/connector/result` still work, and
+`/api/pub/config` advertises `connector_ws` so an agent knows before it probes.
+An agent that cannot upgrade falls back automatically; `OPHQ_DISABLE_WS=1`
+forces the legacy path.
+
+**`openTcpRelay` is still live and is not the retired broker.** `routing.js`
+uses it to give the cloud engine a local TCP endpoint that tunnels through the
+connector. Only the *inbound* broker listener was removed.
+
+### Things that bite at the edge
+
+Both transports are long-lived, and every proxy in front of them must be told so.
+Two separate outages traced to exactly this:
+
+- `proxy_buffering off` — otherwise SSE events arrive batched.
+- `proxy_read_timeout` well above the heartbeat — the default closes the stream
+  and the client reports it as the tunnel dropping.
+- `Connection $connection_upgrade`, never a hardcoded value. Pinning it to `""`
+  silently blocks the WebSocket upgrade; pinning it to `upgrade` breaks ordinary
+  keep-alive. `infra/router/nginx.conf` has the map.
+
+## Camera (added 2026-08)
+
+Frame relay over the tunnel (above) still works and remains the fallback. In
+addition, connector-routed printers can negotiate **WebRTC directly with the
+browser**: the control-plane relays only the SDP offer/answer to the connector's
+own go2rtc, and media then flows browser ↔ connector without crossing the cloud
+host at all.
+
+Direct paths frequently fail on CGNAT, which is the same population this whole
+design targets, so a TURN relay is the fallback. Credentials are Cloudflare
+Realtime, held in owner settings (encrypted at rest, write-only over the API),
+with STUN always available and unmetered. **Without TURN configured, remote
+cameras work on permissive networks and fail on strict ones** — that is the
+expected behaviour, not a bug.
+
+## What is deliberately NOT retired yet
+
+- **The cloud go2rtc.** It still serves local-mode printers, which the cloud can
+  reach directly. Retiring it waits on the connector-side WebRTC path having
+  actually carried traffic.
+- **The SSE transport.** Kept until no deployed client needs it.
+
+## Testing note
+
+Handshake probes are not sufficient. A bug where `proxyViaConnector` wrote to
+`target.raw` directly shipped to all three tiers with every endpoint check
+green: the upgrade succeeded, the connector reported online, and every job
+failed. `e2e/live-connector-check.sh` attaches a real agent and makes it do
+work; it is a gate in `promote.sh`.
