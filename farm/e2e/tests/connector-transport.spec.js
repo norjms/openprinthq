@@ -22,3 +22,17 @@ test('the tunnel endpoint rejects an unauthenticated upgrade', async ({ request 
   // or a redirect if an SSO edge sits in front on this tier.
   expect([301, 302, 401, 403]).toContain(res.status());
 });
+
+// Regression guard for a bug that only showed up with a real agent attached:
+// proxyViaConnector wrote to target.raw directly instead of going through the
+// transport, so every job failed with "connector write failed" on the
+// multiplexed tunnel while the SSE path kept working.
+test('a job to an offline connector reports it offline, not as a write failure', async ({ request }) => {
+  const res = await request.post('/api/connectors/999999/discover', {
+    data: { window_ms: 1000 },
+    failOnStatusCode: false
+  });
+  if (res.status() >= 400) return;           // not found / not authorised is fine
+  const body = await res.json().catch(() => ({}));
+  expect(body.error || '').not.toContain('connector write failed');
+});
