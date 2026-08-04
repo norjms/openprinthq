@@ -295,13 +295,23 @@ export function registerConnectorRoutes(app) {
   //   type 1 = TCP data
   // Stream indexes are per-session; the canonical id stays the UUID so the SSE
   // path and this one share all the logic above.
-  app.get('/api/connector/ws', { websocket: true }, async (socket, req) => {
-    const conn = await getConnectorByToken(bearer(req));
-    if (!conn) { try { socket.close(4401, 'invalid connector token'); } catch { /* */ } return; }
-    if (!(await ensureClientAuth(conn, req))) {
-      try { socket.close(4401, 'client key authentication failed — reset this connector in Settings → Connectors to pair a new client'); } catch { /* */ }
-      return;
+  app.get('/api/connector/ws', {
+    websocket: true,
+    // Authenticate BEFORE the upgrade. Checking inside the handler meant an
+    // unauthenticated caller completed a full websocket handshake and only then
+    // got closed — wasted work on our side and inconsistent with the SSE route,
+    // which answers a plain 401. Rejecting here keeps both transports honest.
+    preValidation: async (req, reply) => {
+      const conn = await getConnectorByToken(bearer(req));
+      if (!conn) return reply.code(401).send({ error: 'invalid connector token' });
+      if (!(await ensureClientAuth(conn, req))) {
+        return reply.code(401).send({ error: 'client key authentication failed — this connector is locked to a different client key; reset it in Settings → Connectors to pair a new client' });
+      }
+      req.ophqConnector = conn;
     }
+  }, async (socket, req) => {
+    const conn = req.ophqConnector;
+    if (!conn) { try { socket.close(4401, 'invalid connector token'); } catch { /* */ } return; }
     const prev = streams.get(conn.id);
     if (prev) { try { clearInterval(prev.heartbeat); prev.closeSession?.(); } catch { /* */ } }
 
