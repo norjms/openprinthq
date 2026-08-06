@@ -14,7 +14,7 @@
 // engine keeps `ip_address` as the (relay) host and reads a per-role PORT from
 // `endpoint_overrides`, so a single relay host serves every port a printer uses.
 import { getInstanceForUser, getAutomation, setRouteDirect, listActiveRoutes } from './db.js';
-import { openTcpRelay, closeRelay, connectorOnline, RELAY_HOST, relayPort, proxyViaConnector } from './connector.js';
+import { openTcpRelay, closeRelay, connectorOnline, RELAY_HOST, relayPort, proxyViaConnector, onConnectorOnline } from './connector.js';
 import { dbg } from './debuglog.js';
 
 const ENGINE_PORT = 8000;
@@ -206,16 +206,33 @@ export async function reconcileRoutes() {
     const prof = printer ? profileFor(printer) : null;
     if (prof) prof.endpoints.forEach((ep, idx) => openTcpRelay(r.user_id, r.direct_host, ep.port, relayPort(r.printer_id, idx), r.connector_id ?? null));
     else openTcpRelay(r.user_id, r.direct_host, r.direct_port || 7125, relayPort(r.printer_id, 0), r.connector_id ?? null);
-    // Re-register the camera too. Previously only the MQTT/FTP relays were
-    // rebuilt here, so a camera-register that failed once — connector offline,
-    // or a tunnel too slow to answer within the timeout — stayed failed
-    // forever: nothing retried it, and the printer silently kept
-    // external_camera_enabled = false while control and files worked fine.
-    if (printer && !printer.external_camera_enabled) {
-      try { await setupCameraRelay(r.user_id, r.printer_id, printer, r.direct_host, r.connector_id ?? null, base); }
-      catch (e) { dbg('routing', 'camera re-register failed', { printerId: r.printer_id, error: e?.message }); }
-    }
     n++;
   }
   if (n) console.log(`[routing] reconciled ${n} via-connector printer(s)`);
 }
+
+// Camera registration needs the connector present, and reconcile runs at
+// startup — before any agent has reconnected — so retrying there always failed
+// with "connector offline". Hang it off the session instead: whenever a
+// connector attaches, register the camera for any of its printers still
+// missing one. That makes it self-healing, which matters because a single
+// failed attempt previously left a camera dark indefinitely with control and
+// file transfer working normally.
+onConnectorOnline(async (connectorId, userId) => {
+  let rows = [];
+  try { rows = await listActiveRoutes(); } catch { return; }
+  const base = engineBase(await getInstanceForUser(userId));
+  if (!base) return;
+  for (const r of rows) {
+    if (r.connector_id !== connectorId || !r.direct_host) continue;
+    let printer = null;
+    try { printer = await eng(base, `/api/v1/printers/${r.printer_id}`); } catch { continue; }
+    if (!printer || printer.external_camera_enabled) continue;
+    try {
+      await setupCameraRelay(userId, r.printer_id, printer, r.direct_host, connectorId, base);
+      dbg('routing', 'camera registered on connector attach', { printerId: r.printer_id, connectorId });
+    } catch (e) {
+      dbg('routing', 'camera register on attach failed', { printerId: r.printer_id, error: e?.message });
+    }
+  }
+});
