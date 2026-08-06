@@ -135,10 +135,15 @@ export async function migrate() {
   await pool.query(`ALTER TABLE connectors ADD COLUMN IF NOT EXISTS client_public_pem TEXT;`);
   await pool.query(`ALTER TABLE connectors ADD COLUMN IF NOT EXISTS host_cidr TEXT;`);
 
-  // Platform-wide learned mapping of a vendor's internal model code (e.g. Bambu
-  // SSDP devmodel "O1D") to a friendly marketing name ("H2D"). Filled when a user
-  // types a name on add (fill-when-empty), and lockable by a global admin so user
-  // input can't overwrite a curated name. Keyed by (vendor, code).
+  // Platform-wide learned mapping from whatever identifier a vendor happens to
+  // expose during discovery to the name a human actually uses. For Bambu that
+  // identifier is the SSDP devmodel ("O1D" -> "H2D"); other manufacturers may
+  // expose something else, or nothing at all, so `code` is "whatever we can key
+  // on", not "a devmodel".
+  //
+  // Filled when a user names a printer on add (fill-when-empty), and lockable by
+  // a global admin so a curated name can't be overwritten and one user's typo
+  // can't propagate. Nothing is seeded here: the user is the source.
   await pool.query(`
     CREATE TABLE IF NOT EXISTS printer_model_names (
       vendor       TEXT NOT NULL,
@@ -148,23 +153,6 @@ export async function migrate() {
       updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
       PRIMARY KEY (vendor, code)
     );
-  `);
-
-  // Seed the vendor code -> marketing name map from the engine's authoritative
-  // table (backend/app/services/virtual_printer/manager.py). Users know their
-  // printer as an "H2D", never as an "O1D" — the code is a wire detail from
-  // SSDP/MQTT and should be translated once, on the way in, and never surface
-  // again. Learned rows are left alone: ON CONFLICT DO NOTHING means a name an
-  // admin curated always wins over this seed.
-  await pool.query(`
-    INSERT INTO printer_model_names (vendor, code, friendly_name) VALUES
-      ('bambu','BL-P001','X1C'), ('bambu','BL-P002','X1'), ('bambu','C13','X1E'),
-      ('bambu','N6','X2D'), ('bambu','N9','A2L'),
-      ('bambu','C11','P1P'), ('bambu','C12','P1S'), ('bambu','N7','P2S'),
-      ('bambu','N2S','A1'), ('bambu','N1','A1 Mini'),
-      ('bambu','O1D','H2D'), ('bambu','O1C','H2C'), ('bambu','O1C2','H2C'),
-      ('bambu','O1S','H2S'), ('bambu','O1E','H2D Pro'), ('bambu','O2D','H2D Pro')
-    ON CONFLICT (vendor, code) DO NOTHING;
   `);
 
   await pool.query(`
@@ -351,6 +339,16 @@ export async function friendlyModelName(vendor, code) {
   } catch { return code; }
 }
 
+// Learn a model name from what a user typed on add. Deliberately NOT seeded
+// from any shipped list: the name comes from the person who owns the printer,
+// and a global admin curates or locks it afterwards so one typo doesn't
+// propagate to everyone who scans next.
+//
+// Returns null when the vendor gave us nothing to key on. Not every
+// manufacturer exposes a model identifier during discovery, and when there is
+// no shared key there is nothing to share — the printer still gets the name the
+// user typed, it just stays local to that printer instead of teaching the
+// platform. Callers must treat null as "not shareable", not as failure.
 export async function learnModelName(vendor, code, friendly) {
   const [v, c] = normModelKey(vendor, code);
   const f = String(friendly || '').trim();

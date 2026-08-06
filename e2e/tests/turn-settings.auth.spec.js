@@ -42,19 +42,18 @@ test.describe('TURN credentials — admin settings', () => {
   });
 });
 
-// Users know their printer as an "H2D", never as an "O1D". The vendor code is a
-// wire detail from SSDP/MQTT and must be translated on the way in — if it ever
-// reaches a screen or a client, someone has to look up what it means.
-test('vendor model codes are translated to marketing names', async ({ request }) => {
+// The model-name table is LEARNED from users and curated by an admin — nothing
+// is seeded. So the assertion is about the mechanism, not about any particular
+// model being present: whatever is in there must translate to something other
+// than the raw identifier, or it isn't doing its job.
+test('learned model names translate the vendor identifier, never echo it', async ({ request }) => {
   const res = await request.get('/api/admin/model-names', { failOnStatusCode: false });
-  if (res.status() === 403 || res.status() === 404) test.skip(true, 'not owner / route absent on this tier');
-  const rows = await res.json();
-  const byCode = Object.fromEntries((rows.items || rows).map((r) => [r.code, r.friendly_name]));
-  // Seeded from the engine's authoritative table.
-  expect(byCode['O1D']).toBe('H2D');
-  expect(byCode['O1C2']).toBe('H2C');
-  expect(byCode['BL-P001']).toBe('X1C');
-  for (const [code, name] of Object.entries(byCode)) {
-    expect(name, `${code} must map to a name, not back to itself`).not.toBe(code);
+  if ([403, 404].includes(res.status())) test.skip(true, 'not owner / route absent on this tier');
+  const body = await res.json();
+  const rows = body.items || body;
+  expect(Array.isArray(rows)).toBeTruthy();
+  for (const r of rows) {
+    expect(r.friendly_name, `${r.code} must map to a name, not back to itself`).not.toBe(r.code);
+    expect(String(r.friendly_name).trim().length).toBeGreaterThan(0);
   }
 });
