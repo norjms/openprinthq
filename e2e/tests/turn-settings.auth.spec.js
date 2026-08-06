@@ -41,3 +41,20 @@ test.describe('TURN credentials — admin settings', () => {
     expect([200, 400, 403, 502]).toContain(res.status());
   });
 });
+
+// Users know their printer as an "H2D", never as an "O1D". The vendor code is a
+// wire detail from SSDP/MQTT and must be translated on the way in — if it ever
+// reaches a screen or a client, someone has to look up what it means.
+test('vendor model codes are translated to marketing names', async ({ request }) => {
+  const res = await request.get('/api/admin/model-names', { failOnStatusCode: false });
+  if (res.status() === 403 || res.status() === 404) test.skip(true, 'not owner / route absent on this tier');
+  const rows = await res.json();
+  const byCode = Object.fromEntries((rows.items || rows).map((r) => [r.code, r.friendly_name]));
+  // Seeded from the engine's authoritative table.
+  expect(byCode['O1D']).toBe('H2D');
+  expect(byCode['O1C2']).toBe('H2C');
+  expect(byCode['BL-P001']).toBe('X1C');
+  for (const [code, name] of Object.entries(byCode)) {
+    expect(name, `${code} must map to a name, not back to itself`).not.toBe(code);
+  }
+});
