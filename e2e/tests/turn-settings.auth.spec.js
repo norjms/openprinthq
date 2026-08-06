@@ -50,8 +50,8 @@ test('learned model names translate the vendor identifier, never echo it', async
   const res = await request.get('/api/admin/model-names', { failOnStatusCode: false });
   if ([403, 404].includes(res.status())) test.skip(true, 'not owner / route absent on this tier');
   const body = await res.json();
-  const rows = body.items || body;
-  expect(Array.isArray(rows)).toBeTruthy();
+  const rows = body.model_names || body.items || body;
+  expect(Array.isArray(rows), 'expected model_names array, got ' + JSON.stringify(body).slice(0, 120)).toBeTruthy();
   for (const r of rows) {
     expect(r.friendly_name, `${r.code} must map to a name, not back to itself`).not.toBe(r.code);
     expect(String(r.friendly_name).trim().length).toBeGreaterThan(0);
