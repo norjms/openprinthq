@@ -84,9 +84,17 @@
     } catch { /* */ }
   });
 
+  // Open the list on focus and show everything. Requiring two characters before
+  // anything appeared meant a user who didn't already know their model's exact
+  // name got a blank box — the whole point of shipping a 385-model catalog is
+  // that you can browse it.
+  let open = $state(false);
   const results = $derived.by(() => {
     const q = query.trim().toLowerCase();
-    if (!q || q.length < 2) return [];
+    if (!q) return catalog.slice().sort((a, b) =>
+      (a.popularity_rank ?? 9) - (b.popularity_rank ?? 9) ||
+      vname(a.vendor).localeCompare(vname(b.vendor)) ||
+      a.model.localeCompare(b.model));
     const out = [];
     for (const r of catalog) {
       const hay = (vname(r.vendor) + ' ' + r.model).toLowerCase();
@@ -94,9 +102,19 @@
       if (i >= 0) out.push({ r, score: i * 100 + (r.popularity_rank ?? 9) });
     }
     out.sort((a, b) => a.score - b.score);
-    return out.slice(0, 40).map((s) => s.r);
+    return out.map((s) => s.r);
   });
   const popular = $derived(catalog.filter((r) => (r.popularity_rank ?? 9) <= 1).slice(0, 10));
+  // Vendor headings so 385 entries are scannable rather than a wall.
+  const grouped = $derived.by(() => {
+    const m = new Map();
+    for (const r of results) {
+      const v = vname(r.vendor);
+      if (!m.has(v)) m.set(v, []);
+      m.get(v).push(r);
+    }
+    return [...m.entries()];
+  });
 
   const caps = (r) => {
     const c = [];
@@ -266,35 +284,51 @@
   <p class="muted lead">Search your printer by brand or model — we set up the right connection automatically. Everything connects through your private engine; nothing leaves your network.</p>
 
   <div class="finder card card-pad">
-    <input class="input search" bind:value={query} autocomplete="off" spellcheck="false"
-           placeholder="Search — e.g. X1 Carbon, Voron 2.4, Ender 3 V3, Prusa MK4…" aria-label="Search printers" />
+    <div class="picker">
+      <input class="input search" bind:value={query} autocomplete="off" spellcheck="false"
+             onfocus={() => (open = true)}
+             onkeydown={(e) => { if (e.key === 'Escape') open = false; }}
+             placeholder="Choose your printer — click to browse all {catalog.length} models, or type to filter"
+             aria-label="Choose printer model" aria-expanded={open} role="combobox" aria-controls="model-list" />
+      <button type="button" class="toggle" aria-label={open ? 'Close list' : 'Show all models'}
+              onclick={() => (open = !open)}>{open ? '▲' : '▼'}</button>
+    </div>
 
-    {#if query.trim().length >= 2}
-      {#if results.length}
-        <div class="results">
-          {#each results as r}
-            <button type="button" class="resrow" onclick={() => pickCatalog(r)}>
-              <span class="rmain"><b class="rm">{r.model}</b><span class="rv muted">{vname(r.vendor)}</span></span>
-              <span class="rmeta">
-                <span class="conn">{vendorByKey[vendorForRow(r)]?.name?.split(' ')[0] ?? 'Host'}</span>
-                {#each caps(r) as c}<span class="cap">{c}</span>{/each}
-              </span>
-            </button>
-          {/each}
-        </div>
-      {:else if !catalogLoading}
+    {#if open}
+      {#if catalogLoading}
+        <p class="muted tiny nores">Loading the printer catalog…</p>
+      {:else if catalogErr}
+        <p class="muted tiny nores">Catalog unavailable ({catalogErr}) — pick a platform below, or scan your network.</p>
+      {:else if !results.length}
         <p class="muted tiny nores">No match in the {catalog.length}-model catalog. Pick a platform below, or scan your network.</p>
-      {/if}
-    {:else}
-      {#if popular.length}
-        <div class="pop">
-          <span class="muted tiny poplabel">Popular</span>
-          {#each popular as r}
-            <button type="button" class="chip" onclick={() => pickCatalog(r)}>{r.model}</button>
+      {:else}
+        <div class="results" id="model-list" role="listbox">
+          {#each grouped as [vendorName, rows]}
+            <div class="vgroup" role="presentation">{vendorName}</div>
+            {#each rows as r}
+              <button type="button" class="resrow" role="option" aria-selected="false"
+                      onclick={() => { pickCatalog(r); open = false; }}>
+                <span class="rmain"><b class="rm">{r.model}</b></span>
+                <span class="rmeta">
+                  <span class="conn">{vendorByKey[vendorForRow(r)]?.name?.split(' ')[0] ?? 'Host'}</span>
+                  {#each caps(r) as c}<span class="cap">{c}</span>{/each}
+                </span>
+              </button>
+            {/each}
           {/each}
         </div>
+        <p class="muted tiny nores">
+          Can't see it? Any Klipper or Moonraker machine works even if the exact model isn't listed —
+          the model only picks the slicing profile.
+        </p>
       {/if}
-      {#if catalogErr}<p class="muted tiny">Catalog unavailable ({catalogErr}) — pick a platform below.</p>{/if}
+    {:else if popular.length}
+      <div class="pop">
+        <span class="muted tiny poplabel">Popular</span>
+        {#each popular as r}
+          <button type="button" class="chip" onclick={() => pickCatalog(r)}>{r.model}</button>
+        {/each}
+      </div>
     {/if}
 
     <div class="scanrow2">
@@ -428,6 +462,15 @@
   .finder { margin-bottom: 1rem; }
   .search { width: 100%; font-size: 1.05rem; padding: 0.8rem 1rem; }
   .results { display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.8rem; max-height: 46vh; overflow-y: auto; }
+  .picker { display: flex; gap: 0.4rem; align-items: stretch; }
+  .picker .search { flex: 1; }
+  .toggle { flex: 0 0 auto; padding: 0 0.9rem; border-radius: var(--radius, 8px);
+            border: 1px solid var(--border, #333); background: var(--surface, #1b1b1b);
+            color: inherit; cursor: pointer; font-size: 0.8rem; }
+  .toggle:hover { background: var(--surface-2, #242424); }
+  .vgroup { position: sticky; top: 0; z-index: 1; padding: 0.3rem 0.2rem;
+            font-size: 0.72rem; letter-spacing: 0.04em; text-transform: uppercase;
+            color: var(--muted, #999); background: var(--card, #151515); }
   .resrow { display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; text-align: left;
     padding: 0.6rem 0.8rem; border: 1px solid var(--ophq-border); border-radius: var(--radius-sm);
     background: var(--ophq-surface); cursor: pointer; transition: border 0.12s, background 0.12s; }
