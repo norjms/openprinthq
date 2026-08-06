@@ -92,6 +92,18 @@ function connectorFor(userId, connectorId = null) {
 }
 // Transport-agnostic send. An SSE session writes an event frame; a WebSocket
 // session sends a text frame. Everything above this line is unaware of which.
+// Fired when a connector session becomes usable. Reconcile runs at startup —
+// before any agent has had time to reconnect — so anything that needs the
+// connector present (camera registration) must hang off this instead, or it
+// runs at the one moment the connector is guaranteed to be absent.
+const onlineHandlers = [];
+export function onConnectorOnline(fn) { onlineHandlers.push(fn); }
+function announceOnline(connectorId, userId) {
+  for (const fn of onlineHandlers) {
+    try { Promise.resolve(fn(connectorId, userId)).catch(() => {}); } catch { /* never break the session */ }
+  }
+}
+
 function writeToConnector(target, obj) { target.send(obj); }
 
 // Bulk TCP payloads go as BINARY WebSocket frames when the transport supports
@@ -250,6 +262,7 @@ export function registerConnectorRoutes(app) {
       closeSession: () => { try { raw.end(); } catch { /* already gone */ } }
     });
     dbg('connector', 'stream CONNECTED', { connectorId: conn.id, userId: conn.user_id, name, keyed: !!conn.client_public_pem });
+    announceOnline(conn.id, conn.user_id);
     touchConnector(conn.id).catch(() => {});
     const cleanup = () => {
       clearInterval(heartbeat);
@@ -365,6 +378,7 @@ export function registerConnectorRoutes(app) {
     });
     dbg('connector', 'ws CONNECTED', { connectorId: conn.id, userId: conn.user_id, name, keyed: !!conn.client_public_pem });
     touchConnector(conn.id).catch(() => {});
+    announceOnline(conn.id, conn.user_id);
 
     socket.on('message', (raw, isBinary) => {
       touchConnector(conn.id).catch(() => {});
