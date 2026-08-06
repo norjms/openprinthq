@@ -212,7 +212,7 @@ export async function reconcileRoutes() {
     // forever: nothing retried it, and the printer silently kept
     // external_camera_enabled = false while control and files worked fine.
     if (printer && !printer.external_camera_enabled) {
-      try { await registerCameraRelay(r.user_id, r.printer_id, printer, r.direct_host, base, r.connector_id ?? null); }
+      try { await setupCameraRelay(r.user_id, r.printer_id, printer, r.direct_host, r.connector_id ?? null, base); }
       catch (e) { dbg('routing', 'camera re-register failed', { printerId: r.printer_id, error: e?.message }); }
     }
     n++;
