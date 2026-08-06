@@ -93,8 +93,6 @@ function profileFor(printer) {
   const fn = PROFILES[key];
   return fn ? { key, ...fn(printer) } : null;
 }
-export function supportedVendors() { return Object.keys(PROFILES); }
-
 // Enable "via connector" for a printer. Returns { ok, reason?, endpoints? }.
 export async function activateRoute(userId, printerId) {
   const inst = await getInstanceForUser(userId);
