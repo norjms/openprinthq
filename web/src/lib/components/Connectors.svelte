@@ -23,7 +23,7 @@
   let printers = $state([]);
   let routing = $state({});   // printerId -> connector_id|null
 
-  // signing key
+  // client key (server-held private half; connectors verify commands with the public half)
   let signPub = $state(null);
   let signCreated = $state(null);
   let signBusy = $state(false);
@@ -66,10 +66,34 @@
     try { const r = await api.generateSigningKey(); signPub = r.public_pem; signCreated = new Date().toISOString(); }
     catch { /* ignore */ } finally { signBusy = false; }
   }
+  // Printers routed through a connector are useless once the key it verifies
+  // commands with is gone — they stay listed but silently stop responding. Offer
+  // to clear them in the same action rather than leaving the user to discover
+  // stranded entries later.
+  let alsoRemovePrinters = $state(false);
+  let boundPrinters = $state(0);
+  async function countBoundPrinters() {
+    try {
+      const auto = await api.printerAutomation();
+      const ids = new Set(list.map((c) => c.id));
+      boundPrinters = Object.values(auto || {}).filter((a) => a && ids.has(a.connector_id)).length;
+    } catch { boundPrinters = 0; }
+  }
+
   async function removeKey() {
     signBusy = true; confirmRemove = false;
-    try { await api.deleteSigningKey(); signPub = null; signCreated = null; }
-    catch { /* ignore */ } finally { signBusy = false; }
+    try {
+      if (alsoRemovePrinters) {
+        const auto = await api.printerAutomation().catch(() => ({}));
+        const ids = new Set(list.map((c) => c.id));
+        for (const [pid, a] of Object.entries(auto || {})) {
+          if (a && ids.has(a.connector_id)) await api.deletePrinter(pid).catch(() => {});
+        }
+      }
+      await api.deleteSigningKey();
+      signPub = null; signCreated = null;
+    } catch { /* ignore */ }
+    finally { signBusy = false; alsoRemovePrinters = false; boundPrinters = 0; }
   }
   async function copyPub() { try { await navigator.clipboard.writeText(signPub); pubCopied = true; setTimeout(() => (pubCopied = false), 2000); } catch { /* */ } }
 
@@ -192,7 +216,7 @@
   {/if}
 
   <div class="signing">
-    <span class="gl">Signing key <span class="muted">(command authentication)</span></span>
+    <span class="gl">Client key <span class="muted">(command authentication)</span></span>
     <p class="muted tiny">An RSA-2048 key pair that lets a connector verify every command really came from this instance. This server keeps the private key; copy the <b>public</b> key into your connector as <code>OPHQ_SIGNING_PUBKEY</code>. The connector then rejects any command not signed by this instance.</p>
     {#if signPub}
       <div class="snip"><button class="cbtn" onclick={copyPub}>{pubCopied ? 'Copied' : 'Copy'}</button><pre>{signPub}</pre></div>
@@ -202,14 +226,30 @@
           <span class="flex gap"><button class="btn btn-primary btn-xs" onclick={genKey} disabled={signBusy}>Regenerate</button><button class="btn btn-ghost btn-xs" onclick={() => (confirmRegen = false)} aria-label="Cancel">✕</button></span>
           <span class="muted tiny">— you’ll need to update every connector with the new key.</span>
         {:else if confirmRemove}
-          <span class="flex gap"><button class="btn btn-danger btn-xs" onclick={removeKey} disabled={signBusy}>Remove key</button><button class="btn btn-ghost btn-xs" onclick={() => (confirmRemove = false)} aria-label="Cancel">✕</button></span>
+          <div class="removewarn">
+            <p class="tiny">
+              Removing the client key stops every connector from verifying commands from this
+              instance. {#if list.length}<b>{list.length} connector{list.length === 1 ? '' : 's'}</b>
+              {#if boundPrinters}and <b>{boundPrinters} printer{boundPrinters === 1 ? '' : 's'}</b> routed through
+              {list.length === 1 ? 'it' : 'them'}{/if} will stop responding until you generate a new key and
+              update {list.length === 1 ? 'it' : 'each one'}.{/if}
+            </p>
+            {#if boundPrinters}
+              <label class="tiny chk">
+                <input type="checkbox" bind:checked={alsoRemovePrinters} />
+                Also remove the {boundPrinters} printer{boundPrinters === 1 ? '' : 's'} routed through
+                {list.length === 1 ? 'this connector' : 'these connectors'}
+              </label>
+            {/if}
+            <span class="flex gap"><button class="btn btn-danger btn-xs" onclick={removeKey} disabled={signBusy}>{alsoRemovePrinters ? 'Remove key and printers' : 'Remove key'}</button><button class="btn btn-ghost btn-xs" onclick={() => { confirmRemove = false; alsoRemovePrinters = false; }} aria-label="Cancel">✕</button></span>
+          </div>
         {:else}
           <button class="btn btn-ghost btn-xs" onclick={() => (confirmRegen = true)}>Regenerate</button>
-          <button class="btn btn-ghost btn-xs" onclick={() => (confirmRemove = true)}>Remove</button>
+          <button class="btn btn-ghost btn-xs" onclick={() => { confirmRemove = true; countBoundPrinters(); }}>Remove</button>
         {/if}
       </div>
     {:else}
-      <button class="btn btn-ghost btn-sm" onclick={genKey} disabled={signBusy}>{signBusy ? 'Generating…' : 'Generate signing key'}</button>
+      <button class="btn btn-ghost btn-sm" onclick={genKey} disabled={signBusy}>{signBusy ? 'Generating…' : 'Generate client key'}</button>
     {/if}
   </div>
 
@@ -346,4 +386,7 @@
   .rrow { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
   .rn { font-size: 0.9rem; }
   .rsel { max-width: 240px; }
+  .removewarn { display: grid; gap: 0.45rem; padding: 0.55rem 0.7rem; border-radius: var(--radius, 8px);
+                border: 1px solid var(--danger-border, #6b2b2b); background: var(--danger-bg, #2a1616); }
+  .removewarn .chk { display: flex; align-items: center; gap: 0.4rem; cursor: pointer; }
 </style>
