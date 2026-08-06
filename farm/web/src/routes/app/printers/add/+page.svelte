@@ -84,37 +84,39 @@
     } catch { /* */ }
   });
 
-  // Open the list on focus and show everything. Requiring two characters before
-  // anything appeared meant a user who didn't already know their model's exact
-  // name got a blank box — the whole point of shipping a 385-model catalog is
-  // that you can browse it.
-  let open = $state(false);
-  const results = $derived.by(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return catalog.slice().sort((a, b) =>
-      (a.popularity_rank ?? 9) - (b.popularity_rank ?? 9) ||
-      vname(a.vendor).localeCompare(vname(b.vendor)) ||
-      a.model.localeCompare(b.model));
-    const out = [];
+  // Two dependent dropdowns: manufacturer, then model. A single combined list
+  // meant picking from 385 entries at once, and before that it was search-only —
+  // type nothing, see nothing — which is useless to anyone who doesn't already
+  // know their model's exact spelling.
+  let vendorSel = $state('');
+  let modelSel = $state('');
+
+  const makers = $derived.by(() => {
+    const seen = new Map();
     for (const r of catalog) {
-      const hay = (vname(r.vendor) + ' ' + r.model).toLowerCase();
-      const i = hay.indexOf(q);
-      if (i >= 0) out.push({ r, score: i * 100 + (r.popularity_rank ?? 9) });
+      const label = vname(r.vendor);
+      if (!seen.has(label)) seen.set(label, { label, key: r.vendor, count: 0 });
+      seen.get(label).count += 1;
     }
-    out.sort((a, b) => a.score - b.score);
-    return out.map((s) => s.r);
+    return [...seen.values()].sort((a, b) => a.label.localeCompare(b.label));
   });
+
+  const modelsForVendor = $derived.by(() => {
+    if (!vendorSel) return [];
+    return catalog
+      .filter((r) => vname(r.vendor) === vendorSel)
+      .sort((a, b) => (a.popularity_rank ?? 9) - (b.popularity_rank ?? 9) || a.model.localeCompare(b.model));
+  });
+
+  // Reset the model whenever the manufacturer changes, so a stale pick from the
+  // previous vendor can't be submitted.
+  function onVendorChange() { modelSel = ''; }
+  function onModelChange() {
+    const r = modelsForVendor.find((m) => m.model === modelSel);
+    if (r) pickCatalog(r);
+  }
+
   const popular = $derived(catalog.filter((r) => (r.popularity_rank ?? 9) <= 1).slice(0, 10));
-  // Vendor headings so 385 entries are scannable rather than a wall.
-  const grouped = $derived.by(() => {
-    const m = new Map();
-    for (const r of results) {
-      const v = vname(r.vendor);
-      if (!m.has(v)) m.set(v, []);
-      m.get(v).push(r);
-    }
-    return [...m.entries()];
-  });
 
   const caps = (r) => {
     const c = [];
@@ -284,51 +286,47 @@
   <p class="muted lead">Search your printer by brand or model — we set up the right connection automatically. Everything connects through your private engine; nothing leaves your network.</p>
 
   <div class="finder card card-pad">
-    <div class="picker">
-      <input class="input search" bind:value={query} autocomplete="off" spellcheck="false"
-             onfocus={() => (open = true)}
-             onkeydown={(e) => { if (e.key === 'Escape') open = false; }}
-             placeholder="Choose your printer — click to browse all {catalog.length} models, or type to filter"
-             aria-label="Choose printer model" aria-expanded={open} role="combobox" aria-controls="model-list" />
-      <button type="button" class="toggle" aria-label={open ? 'Close list' : 'Show all models'}
-              onclick={() => (open = !open)}>{open ? '▲' : '▼'}</button>
-    </div>
-
-    {#if open}
-      {#if catalogLoading}
-        <p class="muted tiny nores">Loading the printer catalog…</p>
-      {:else if catalogErr}
-        <p class="muted tiny nores">Catalog unavailable ({catalogErr}) — pick a platform below, or scan your network.</p>
-      {:else if !results.length}
-        <p class="muted tiny nores">No match in the {catalog.length}-model catalog. Pick a platform below, or scan your network.</p>
-      {:else}
-        <div class="results" id="model-list" role="listbox">
-          {#each grouped as [vendorName, rows]}
-            <div class="vgroup" role="presentation">{vendorName}</div>
-            {#each rows as r}
-              <button type="button" class="resrow" role="option" aria-selected="false"
-                      onclick={() => { pickCatalog(r); open = false; }}>
-                <span class="rmain"><b class="rm">{r.model}</b></span>
-                <span class="rmeta">
-                  <span class="conn">{vendorByKey[vendorForRow(r)]?.name?.split(' ')[0] ?? 'Host'}</span>
-                  {#each caps(r) as c}<span class="cap">{c}</span>{/each}
-                </span>
-              </button>
+    {#if catalogLoading}
+      <p class="muted tiny nores">Loading the printer catalog…</p>
+    {:else if catalogErr}
+      <p class="muted tiny nores">Catalog unavailable ({catalogErr}) — pick a platform below, or scan your network.</p>
+    {:else}
+      <div class="picker">
+        <label class="pick">
+          <span class="picklabel">Manufacturer</span>
+          <select class="input" bind:value={vendorSel} onchange={onVendorChange} aria-label="Manufacturer">
+            <option value="">Select a manufacturer…</option>
+            {#each makers as v}
+              <option value={v.label}>{v.label} ({v.count})</option>
             {/each}
+          </select>
+        </label>
+
+        <label class="pick">
+          <span class="picklabel">Model</span>
+          <select class="input" bind:value={modelSel} onchange={onModelChange}
+                  disabled={!vendorSel} aria-label="Model">
+            <option value="">{vendorSel ? 'Select a model…' : 'Choose a manufacturer first'}</option>
+            {#each modelsForVendor as r}
+              <option value={r.model}>{r.model}{caps(r).length ? ' — ' + caps(r).join(', ') : ''}</option>
+            {/each}
+          </select>
+        </label>
+      </div>
+
+      {#if popular.length && !vendorSel}
+        <div class="pop">
+          <span class="muted tiny poplabel">Popular</span>
+          {#each popular as r}
+            <button type="button" class="chip" onclick={() => pickCatalog(r)}>{r.model}</button>
           {/each}
         </div>
-        <p class="muted tiny nores">
-          Can't see it? Any Klipper or Moonraker machine works even if the exact model isn't listed —
-          the model only picks the slicing profile.
-        </p>
       {/if}
-    {:else if popular.length}
-      <div class="pop">
-        <span class="muted tiny poplabel">Popular</span>
-        {#each popular as r}
-          <button type="button" class="chip" onclick={() => pickCatalog(r)}>{r.model}</button>
-        {/each}
-      </div>
+
+      <p class="muted tiny nores">
+        Can't see yours? Any Klipper or Moonraker machine works even if the exact model isn't listed —
+        the model only selects the slicing profile.
+      </p>
     {/if}
 
     <div class="scanrow2">
@@ -462,15 +460,11 @@
   .finder { margin-bottom: 1rem; }
   .search { width: 100%; font-size: 1.05rem; padding: 0.8rem 1rem; }
   .results { display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.8rem; max-height: 46vh; overflow-y: auto; }
-  .picker { display: flex; gap: 0.4rem; align-items: stretch; }
-  .picker .search { flex: 1; }
-  .toggle { flex: 0 0 auto; padding: 0 0.9rem; border-radius: var(--radius, 8px);
-            border: 1px solid var(--border, #333); background: var(--surface, #1b1b1b);
-            color: inherit; cursor: pointer; font-size: 0.8rem; }
-  .toggle:hover { background: var(--surface-2, #242424); }
-  .vgroup { position: sticky; top: 0; z-index: 1; padding: 0.3rem 0.2rem;
-            font-size: 0.72rem; letter-spacing: 0.04em; text-transform: uppercase;
-            color: var(--muted, #999); background: var(--card, #151515); }
+  .picker { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+  @media (max-width: 640px) { .picker { grid-template-columns: 1fr; } }
+  .pick { display: grid; gap: 0.3rem; }
+  .picklabel { font-size: 0.78rem; color: var(--muted, #999); }
+  .pick select:disabled { opacity: 0.55; cursor: not-allowed; }
   .resrow { display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; text-align: left;
     padding: 0.6rem 0.8rem; border: 1px solid var(--ophq-border); border-radius: var(--radius-sm);
     background: var(--ophq-surface); cursor: pointer; transition: border 0.12s, background 0.12s; }
