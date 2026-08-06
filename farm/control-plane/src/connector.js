@@ -304,9 +304,25 @@ export function registerConnectorRoutes(app) {
     // got closed — wasted work on our side and inconsistent with the SSE route,
     // which answers a plain 401. Rejecting here keeps both transports honest.
     preValidation: async (req, reply) => {
-      const conn = await getConnectorByToken(bearer(req));
-      if (!conn) return reply.code(401).send({ error: 'invalid connector token' });
+      // A rejected upgrade gives the client no response body to read — ws.onerror
+      // fires with nothing useful — so the reason has to be logged here or it is
+      // lost to both sides. Without this a connector silently drops to the slow
+      // transport and the only symptom is printers flapping offline.
+      const tok = bearer(req);
+      const conn = await getConnectorByToken(tok);
+      if (!conn) {
+        dbg('connector', 'ws REJECT: no connector for token', { tokenLen: (tok || '').length, hasAuthHeader: !!req.headers['authorization'] });
+        return reply.code(401).send({ error: 'invalid connector token' });
+      }
       if (!(await ensureClientAuth(conn, req))) {
+        dbg('connector', 'ws REJECT: client key auth failed', {
+          connectorId: conn.id,
+          keyed: !!conn.client_public_pem,
+          sentTs: !!req.headers['x-ophq-client-ts'],
+          sentSig: !!req.headers['x-ophq-client-sig'],
+          sentPubkey: !!req.headers['x-ophq-client-pubkey'],
+          skewMs: req.headers['x-ophq-client-ts'] ? Math.abs(Date.now() - Number(req.headers['x-ophq-client-ts'])) : null
+        });
         return reply.code(401).send({ error: 'client key authentication failed — this connector is locked to a different client key; reset it in Settings → Connectors to pair a new client' });
       }
       req.ophqConnector = conn;
