@@ -15,6 +15,7 @@
 // `endpoint_overrides`, so a single relay host serves every port a printer uses.
 import { getInstanceForUser, getAutomation, setRouteDirect, listActiveRoutes } from './db.js';
 import { openTcpRelay, closeRelay, connectorOnline, RELAY_HOST, relayPort, proxyViaConnector } from './connector.js';
+import { dbg } from './debuglog.js';
 
 const ENGINE_PORT = 8000;
 const engineBase = (inst) => (inst && inst.subdomain ? `http://ophq-${inst.subdomain}:${ENGINE_PORT}` : null);
@@ -149,7 +150,17 @@ async function setupCameraRelay(userId, printerId, printer, directHost, connecto
       kind: 'camera-register', vendor, ip: directHost,
       access_code: printer.access_code, model: printer.model, name: `p${printerId}`, printer_id: printerId
     }, 15000, connectorId);
-    if (!reg || !reg.ok) return; // model may not support RTSPS (A1/P1) — leave camera off
+    if (!reg || !reg.ok) {
+      // Not necessarily an A1/P1. It is equally likely the connector was
+      // offline, go2rtc failed to start on the connector host, or the job timed
+      // out — and swallowing all of those as "unsupported model" is why a
+      // camera can be dark for days with nothing to point at.
+      dbg('routing', 'camera-register refused', {
+        printerId, connectorId, model: printer.model,
+        error: reg?.error || 'no answer from connector'
+      });
+      return;
+    }
   }
   // Point the engine at our internal relay endpoint. RELAY_HOST is the
   // control-plane's docker hostname, reachable from the engine.
@@ -195,6 +206,15 @@ export async function reconcileRoutes() {
     const prof = printer ? profileFor(printer) : null;
     if (prof) prof.endpoints.forEach((ep, idx) => openTcpRelay(r.user_id, r.direct_host, ep.port, relayPort(r.printer_id, idx), r.connector_id ?? null));
     else openTcpRelay(r.user_id, r.direct_host, r.direct_port || 7125, relayPort(r.printer_id, 0), r.connector_id ?? null);
+    // Re-register the camera too. Previously only the MQTT/FTP relays were
+    // rebuilt here, so a camera-register that failed once — connector offline,
+    // or a tunnel too slow to answer within the timeout — stayed failed
+    // forever: nothing retried it, and the printer silently kept
+    // external_camera_enabled = false while control and files worked fine.
+    if (printer && !printer.external_camera_enabled) {
+      try { await registerCameraRelay(r.user_id, r.printer_id, printer, r.direct_host, base, r.connector_id ?? null); }
+      catch (e) { dbg('routing', 'camera re-register failed', { printerId: r.printer_id, error: e?.message }); }
+    }
     n++;
   }
   if (n) console.log(`[routing] reconciled ${n} via-connector printer(s)`);
