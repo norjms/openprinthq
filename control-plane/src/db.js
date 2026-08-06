@@ -150,6 +150,23 @@ export async function migrate() {
     );
   `);
 
+  // Seed the vendor code -> marketing name map from the engine's authoritative
+  // table (backend/app/services/virtual_printer/manager.py). Users know their
+  // printer as an "H2D", never as an "O1D" — the code is a wire detail from
+  // SSDP/MQTT and should be translated once, on the way in, and never surface
+  // again. Learned rows are left alone: ON CONFLICT DO NOTHING means a name an
+  // admin curated always wins over this seed.
+  await pool.query(`
+    INSERT INTO printer_model_names (vendor, code, friendly_name) VALUES
+      ('bambu','BL-P001','X1C'), ('bambu','BL-P002','X1'), ('bambu','C13','X1E'),
+      ('bambu','N6','X2D'), ('bambu','N9','A2L'),
+      ('bambu','C11','P1P'), ('bambu','C12','P1S'), ('bambu','N7','P2S'),
+      ('bambu','N2S','A1'), ('bambu','N1','A1 Mini'),
+      ('bambu','O1D','H2D'), ('bambu','O1C','H2C'), ('bambu','O1C2','H2C'),
+      ('bambu','O1S','H2S'), ('bambu','O1E','H2D Pro'), ('bambu','O2D','H2D Pro')
+    ON CONFLICT (vendor, code) DO NOTHING;
+  `);
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS signing_keys (
       user_id     INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -323,6 +340,17 @@ export async function getModelName(vendor, code) {
 }
 // Fill-when-empty: only inserts a mapping if none exists (and never overwrites a
 // locked one). Returns the effective row. Admin edits use upsertModelNameForce.
+// Translate a vendor wire code to the name the user actually knows. Falls back
+// to the code itself so an unmapped model degrades to "shows something odd"
+// rather than "shows nothing".
+export async function friendlyModelName(vendor, code) {
+  if (!code) return code || '';
+  try {
+    const row = await getModelName(vendor, code);
+    return (row && row.friendly_name) || code;
+  } catch { return code; }
+}
+
 export async function learnModelName(vendor, code, friendly) {
   const [v, c] = normModelKey(vendor, code);
   const f = String(friendly || '').trim();

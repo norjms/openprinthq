@@ -15,14 +15,14 @@ import { migrate, upsertUser, getUserByEmail, getInstanceForUser, getCompatibleP
   getAppearance, setAppearance, getOwnerUserId,
   createInvite, getValidInvite, consumeInvite, listInvites, revokeInvite,
   listUsers, listAllInstances, countUsers,
-  getAppSetting, setAppSetting, setSecretSetting } from './db.js';
+  getAppSetting, setAppSetting, setSecretSetting, friendlyModelName } from './db.js';
 import { createAuthentikUser, linkAuthentikUser, authentikUserExists, authentikConfigured, OWNER_GROUP } from './authentik.js';
 import { registerConnectorRoutes, connectorOnline, isConnectorOnline, proxyViaConnector, openTcpStream } from './connector.js';
 import { provisionForUser } from './provisioner.js';
 import { startBatch, activeBatchForUser, advanceBatch, cancelBatch, startOrchestrator } from './batch.js';
 import { activateRoute, deactivateRoute, reconcileRoutes } from './routing.js';
 import { generateKeyPair, encryptPrivate, invalidateSigningCache } from './signing.js';
-import { ensureStream, iceServers, turnCredentials, mintTurn, GO2RTC_URL } from './go2rtc.js';
+import { ensureStream, iceServers, turnCredentials, mintTurn, supportsRtsp, GO2RTC_URL } from './go2rtc.js';
 import { dbg } from './debuglog.js';
 
 // Bambu HMS error dictionary (short_code "XXXX_YYYY" -> human description),
@@ -1000,7 +1000,15 @@ app.post('/api/camera/webrtc/:printerId', async (req, reply) => {
       vendor: 'bambu',
       ip: autoAll[pid]?.direct_host || printer.ip_address,
       access_code: printer.access_code,
-      model: printer.model,
+      // Resolve the vendor code to the marketing name before it leaves here.
+      // The connector must never have to know that "O1D" means "H2D": that
+      // mapping lives in one table, on this side, and a new printer model
+      // becomes a database row rather than a client release.
+      model: await friendlyModelName('bambu', printer.model),
+      // And don't make the connector infer capability from a name at all.
+      // Two independent model lists had already drifted far enough that the
+      // X1 Carbon's own code was missing from one of them.
+      rtsp: supportsRtsp(printer.model),
       name: `p${pid}`,
       printer_id: Number(pid),
       offer,
