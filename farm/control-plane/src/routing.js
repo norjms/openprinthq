@@ -230,7 +230,13 @@ onConnectorOnline(async (connectorId, userId) => {
     if (!printer || printer.external_camera_enabled) continue;
     try {
       await setupCameraRelay(userId, r.printer_id, printer, r.direct_host, connectorId, base);
-      dbg('routing', 'camera registered on connector attach', { printerId: r.printer_id, connectorId });
+      // setupCameraRelay returns normally when the connector refuses, so don't
+      // claim success — re-read the printer and report what actually happened.
+      let after = null;
+      try { after = await eng(base, `/api/v1/printers/${r.printer_id}`); } catch { /* best effort */ }
+      dbg('routing', after?.external_camera_enabled
+        ? 'camera registered on connector attach'
+        : 'camera still not registered after attach', { printerId: r.printer_id, connectorId });
     } catch (e) {
       dbg('routing', 'camera register on attach failed', { printerId: r.printer_id, error: e?.message });
     }
