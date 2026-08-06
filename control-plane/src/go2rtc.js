@@ -26,7 +26,7 @@ export function streamName(userId, printerId) { return `u${userId}_p${printerId}
 
 // Mirror of the engine's supports_rtsp(): which Bambu models expose an RTSP
 // camera (vs the A1/P1 chamber-image protocol, which isn't a go2rtc source).
-function supportsRtsp(model) {
+export function supportsRtsp(model) {
   if (!model) return false;
   const m = String(model).toUpperCase();
   if (/^(X1|X2|H2|P2)/.test(m)) return true;
