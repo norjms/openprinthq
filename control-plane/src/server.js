@@ -15,7 +15,8 @@ import { migrate, upsertUser, getUserByEmail, getInstanceForUser, getCompatibleP
   getAppearance, setAppearance, getOwnerUserId,
   createInvite, getValidInvite, consumeInvite, listInvites, revokeInvite,
   listUsers, listAllInstances, countUsers,
-  getAppSetting, setAppSetting, setSecretSetting, friendlyModelName } from './db.js';
+  getAppSetting, setAppSetting, setSecretSetting, friendlyModelName,
+  getUserLogSink, setUserLogSink, listUserLogSinks } from './db.js';
 import { createAuthentikUser, linkAuthentikUser, authentikUserExists, authentikConfigured, OWNER_GROUP } from './authentik.js';
 import { registerConnectorRoutes, connectorOnline, isConnectorOnline, proxyViaConnector, openTcpStream } from './connector.js';
 import { provisionForUser } from './provisioner.js';
@@ -23,6 +24,7 @@ import { startBatch, activeBatchForUser, advanceBatch, cancelBatch, startOrchest
 import { activateRoute, deactivateRoute, reconcileRoutes } from './routing.js';
 import { generateKeyPair, encryptPrivate, invalidateSigningCache } from './signing.js';
 import { ensureStream, iceServers, turnCredentials, mintTurn, supportsRtsp, GO2RTC_URL } from './go2rtc.js';
+import { setSink, sinkConfigured, shipServer } from './logship.js';
 import { dbg } from './debuglog.js';
 
 // Bambu HMS error dictionary (short_code "XXXX_YYYY" -> human description),
@@ -166,6 +168,20 @@ app.get('/api/me', async (req, reply) => {
   if (!user) return { email, hasAccount: false, needsInvite: (await countUsers()) > 0, isOwner: false, role: 'guest' };
   const owner = isOwner(req, user);
   return { id: user.id, email: user.email, displayName: user.display_name, role: owner ? 'owner' : 'user', isOwner: owner, hasAccount: true };
+});
+
+// ---- per-tenant log destination -----------------------------------------
+// Scoped to the caller: a tenant configures where THEIR instance's logs go, and
+// can only ever read or write their own row.
+app.get('/api/settings/logging', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  return { log_url: await getUserLogSink(user.id) };
+});
+app.put('/api/settings/logging', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  const url = await setUserLogSink(user.id, (req.body || {}).log_url);
+  setSink(`tenant:${user.id}`, url, { job: 'openprinthq-instance', scope: 'tenant', instance: String(user.id) });
+  return { ok: true, log_url: url };
 });
 
 // ---- slicer preset compatibility ---------------------------------------
@@ -345,7 +361,13 @@ async function turnStatus() {
 }
 app.get('/api/admin/settings', async (req, reply) => {
   const owner = await requireOwner(req, reply); if (!owner) return;
-  return { deployment_mode: await getDeploymentMode(), cf_turn: await turnStatus() };
+  return {
+    deployment_mode: await getDeploymentMode(),
+    cf_turn: await turnStatus(),
+    // Server scope only. This destination receives the application's own
+    // operational logs and deliberately never tenant or connector data.
+    server_log_url: await getAppSetting('server_log_url', '') || ''
+  };
 });
 app.put('/api/admin/settings', async (req, reply) => {
   const owner = await requireOwner(req, reply); if (!owner) return;
@@ -360,6 +382,11 @@ app.put('/api/admin/settings', async (req, reply) => {
   }
   if ('cf_turn_api_token' in body) {
     await setSecretSetting('cf_turn_api_token', String(body.cf_turn_api_token || '').trim());
+  }
+  if ('server_log_url' in body) {
+    const u = String(body.server_log_url || '').trim();
+    await setAppSetting('server_log_url', u || null);
+    setSink('server', u, { job: 'openprinthq-control-plane', scope: 'server' });
   }
   return { ok: true, deployment_mode: await getDeploymentMode(), cf_turn: await turnStatus() };
 });
@@ -1117,11 +1144,34 @@ app.all('/api/engine/*', async (req, reply) => {
 // ---- boot ---------------------------------------------------------------
 try {
   await migrate();
+  // Restore configured log destinations so shipping survives a restart. Both
+  // scopes are opt-in: an unconfigured deployment ships nothing anywhere.
+  try {
+    const serverUrl = await getAppSetting('server_log_url', '');
+    if (serverUrl) {
+      setSink('server', serverUrl, { job: 'openprinthq-control-plane', scope: 'server' });
+      console.log(`[logship] server logs -> ${serverUrl}`);
+    }
+    for (const row of await listUserLogSinks()) {
+      setSink(`tenant:${row.user_id}`, row.url, { job: 'openprinthq-instance', scope: 'tenant', instance: String(row.user_id) });
+    }
+  } catch (e) { console.error('[logship] restore failed', e.message); }
   reconcileRoutes().catch((e) => console.error('reconcileRoutes', e.message));
   // Resume + drive any running temperature-staggered batches.
   startOrchestrator(8000);
   await app.listen({ host: '0.0.0.0', port: PORT });
   app.log.info(`control-plane listening on ${PORT}`);
+  // Mirror the application's own operational output to the SERVER sink only.
+  // Deliberately wrapping console rather than hooking request logging: request
+  // logs carry tenant identifiers and belong to the tenant scope, not here.
+  for (const level of ['log', 'warn', 'error']) {
+    const orig = console[level].bind(console);
+    console[level] = (...args) => {
+      orig(...args);
+      try { shipServer(args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ')); } catch { /* never break logging */ }
+    };
+  }
+  shipServer(`control-plane started, listening on ${PORT}`);
 } catch (err) {
   app.log.error(err);
   process.exit(1);
