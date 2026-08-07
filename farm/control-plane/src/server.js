@@ -954,7 +954,12 @@ async function relayCameraFrame(userId, pid, reply) {
 }
 // Internal (engine-facing): the printer's external_camera_url points here.
 app.get('/api/internal/camera-relay/:userId/:printerId/frame', async (req, reply) => {
-  const gatewayOk = !GATEWAY_SECRET || req.headers['x-ophq-gateway'] === GATEWAY_SECRET;
+  // The engine fetches this URL itself and has no way to attach a header to an
+  // external camera URL, so the secret is also accepted as a query parameter.
+  // The URL never leaves the docker network -- it is stored in the tenant DB and
+  // fetched container-to-container -- so it does not reach a proxy access log.
+  const presented = req.headers['x-ophq-gateway'] || req.query?.gw;
+  const gatewayOk = !GATEWAY_SECRET || presented === GATEWAY_SECRET;
   if (!gatewayOk) return reply.code(403).send({ error: 'forbidden' });
   const userId = Number(String(req.params.userId).replace(/[^0-9]/g, ''));
   const pid = Number(String(req.params.printerId).replace(/[^0-9]/g, ''));
