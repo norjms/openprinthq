@@ -1144,6 +1144,16 @@ app.all('/api/engine/*', async (req, reply) => {
 // ---- boot ---------------------------------------------------------------
 try {
   await migrate();
+  // Wrap console FIRST: the restore below logs its own result, and installing
+  // the wrapper afterwards meant those lines were the one thing that never
+  // shipped -- the log claimed nothing about shipping while shipping worked.
+  for (const level of ['log', 'warn', 'error']) {
+    const orig = console[level].bind(console);
+    console[level] = (...args) => {
+      orig(...args);
+      try { shipServer(args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ')); } catch { /* never break logging */ }
+    };
+  }
   // Restore configured log destinations so shipping survives a restart. Both
   // scopes are opt-in: an unconfigured deployment ships nothing anywhere.
   try {
@@ -1161,16 +1171,6 @@ try {
   startOrchestrator(8000);
   await app.listen({ host: '0.0.0.0', port: PORT });
   app.log.info(`control-plane listening on ${PORT}`);
-  // Mirror the application's own operational output to the SERVER sink only.
-  // Deliberately wrapping console rather than hooking request logging: request
-  // logs carry tenant identifiers and belong to the tenant scope, not here.
-  for (const level of ['log', 'warn', 'error']) {
-    const orig = console[level].bind(console);
-    console[level] = (...args) => {
-      orig(...args);
-      try { shipServer(args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ')); } catch { /* never break logging */ }
-    };
-  }
   shipServer(`control-plane started, listening on ${PORT}`);
 } catch (err) {
   app.log.error(err);
