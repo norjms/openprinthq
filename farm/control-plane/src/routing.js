@@ -44,9 +44,15 @@ async function eng(base, path, opts = {}) {
 // Single-endpoint transports (Moonraker/Klipper, OctoPrint, PrusaLink, Duet,
 // FlashForge, MKS, Snapmaker) all connect on one port the engine reads from
 // `moonraker_port`, so they need only a profile — no engine change.
+// devicePort: the port ON THE PRINTER. It must not be read back from the
+// printer record, because activateRoute overwrites moonraker_port with the
+// RELAY port. Reading it again on reconcile pointed the tunnel at
+// <printer-ip>:<relay-port>, where nothing listens, and the printer silently
+// went offline and stayed there. printer_automation.direct_port holds the real
+// device port and is never rewritten, so prefer it.
 function singleEndpoint(defaultPort) {
-  return (p) => ({
-    endpoints: [{ role: 'api', port: Number(p.moonraker_port) || defaultPort }],
+  return (p, devicePort) => ({
+    endpoints: [{ role: 'api', port: Number(devicePort) || defaultPort }],
     apply: (ports) => ({ ip_address: RELAY_HOST, moonraker_port: ports.api }),
     restore: (d) => ({ ip_address: d.host, moonraker_port: Number(d.port) || defaultPort })
   });
@@ -89,10 +95,10 @@ export const VENDOR_ROUTING = {
   flashforge: 'full', mks: 'full', snapmaker: 'full',
   bambu: 'control+files'
 };
-function profileFor(printer) {
+function profileFor(printer, devicePort) {
   const key = (printer.connection_type || '').toLowerCase();
   const fn = PROFILES[key];
-  return fn ? { key, ...fn(printer) } : null;
+  return fn ? { key, ...fn(printer, devicePort) } : null;
 }
 // Enable "via connector" for a printer. Returns { ok, reason?, endpoints? }.
 export async function activateRoute(userId, printerId) {
@@ -107,7 +113,9 @@ export async function activateRoute(userId, printerId) {
   let printer;
   try { printer = await eng(base, `/api/v1/printers/${printerId}`); }
   catch { return { ok: false, reason: 'printer not found' }; }
-  const prof = profileFor(printer);
+  // On a re-activation printer.moonraker_port is already the relay port, so
+  // prefer the device port recorded on the route.
+  const prof = profileFor(printer, autoAll[printerId]?.direct_port);
   if (!prof) return { ok: false, reason: `auto-activation not supported for ${printer.connection_type || 'this'} printers yet` };
 
   // Capture the real host once (don't save the relay host as "direct").
@@ -184,7 +192,7 @@ export async function deactivateRoute(userId, printerId) {
   if (base && auto.direct_host) {
     let printer = null;
     try { printer = await eng(base, `/api/v1/printers/${printerId}`); } catch { /* */ }
-    const prof = printer ? profileFor(printer) : null;
+    const prof = printer ? profileFor(printer, r.direct_port) : null;
     const patch = prof ? prof.restore({ host: auto.direct_host, port: auto.direct_port })
                        : { ip_address: auto.direct_host, moonraker_port: auto.direct_port || 7125, endpoint_overrides: null };
     try { await eng(base, `/api/v1/printers/${printerId}`, { method: 'PATCH', body: JSON.stringify(patch) }); } catch { /* best effort */ }
@@ -203,7 +211,7 @@ export async function reconcileRoutes() {
     const base = engineBase(await getInstanceForUser(r.user_id));
     let printer = null;
     try { if (base) printer = await eng(base, `/api/v1/printers/${r.printer_id}`); } catch { /* */ }
-    const prof = printer ? profileFor(printer) : null;
+    const prof = printer ? profileFor(printer, r.direct_port) : null;
     if (prof) prof.endpoints.forEach((ep, idx) => openTcpRelay(r.user_id, r.direct_host, ep.port, relayPort(r.printer_id, idx), r.connector_id ?? null));
     else openTcpRelay(r.user_id, r.direct_host, r.direct_port || 7125, relayPort(r.printer_id, 0), r.connector_id ?? null);
     n++;
