@@ -37,6 +37,22 @@
   // write-only: the server never returns it, so the field starts blank and an
   // empty submit means "leave unchanged".
   let turn = $state({ configured: false, key_id_hint: null });
+  // Server-scope logging. This receives the application's own operational
+  // output and deliberately never tenant or connector data, so it is separate
+  // from the per-instance destination a tenant sets for themselves.
+  let serverLogUrl = $state('');
+  let logBusy = $state(false);
+  let logMsg = $state('');
+  async function saveServerLog() {
+    if (logBusy) return;
+    logBusy = true; logMsg = ''; err = '';
+    try {
+      const r = await api.saveAdminSettings({ server_log_url: serverLogUrl.trim() });
+      serverLogUrl = r.server_log_url ?? serverLogUrl;
+      logMsg = serverLogUrl ? 'Saved. Server logs are being sent to this destination.' : 'Cleared. Server logs stay on this host.';
+    } catch (e) { err = e.message || 'could not save the log destination'; }
+    finally { logBusy = false; }
+  }
   let turnKeyId = $state('');
   let turnToken = $state('');
   let turnBusy = $state(false);
@@ -90,6 +106,7 @@
     featureCatalog = feat.features || [];
     deploymentMode = settings.deployment_mode || 'both';
     turn = settings.cf_turn || { configured: false, key_id_hint: null };
+    serverLogUrl = settings.server_log_url || '';
     const q = {};
     for (const i of instances) q[i.id] = i.storage_quota_mb == null ? '' : String(i.storage_quota_mb);
     quotaEdits = q;
@@ -217,6 +234,28 @@
     </p>
   </section>
 
+  <!-- SERVER LOGGING -->
+  <section class="card card-pad blk">
+    <h3>Server logging</h3>
+    <p class="muted small">
+      Sends this server's own operational logs to a Grafana Loki or syslog endpoint.
+      This is the platform's application log only: startup, routing, connector transport
+      and errors. It deliberately does not include tenant or printer activity, which
+      belongs to each instance and is configured separately by its owner.
+    </p>
+    <label class="small loglabel">
+      Destination
+      <input class="input" bind:value={serverLogUrl} autocomplete="off"
+             placeholder="http://loki.internal:3100 or syslog://siem.internal:514" />
+    </label>
+    <div class="flex gap">
+      <button class="btn" disabled={logBusy} onclick={saveServerLog}>Save</button>
+      <button class="btn btn-ghost" disabled={logBusy || !serverLogUrl} onclick={() => { serverLogUrl = ''; saveServerLog(); }}>Clear</button>
+    </div>
+    {#if logMsg}<p class="small ok">{logMsg}</p>{/if}
+    <p class="muted tiny">Leave blank to keep logs on this host. There is no default destination.</p>
+  </section>
+
   <!-- INVITES -->
   <section class="card card-pad blk">
     <h3>Invite codes</h3>
@@ -341,4 +380,5 @@
   .turnbtns { display: flex; gap: .5rem; flex-wrap: wrap; }
   .ok { color: var(--ok, #3aa657); }
   .warn { color: var(--warn, #b8860b); }
+  .loglabel { display: grid; gap: 0.3rem; margin: 0.6rem 0; max-width: 34rem; }
 </style>
