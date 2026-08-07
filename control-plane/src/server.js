@@ -971,7 +971,11 @@ async function relayCameraFrame(userId, pid, reply) {
   const vendor = printer.connection_type;
   const directHost = autoAll[pid]?.direct_host || printer.ip_address;
   const job = vendor === 'bambu'
-    ? { kind: 'camera-frame', vendor, name: `p${pid}`, printer_id: pid }
+    // Carry the address and access code so the connector can re-register the
+    // stream if its go2rtc restarted since registration. Without them a lost
+    // go2rtc meant frames failed forever, because the control-plane only
+    // registers a camera that is not already enabled.
+    ? { kind: 'camera-frame', vendor, name: `p${pid}`, printer_id: pid, ip: directHost, access_code: printer.access_code }
     : { kind: 'camera-frame', vendor, snapshot_url: `http://${directHost}/webcam/?action=snapshot`, printer_id: pid };
   const r = await proxyViaConnector(userId, job, 12000, connectorId);
   if (!r || r.status !== 200 || !r.body) return reply.code(r?.status || 502).send({ error: r?.error || 'frame relay failed' });
