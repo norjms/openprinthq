@@ -1026,15 +1026,30 @@ app.post('/api/camera/webrtc/:printerId', async (req, reply) => {
     let printer;
     try { printer = await (await fetch(`${base}/api/v1/printers/${pid}`)).json(); }
     catch { return reply.code(404).send({ error: 'printer not found' }); }
-    if (printer.connection_type !== 'bambu') {
-      // Klipper and friends have no RTSPS source; the browser falls back to the
-      // snapshot relay, which already works.
-      return reply.code(404).send({ error: 'no WebRTC camera stream for this printer' });
+    const vendor = printer.connection_type;
+    const directHost = autoAll[pid]?.direct_host || printer.ip_address;
+    // Klipper has no RTSPS source, but Moonraker serves MJPEG, which go2rtc can
+    // ingest and re-publish as WebRTC. Without this a Klipper printer was pinned
+    // to relayed still frames while the Bambus went live: the same camera
+    // behaving differently by printer brand, for no reason a user can see, and
+    // paying server bandwidth the whole time.
+    if (vendor !== 'bambu') {
+      const snapshotUrl = printer.external_camera_url || `http://${directHost}/webcam/?action=snapshot`;
+      const job = {
+        kind: 'camera-webrtc', vendor, name: `p${pid}`, printer_id: Number(pid), offer,
+        snapshot_url: snapshotUrl,
+        ice_servers: await iceServers(86400)
+      };
+      const r = await proxyViaConnector(userId, job, 20000, connectorId);
+      if (!r || !r.ok || !r.answer) {
+        return reply.code(502).send({ error: r?.error || 'connector did not answer the WebRTC offer' });
+      }
+      return { type: 'answer', sdp: r.answer };
     }
     const job = {
       kind: 'camera-webrtc',
       vendor: 'bambu',
-      ip: autoAll[pid]?.direct_host || printer.ip_address,
+      ip: directHost,
       access_code: printer.access_code,
       // Resolve the vendor code to the marketing name before it leaves here.
       // The connector must never have to know that "O1D" means "H2D": that
@@ -1091,12 +1106,16 @@ app.get('/api/camera/capability/:printerId', async (req, reply) => {
   const base = engineBase(inst);
   let printer = null;
   try { printer = await (await fetch(`${base}/api/v1/printers/${pid}`)).json(); } catch { /* best effort */ }
+  // Bambu supplies RTSPS; everything else can still go live if it exposes an
+  // MJPEG webcam, which Moonraker does by default.
   const bambu = printer?.connection_type === 'bambu';
+  const hasWebcam = Boolean(printer?.external_camera_url) || printer?.connection_type === 'klipper';
   const turn = await turnCredentials();
   return {
     printer_id: pid,
     routed_via_connector: Boolean(connectorId),
-    webrtc: bambu,
+    webrtc: bambu || hasWebcam,
+    webrtc_source: bambu ? 'rtsps' : (hasWebcam ? 'mjpeg' : null),
     // Direct video across CGNAT usually needs a relay; say so plainly rather
     // than letting the camera fail silently on a strict network.
     relay_available: Boolean(turn.keyId && turn.token),
