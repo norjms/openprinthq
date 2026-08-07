@@ -13,7 +13,7 @@
 // field — teach the engine to honour `endpoint_overrides` for that role. The
 // engine keeps `ip_address` as the (relay) host and reads a per-role PORT from
 // `endpoint_overrides`, so a single relay host serves every port a printer uses.
-import { getInstanceForUser, getAutomation, setRouteDirect, listActiveRoutes } from './db.js';
+import { getInstanceForUser, getAutomation, setRouteDirect, listActiveRoutes, setPlugRoute, getPlugRoutes } from './db.js';
 import { openTcpRelay, closeRelay, connectorOnline, RELAY_HOST, relayPort, proxyViaConnector, onConnectorOnline } from './connector.js';
 import { dbg } from './debuglog.js';
 
@@ -231,11 +231,59 @@ export async function reconcileRoutes() {
 // missing one. That makes it self-healing, which matters because a single
 // failed attempt previously left a camera dark indefinitely with control and
 // file transfer working normally.
+// Smart plugs live on the tenant's LAN, but the engine calls them directly with
+// httpx. On a cloud-hosted instance that is simply unroutable: every control and
+// status request times out, so plugs appear dead while the device itself is
+// perfectly healthy. They were built for local-mode deployments and never taught
+// about the connector.
+//
+// No engine change is needed. It builds `http://{ip}/cm?...`, so pointing
+// ip_address at "relayhost:port" produces a valid URL through the same TCP relay
+// the printers use. Plug relays are allocated well above the printer range so the
+// two schemes cannot collide.
+const PLUG_RELAY_BASE = 41000;
+export function plugRelayPort(plugId) { return PLUG_RELAY_BASE + (Number(plugId) % 900); }
+
+export async function reconcileSmartPlugs(userId, connectorId, base) {
+  if (!base || !connectorId) return 0;
+  let plugs = [];
+  try { plugs = await eng(base, '/api/v1/smart-plugs/'); } catch { return 0; }
+  const list = Array.isArray(plugs) ? plugs : (plugs.items || plugs.smart_plugs || []);
+  const known = await getPlugRoutes(userId).catch(() => ({}));
+  let n = 0;
+  for (const plug of list) {
+    const addr = String(plug.ip_address || '');
+    if (!addr || !plug.enabled) continue;
+    // Already pointed at a relay: leave it be, but keep the tunnel open.
+    const viaRelay = addr.startsWith(RELAY_HOST);
+    const lanIp = viaRelay ? (known[plug.id] || null) : addr.split(':')[0];
+    if (!lanIp) continue;
+    if (!viaRelay) await setPlugRoute(userId, plug.id, lanIp).catch(() => {});
+    const port = plugRelayPort(plug.id);
+    openTcpRelay(userId, lanIp, 80, port, connectorId);
+    if (!viaRelay) {
+      try {
+        await eng(base, `/api/v1/smart-plugs/${plug.id}`, {
+          method: 'PUT',
+          body: JSON.stringify({ ip_address: `${RELAY_HOST}:${port}` })
+        });
+        dbg('routing', 'smart plug routed via connector', { plugId: plug.id, lanIp, port });
+      } catch (e) { dbg('routing', 'smart plug reroute failed', { plugId: plug.id, error: e?.message }); }
+    }
+    n++;
+  }
+  if (n) console.log(`[routing] ${n} smart plug(s) routed via connector`);
+  return n;
+}
+
 onConnectorOnline(async (connectorId, userId) => {
   let rows = [];
   try { rows = await listActiveRoutes(); } catch { return; }
   const base = engineBase(await getInstanceForUser(userId));
   if (!base) return;
+  // Plugs are per-tenant, not per-printer, so do them once per attach.
+  try { await reconcileSmartPlugs(userId, connectorId, base); }
+  catch (e) { dbg('routing', 'smart plug reconcile failed', { error: e?.message }); }
   for (const r of rows) {
     if (r.connector_id !== connectorId || !r.direct_host) continue;
     let printer = null;
