@@ -263,8 +263,10 @@ export async function reconcileSmartPlugs(userId, connectorId, base) {
     openTcpRelay(userId, lanIp, 80, port, connectorId);
     if (!viaRelay) {
       try {
+        // The engine exposes PATCH on this route, not PUT: a PUT returns 405 and
+        // the reroute silently did nothing while the relay sat listening.
         await eng(base, `/api/v1/smart-plugs/${plug.id}`, {
-          method: 'PUT',
+          method: 'PATCH',
           body: JSON.stringify({ ip_address: `${RELAY_HOST}:${port}` })
         });
         dbg('routing', 'smart plug routed via connector', { plugId: plug.id, lanIp, port });
