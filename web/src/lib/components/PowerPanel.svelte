@@ -8,6 +8,7 @@
   let plug = $state(null);      // associated SmartPlug or null
   let status = $state(null);    // live { state, reachable, energy:{power,today,total,...} }
   let loading = $state(true);
+  let loadFailed = $state(false);
   let acting = $state(false);
   let msg = $state(null);
   let poll = null;
@@ -17,13 +18,35 @@
   let f = $state({ name: '', ip_address: '', auto_off: true, off_delay_minutes: 5, off_delay_mode: 'time', off_temp_threshold: 70 });
 
   async function load() {
-    loading = true; msg = null;
+    loading = true; msg = null; loadFailed = false;
     try {
-      plug = await api.plugByPrinter(printerId).catch(() => null);
+      plug = await api.plugByPrinter(printerId);
       if (plug && plug.id) await refreshStatus();
       else plug = null;
-    } catch { plug = null; }
-    finally { loading = false; }
+    } catch (e) {
+      // Swallowing this made a failed lookup indistinguishable from "no plug
+      // configured": the panel offered the add form, Remove never rendered
+      // because it needs a loaded plug, and the only clue was the server
+      // rejecting the add as a duplicate. Say what actually happened.
+      plug = null;
+      loadFailed = true;
+      msg = { kind: 'err', text: `Could not load this printer's plug: ${e.message || 'request failed'}` };
+    } finally { loading = false; }
+  }
+
+  // Remove by printer, for when the plug cannot be loaded but the server still
+  // says one is assigned. Without this the only way out was editing the database.
+  async function forceRemoveByPrinter() {
+    if (!confirm('Remove the plug currently assigned to this printer?')) return;
+    acting = true; msg = null;
+    try {
+      const existing = await api.plugByPrinter(printerId).catch(() => null);
+      if (existing?.id) await api.plugDelete(existing.id);
+      plug = null; status = null; loadFailed = false;
+      msg = { kind: 'ok', text: 'Removed. You can add a plug again now.' };
+      await load();
+    } catch (e) { msg = { kind: 'err', text: e.message || 'could not remove the assigned plug' }; }
+    finally { acting = false; }
   }
   async function refreshStatus() {
     if (!plug?.id) return;
@@ -142,6 +165,25 @@
         <button class="btn btn-primary btn-sm" onclick={createPlug} disabled={acting}>{acting ? 'Adding…' : 'Add plug'}</button>
         <button class="btn btn-ghost btn-sm" onclick={() => (adding = false)}>Cancel</button>
       </div>
+      {#if msg?.kind === 'err' && /already has/i.test(msg.text || '')}
+        <!-- The add was refused because a plug is assigned but could not be
+             shown. Offer the way out here, where the problem is visible. -->
+        <p class="tiny muted">
+          A plug is already assigned to this printer but could not be loaded.
+        </p>
+        <button class="btn btn-danger btn-sm" onclick={forceRemoveByPrinter} disabled={acting}>
+          Remove the assigned plug
+        </button>
+      {/if}
+    </div>
+  {:else if loadFailed}
+    <p class="muted">
+      A plug may be assigned to this printer, but it could not be loaded. Adding a new one
+      will be refused until the existing assignment is removed.
+    </p>
+    <div class="flex gap">
+      <button class="btn btn-ghost btn-sm" onclick={load} disabled={acting}>Retry</button>
+      <button class="btn btn-danger btn-sm" onclick={forceRemoveByPrinter} disabled={acting}>Remove the assigned plug</button>
     </div>
   {:else}
     <p class="muted">No smart plug linked. Add a Tasmota plug for real power control, live watts, and auto power-off after prints.</p>
