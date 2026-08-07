@@ -1040,7 +1040,7 @@ app.post('/api/camera/webrtc/:printerId', async (req, reply) => {
         snapshot_url: snapshotUrl,
         ice_servers: await iceServers(86400)
       };
-      const r = await proxyViaConnector(userId, job, 20000, connectorId);
+      const r = await proxyViaConnector(user.id, job, 20000, connectorId);
       if (!r || !r.ok || !r.answer) {
         return reply.code(502).send({ error: r?.error || 'connector did not answer the WebRTC offer' });
       }
