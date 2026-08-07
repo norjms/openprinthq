@@ -166,6 +166,19 @@ export async function migrate() {
     );
   `);
 
+  // Remember a smart plug's real LAN address. Once its ip_address is rewritten
+  // to point at the relay, the original is gone from the engine, and without it
+  // the tunnel cannot be rebuilt on the next reconnect.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS smart_plug_routes (
+      user_id    INTEGER NOT NULL,
+      plug_id    INTEGER NOT NULL,
+      lan_ip     TEXT NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (user_id, plug_id)
+    );
+  `);
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS signing_keys (
       user_id     INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -701,4 +714,16 @@ export async function setUserLogSink(userId, url) {
 export async function listUserLogSinks() {
   const { rows } = await pool.query('SELECT user_id, url FROM user_log_sinks');
   return rows;
+}
+
+// ---- smart plug LAN addresses ------------------------------------------
+export async function setPlugRoute(userId, plugId, lanIp) {
+  await pool.query(
+    `INSERT INTO smart_plug_routes (user_id, plug_id, lan_ip) VALUES ($1,$2,$3)
+     ON CONFLICT (user_id, plug_id) DO UPDATE SET lan_ip = EXCLUDED.lan_ip, updated_at = now()`,
+    [userId, plugId, lanIp]);
+}
+export async function getPlugRoutes(userId) {
+  const { rows } = await pool.query('SELECT plug_id, lan_ip FROM smart_plug_routes WHERE user_id = $1', [userId]);
+  return Object.fromEntries(rows.map((r) => [r.plug_id, r.lan_ip]));
 }
