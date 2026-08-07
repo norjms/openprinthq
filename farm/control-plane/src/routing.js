@@ -13,7 +13,7 @@
 // field — teach the engine to honour `endpoint_overrides` for that role. The
 // engine keeps `ip_address` as the (relay) host and reads a per-role PORT from
 // `endpoint_overrides`, so a single relay host serves every port a printer uses.
-import { getInstanceForUser, getAutomation, setRouteDirect, listActiveRoutes, setPlugRoute, getPlugRoutes } from './db.js';
+import { getInstanceForUser, getAutomation, setRouteDirect, listActiveRoutes, setPlugRoute } from './db.js';
 import { openTcpRelay, closeRelay, connectorOnline, RELAY_HOST, relayPort, proxyViaConnector, onConnectorOnline } from './connector.js';
 import { dbg } from './debuglog.js';
 
@@ -231,16 +231,21 @@ export async function reconcileRoutes() {
 // missing one. That makes it self-healing, which matters because a single
 // failed attempt previously left a camera dark indefinitely with control and
 // file transfer working normally.
-// Smart plugs live on the tenant's LAN, but the engine calls them directly with
-// httpx. On a cloud-hosted instance that is simply unroutable: every control and
-// status request times out, so plugs appear dead while the device itself is
-// perfectly healthy. They were built for local-mode deployments and never taught
-// about the connector.
+// Smart plugs live on the tenant's LAN, and the engine calls them directly with
+// httpx, so on a cloud-hosted instance they are unroutable and every request
+// times out. They were written for local-mode deployments and never taught about
+// the connector.
 //
-// No engine change is needed. It builds `http://{ip}/cm?...`, so pointing
-// ip_address at "relayhost:port" produces a valid URL through the same TCP relay
-// the printers use. Plug relays are allocated well above the printer range so the
-// two schemes cannot collide.
+// A previous attempt rewrote ip_address to "relayhost:port" so the engine's
+// `http://{ip}/cm` would traverse the printer relay. That worked at the network
+// level and broke the product: the engine's schema validates ip_address as a
+// bare IPv4 address, so every list request raised ResponseValidationError and
+// the UI showed no plugs at all while still refusing to add one, because the row
+// existed. A field with a validated shape is not a place to smuggle a host:port.
+//
+// The relay is still allocated here so the tunnel exists, but the address is
+// left alone. Routing the plug's HTTP through the connector needs the engine to
+// ask for it, which is an engine change rather than a field rewrite.
 const PLUG_RELAY_BASE = 41000;
 export function plugRelayPort(plugId) { return PLUG_RELAY_BASE + (Number(plugId) % 900); }
 
@@ -249,32 +254,15 @@ export async function reconcileSmartPlugs(userId, connectorId, base) {
   let plugs = [];
   try { plugs = await eng(base, '/api/v1/smart-plugs/'); } catch { return 0; }
   const list = Array.isArray(plugs) ? plugs : (plugs.items || plugs.smart_plugs || []);
-  const known = await getPlugRoutes(userId).catch(() => ({}));
   let n = 0;
   for (const plug of list) {
-    const addr = String(plug.ip_address || '');
-    if (!addr || !plug.enabled) continue;
-    // Already pointed at a relay: leave it be, but keep the tunnel open.
-    const viaRelay = addr.startsWith(RELAY_HOST);
-    const lanIp = viaRelay ? (known[plug.id] || null) : addr.split(':')[0];
-    if (!lanIp) continue;
-    if (!viaRelay) await setPlugRoute(userId, plug.id, lanIp).catch(() => {});
-    const port = plugRelayPort(plug.id);
-    openTcpRelay(userId, lanIp, 80, port, connectorId);
-    if (!viaRelay) {
-      try {
-        // The engine exposes PATCH on this route, not PUT: a PUT returns 405 and
-        // the reroute silently did nothing while the relay sat listening.
-        await eng(base, `/api/v1/smart-plugs/${plug.id}`, {
-          method: 'PATCH',
-          body: JSON.stringify({ ip_address: `${RELAY_HOST}:${port}` })
-        });
-        dbg('routing', 'smart plug routed via connector', { plugId: plug.id, lanIp, port });
-      } catch (e) { dbg('routing', 'smart plug reroute failed', { plugId: plug.id, error: e?.message }); }
-    }
+    const lanIp = String(plug.ip_address || '').split(':')[0];
+    if (!lanIp || !plug.enabled) continue;
+    await setPlugRoute(userId, plug.id, lanIp).catch(() => {});
+    openTcpRelay(userId, lanIp, 80, plugRelayPort(plug.id), connectorId);
     n++;
   }
-  if (n) console.log(`[routing] ${n} smart plug(s) routed via connector`);
+  if (n) dbg('routing', 'smart plug relays open', { count: n });
   return n;
 }
 
