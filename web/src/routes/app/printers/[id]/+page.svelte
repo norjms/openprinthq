@@ -42,6 +42,7 @@
 
   // ---- live camera (polled snapshot through the engine gateway) ----
   let camTick = $state(0);
+  let camTimer;
   let camAvailable = $state(true);
   // The camera view always opens in its own tab (via window.open so that tab's ✕
   // can close itself). The tab that launched it is never affected.
@@ -85,12 +86,17 @@
   }
 
   onMount(() => {
+    // Status is cheap and wants to feel live, so it stays on a short interval.
+    // The camera snapshot is a full JPEG relayed from the printer through the
+    // connector and the control-plane, so refreshing it on the same 3s tick
+    // meant twenty times the intended traffic for a still image. The live view
+    // is what WebRTC is for; this fallback only needs to look current.
     timer = setInterval(() => {
       if (acting) return;
       loadStatus(false);
-      if (camAvailable) camTick++;
     }, 3000);
-    return () => clearInterval(timer);
+    camTimer = setInterval(() => { if (camAvailable && !acting) camTick++; }, 60000);
+    return () => { clearInterval(timer); clearInterval(camTimer); };
   });
 
   // (Re)load whenever the printer id changes — the route component is reused

@@ -11,10 +11,12 @@
   let tick = $state(0);
   let unavailable = $state(false);
 
-  // The camera image endpoint polls; nudge it periodically as a fallback for the
-  // snapshot path (WebRTC updates itself live).
+  // WebRTC updates itself live, so this tick only drives the snapshot fallback.
+  // At 5s that fallback pulled a full JPEG from the printer through the
+  // connector and the control-plane twelve times a minute for what is a still
+  // image, which is most of the bandwidth this design set out to avoid.
   $effect(() => {
-    const t = setInterval(() => (tick += 1), 5000);
+    const t = setInterval(() => (tick += 1), 60000);
     return () => clearInterval(t);
   });
 
