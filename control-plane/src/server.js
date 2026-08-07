@@ -1034,7 +1034,12 @@ app.post('/api/camera/webrtc/:printerId', async (req, reply) => {
     // behaving differently by printer brand, for no reason a user can see, and
     // paying server bandwidth the whole time.
     if (vendor !== 'bambu') {
-      const snapshotUrl = printer.external_camera_url || `http://${directHost}/webcam/?action=snapshot`;
+      // Derive the webcam URL from the PRINTER's address, never from
+      // external_camera_url: setupCameraRelay has already rewritten that to
+      // point at this server's frame relay, so using it told the connector to
+      // pull video from the cloud host it exists to bypass -- and that endpoint
+      // serves single JPEGs, so ffmpeg had no stream to transcode.
+      const snapshotUrl = `http://${directHost}/webcam/?action=snapshot`;
       const job = {
         kind: 'camera-webrtc', vendor, name: `p${pid}`, printer_id: Number(pid), offer,
         snapshot_url: snapshotUrl,
