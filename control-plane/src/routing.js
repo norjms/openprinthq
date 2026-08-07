@@ -172,7 +172,12 @@ async function setupCameraRelay(userId, printerId, printer, directHost, connecto
   }
   // Point the engine at our internal relay endpoint. RELAY_HOST is the
   // control-plane's docker hostname, reachable from the engine.
-  const relayUrl = `http://${RELAY_HOST}:${CP_PORT}/api/internal/camera-relay/${userId}/${printerId}/frame`;
+  // Carry the gateway secret in the URL: the engine fetches this itself and
+  // cannot attach a header. Without it every frame fetch came back 403 while
+  // registration looked perfectly successful.
+  const gw = process.env.OPHQ_GATEWAY_SECRET || '';
+  const relayUrl = `http://${RELAY_HOST}:${CP_PORT}/api/internal/camera-relay/${userId}/${printerId}/frame`
+    + (gw ? `?gw=${encodeURIComponent(gw)}` : '');
   await eng(base, `/api/v1/printers/${printerId}`, {
     method: 'PATCH',
     body: JSON.stringify({
