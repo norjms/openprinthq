@@ -155,6 +155,17 @@ export async function migrate() {
     );
   `);
 
+  // A tenant's own log destination. Separate from app_settings, which is
+  // global: these logs belong to one instance and go only where that tenant
+  // says. Never populated by the platform operator.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS user_log_sinks (
+      user_id    INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      url        TEXT NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS signing_keys (
       user_id     INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -671,5 +682,23 @@ export async function listAllInstances() {
             u.email AS user_email
      FROM instances i JOIN users u ON u.id = i.user_id
      ORDER BY i.id`);
+  return rows;
+}
+
+// ---- per-tenant log destinations ----------------------------------------
+export async function getUserLogSink(userId) {
+  const { rows } = await pool.query('SELECT url FROM user_log_sinks WHERE user_id = $1', [userId]);
+  return rows[0]?.url || '';
+}
+export async function setUserLogSink(userId, url) {
+  const u = String(url || '').trim();
+  if (!u) { await pool.query('DELETE FROM user_log_sinks WHERE user_id = $1', [userId]); return ''; }
+  await pool.query(
+    `INSERT INTO user_log_sinks (user_id, url) VALUES ($1, $2)
+     ON CONFLICT (user_id) DO UPDATE SET url = EXCLUDED.url, updated_at = now()`, [userId, u]);
+  return u;
+}
+export async function listUserLogSinks() {
+  const { rows } = await pool.query('SELECT user_id, url FROM user_log_sinks');
   return rows;
 }
