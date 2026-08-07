@@ -1049,7 +1049,12 @@ app.post('/api/camera/webrtc/:printerId', async (req, reply) => {
       if (!r || !r.ok || !r.answer) {
         return reply.code(502).send({ error: r?.error || 'connector did not answer the WebRTC offer' });
       }
-      return { type: 'answer', sdp: r.answer };
+      // go2rtc already returns a complete {type, sdp} object, so pass it through
+      // untouched. Wrapping it again produced an answer whose sdp field was
+      // itself JSON, which a browser silently rejects -- the handshake looked
+      // successful on this side while the video never started.
+      reply.header('content-type', 'application/json');
+      return reply.send(r.answer);
     }
     const job = {
       kind: 'camera-webrtc',
