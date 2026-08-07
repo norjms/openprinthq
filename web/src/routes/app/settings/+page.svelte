@@ -8,6 +8,7 @@
   import LookAndFeel from '$lib/components/LookAndFeel.svelte';
   import GlobalAdmin from '$lib/components/GlobalAdmin.svelte';
   import PrinterNames from '$lib/components/PrinterNames.svelte';
+  import InstanceLogging from '$lib/components/InstanceLogging.svelte';
   import PageTitle from '$lib/components/PageTitle.svelte';
 
   // Top-level settings tab (General account/instance settings vs Look & Feel).
@@ -191,6 +192,7 @@ scrape_configs:
   <GlobalAdmin />
 {:else}
 <div class="grid two">
+  <InstanceLogging />
   <div class="card card-pad">
     <span class="eyebrow">Account</span>
     <div class="kv mono">
