@@ -57,6 +57,9 @@ export const api = {
   adminSettings: () => req('/admin/settings'),
   saveAdminSettings: (body) => req('/admin/settings', { method: 'PUT', body: JSON.stringify(body) }),
   testTurn: () => req('/admin/settings/turn-test', { method: 'POST' }),
+  // Per-tenant log destination: scoped to the caller, never the whole platform.
+  logSettings: () => req('/settings/logging'),
+  saveLogSettings: (log_url) => req('/settings/logging', { method: 'PUT', body: JSON.stringify({ log_url }) }),
   // ---- printer model-name mapping (friendly names for internal codes) ----
   lookupModelName: (vendor, code) => req('/model-names/lookup?vendor=' + encodeURIComponent(vendor) + '&code=' + encodeURIComponent(code)),
   learnModelName: (vendor, code, friendly_name) => req('/model-names/learn', { method: 'POST', body: JSON.stringify({ vendor, code, friendly_name }) }),
