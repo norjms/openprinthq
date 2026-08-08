@@ -10,8 +10,8 @@
 import crypto from 'node:crypto';
 import net from 'node:net';
 import { EventEmitter } from 'node:events';
-import { getConnectorByToken, touchConnector, setConnectorClientKey, setConnectorHostCidr } from './db.js';
-import { signJob } from './signing.js';
+import { getConnectorByToken, touchConnector, setConnectorClientKey, setConnectorHostCidr, getSigningPublic } from './db.js';
+import { signJob, ensureKeyPair, fingerprint } from './signing.js';
 import { dbg } from './debuglog.js';
 
 // connectorId -> { raw, userId, name, lastSeen, heartbeat }
@@ -238,6 +238,30 @@ export function connectorOnline(userId, connectorId = null) {
 export function isConnectorOnline(connectorId) { return streams.has(connectorId); }
 
 export function registerConnectorRoutes(app) {
+  // Agent → cloud: fetch the account's command-signing public key so the agent
+  // can pin it.
+  //
+  // The equivalent route in server.js is session-authenticated and exists for
+  // the web UI. An agent has a connector token and no session, so it could not
+  // use it, which meant trust-on-first-use had no way to actually fetch the
+  // key and every operator had to hand-copy a PEM block. Almost nobody did,
+  // which is most of why signing was off everywhere.
+  //
+  // Handing the key to a valid connector token is not a disclosure: it is the
+  // public half, and the token holder is the party the key authenticates TO.
+  // The fingerprint is returned alongside so the operator can confirm the pin
+  // out of band against the web UI, which is what closes the window where an
+  // attacker positioned on the network during pairing could serve their own key.
+  app.get('/api/connector/signing-pubkey', async (req, reply) => {
+    const conn = await getConnectorByToken(bearer(req));
+    if (!conn) return reply.code(401).send({ error: 'invalid connector token' });
+    if (!(await ensureClientAuth(conn, req))) return reply.code(401).send({ error: 'client key authentication failed' });
+    await ensureKeyPair(conn.user_id);
+    const k = await getSigningPublic(conn.user_id);
+    if (!k?.public_pem) return reply.code(503).send({ error: 'no signing key available for this account' });
+    return { public_pem: k.public_pem, fingerprint: fingerprint(k.public_pem) };
+  });
+
   // Agent → cloud: long-lived SSE stream carrying jobs down to the LAN.
   app.get('/api/connector/stream', async (req, reply) => {
     const conn = await getConnectorByToken(bearer(req));
