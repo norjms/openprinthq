@@ -45,6 +45,10 @@ const CONFIG = {
   // Optional RSA public key (PEM). When set, the agent verifies that every
   // command it receives is signed by the control-plane's matching private key.
   signPubKeyPem: readPubKey(),
+  signPubKeyFile: process.env.OPHQ_SIGNING_PUBKEY_FILE || '',
+  // Unsigned operation is an explicit, named opt-out. Absence of a key is not
+  // consent to run without one. LAN beta only.
+  allowUnsigned: process.env.OPHQ_ALLOW_UNSIGNED === '1',
   maxClockSkewMs: Number(process.env.OPHQ_MAX_CLOCK_SKEW_MS || 120000),
   // Keep-alive: if no bytes (control-plane sends a ':ping' comment ~every 20s)
   // arrive within this window, treat the tunnel as dead and reconnect. Catches
@@ -75,14 +79,22 @@ function canonJob(j) {
     j.path ?? null, j.method ?? null, j.headers ?? null, j.body ?? null
   ]));
 }
-const isCommand = (j) => j.kind === undefined || j.kind === 'tcp-open' || j.kind === 'tcp-probe';
-let warnedUnsigned = false;
+// MUST stay identical to STREAM_KINDS in control-plane/src/signing.js. A
+// deny-list, not an allow-list: anything the control-plane signs, the agent
+// must verify. The previous allow-list named tcp-open and tcp-probe only, so
+// discover and the camera-* kinds skipped verification entirely on this side
+// even once the control-plane started signing them.
+const STREAM_KINDS = new Set(['tcp-data', 'tcp-close']);
+const isCommand = (j) => !STREAM_KINDS.has(j.kind);
 function verifyCommand(job) {
-  if (!signPubKey) {
-    if (!warnedUnsigned) { warnedUnsigned = true; log('WARNING: OPHQ_SIGNING_PUBKEY not set — command signatures are NOT enforced. Set it for best security.'); }
-    return true;
-  }
-  if (!isCommand(job)) return true;   // stream data/close ride an already-authenticated stream id
+  // Order matters. Stream traffic is authorised by possession of a stream id
+  // that a signed tcp-open created, so it is exempt regardless of key state.
+  if (!isCommand(job)) return true;
+  // Fail CLOSED. With no pinned key we cannot tell a legitimate control-plane
+  // from anything else that can reach this process, and a command makes us
+  // originate a new connection into the user's network. The only way through
+  // here without a key is an operator who set OPHQ_ALLOW_UNSIGNED=1 on purpose.
+  if (!signPubKey) return CONFIG.allowUnsigned;
   if (!job.sig || !job.ts) { log('rejected unsigned command', job.id); return false; }
   if (Math.abs(Date.now() - Number(job.ts)) > CONFIG.maxClockSkewMs) { log('rejected stale command', job.id); return false; }
   if (seenIds.has(job.id)) { log('rejected replayed command', job.id); return false; }
@@ -92,6 +104,85 @@ function verifyCommand(job) {
   if (!ok) { log('rejected bad-signature command', job.id); return false; }
   rememberId(job.id);
   return true;
+}
+
+// ---- trust-on-first-use pinning ------------------------------------------
+// Fetch the control-plane's command-signing public key once, show the operator
+// its fingerprint, and pin it to disk. After the first pin the file is the sole
+// source of truth: a control-plane presenting a different key is treated as an
+// attack, not as a rotation.
+//
+// This exists so that enforcing signatures does not require every operator to
+// hand-copy a PEM block. An enforcement default that costs a manual step gets
+// turned off, and a default that is off is the situation this replaces.
+function fingerprintOf(pem) {
+  return crypto.createHash('sha256')
+    .update(crypto.createPublicKey(pem).export({ type: 'spki', format: 'der' }))
+    .digest('base64');
+}
+
+async function fetchServerPubKey() {
+  const res = await fetch(`${CONFIG.controlUrl}/api/connector/signing-pubkey`, {
+    headers: { authorization: `Bearer ${CONFIG.token}`, ...clientAuthHeaders() }
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const { public_pem, fingerprint } = await res.json();
+  if (!public_pem) throw new Error('control-plane returned no public key');
+  const local = fingerprintOf(public_pem);
+  // The server-supplied fingerprint is a checksum, never the thing we trust.
+  // Recomputing it locally catches a truncated or mangled key before we pin it.
+  if (fingerprint && fingerprint !== local) throw new Error('fingerprint does not match the key in the same response');
+  return { pem: public_pem, fp: local };
+}
+
+async function pinSigningKey() {
+  // An inline key is already a deliberate pin by the operator. Leave it alone.
+  if (CONFIG.signPubKeyPem && !CONFIG.signPubKeyFile) return;
+  if (!CONFIG.signPubKeyFile) return;
+
+  const pinnedPem = signPubKey ? CONFIG.signPubKeyPem : null;
+  const pinnedFp = pinnedPem ? fingerprintOf(pinnedPem) : null;
+
+  let server = null;
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    try { server = await fetchServerPubKey(); break; }
+    catch (e) {
+      // A key we already hold is enough to run. Only a FIRST pin needs the
+      // control-plane reachable, so do not strand a working agent on a blip.
+      if (pinnedFp) { log('could not refresh signing key:', e.message, '— continuing with the pinned key'); return; }
+      log(`waiting for the control-plane to pin the signing key (attempt ${attempt}/5):`, e.message);
+      await new Promise((r) => setTimeout(r, attempt * 3000));
+    }
+  }
+
+  if (!server) {
+    if (CONFIG.allowUnsigned) { log('WARNING: could not pin a signing key and OPHQ_ALLOW_UNSIGNED=1 is set — continuing UNVERIFIED'); return; }
+    fail('Could not fetch the command-signing key from the control-plane, and no key is pinned yet. This agent will not run unverified. Fix connectivity and restart, or set OPHQ_ALLOW_UNSIGNED=1 to accept the risk explicitly.');
+  }
+
+  if (pinnedFp) {
+    if (pinnedFp !== server.fp) {
+      fail(
+        'The control-plane presented a signing key that does not match the pinned key.\n' +
+        `  pinned:    ${pinnedFp}\n` +
+        `  presented: ${server.fp}\n` +
+        'This is either a key rotation you performed, or an attack. If you rotated it ' +
+        `yourself, delete ${CONFIG.signPubKeyFile} and restart to re-pair. Do not do that otherwise.`
+      );
+    }
+    return;   // already pinned, unchanged
+  }
+
+  try { fs.writeFileSync(CONFIG.signPubKeyFile, server.pem, { mode: 0o600 }); }
+  catch (e) { fail(`could not write the pinned key to ${CONFIG.signPubKeyFile}: ${e.message}. The path must be writable and must persist across restarts, or the key re-pins on every boot and pinning protects nothing.`); }
+
+  signPubKey = crypto.createPublicKey(server.pem);
+  CONFIG.signPubKeyPem = server.pem;
+  log('');
+  log('  Pinned the control-plane command-signing key.');
+  log(`  Fingerprint: ${server.fp}`);
+  log('  Confirm this matches Settings → Connectors in the web UI.');
+  log('');
 }
 
 // ---- mutual auth: this connector's own key pair --------------------------
@@ -239,7 +330,8 @@ async function handleJob(job) {
 
 // ---- SSE stream consumer -------------------------------------------------
 async function connectOnce() {
-  const url = `${CONFIG.controlUrl}/api/connector/stream?name=${encodeURIComponent(CONFIG.name)}`;
+  const signing = signPubKey ? 'enforced' : 'disabled';
+  const url = `${CONFIG.controlUrl}/api/connector/stream?name=${encodeURIComponent(CONFIG.name)}&signing=${signing}`;
   const ac = new AbortController();
   let idle = setTimeout(() => ac.abort(), CONFIG.streamTimeoutMs);
   const bump = () => { clearTimeout(idle); idle = setTimeout(() => ac.abort(), CONFIG.streamTimeoutMs); };
@@ -280,6 +372,26 @@ async function connectOnce() {
 async function main() {
   if (!CONFIG.controlUrl) fail('OPHQ_CONTROL_URL is required (e.g. https://openprinthq.example.org)');
   if (!CONFIG.token) fail('OPHQ_CONNECTOR_TOKEN is required (create one in Settings → Connectors)');
+
+  await pinSigningKey();
+
+  if (!signPubKey && !CONFIG.allowUnsigned) {
+    fail(
+      'No command-signing key is pinned, so this connector would execute unauthenticated\n' +
+      'commands against your local network. Set OPHQ_SIGNING_PUBKEY_FILE to a writable,\n' +
+      'persistent path and restart: the agent pins the key automatically on first run.\n' +
+      'To accept the risk explicitly instead, set OPHQ_ALLOW_UNSIGNED=1. That is supported\n' +
+      'for LAN testing only.'
+    );
+  }
+  if (!signPubKey && CONFIG.allowUnsigned) {
+    // Repeat, rather than warning once at boot. A single line at startup scrolls
+    // past and is never seen again, which is exactly how this shipped disabled
+    // for as long as it did.
+    const nag = () => log('WARNING: OPHQ_ALLOW_UNSIGNED=1 — command signatures are NOT enforced. Anything that can reach this agent can drive it against your LAN.');
+    nag();
+    setInterval(nag, 15 * 60 * 1000).unref();
+  }
   log(`starting — control=${CONFIG.controlUrl} allow=[${CONFIG.allow.join(',')}] ports=[${CONFIG.allowPorts.join(',')}] signature-verification=${signPubKey ? 'ENFORCED' : 'off'} client-key=${clientKey ? 'on' : 'off'}`);
   if (clientPubPem) log(`this connector's public key (register it in Settings → Connectors):\n${clientPubPem.trim()}`);
   let backoff = CONFIG.reconnectMinMs;
