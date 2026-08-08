@@ -231,9 +231,68 @@ export const api = {
     req('/engine/api/v1/printers/' + id + '/ams/unload', { method: 'POST' }),
   // kind: 'nozzle' | 'bed' | 'chamber' — engine takes ?target= as a query param.
   // For dual-nozzle machines, nozzle index 0 = right/default, 1 = left.
+  // The nozzle index is sent whenever one is given, INCLUDING 0. Testing the
+  // value for truthiness dropped index 0 — the right nozzle — and only worked
+  // because the engine happens to default to it.
   setTemp: (id, kind, target, nozzle) =>
     req('/engine/api/v1/printers/' + id + '/temperature/' + kind + '?target=' + encodeURIComponent(target) +
-        (kind === 'nozzle' && nozzle ? '&nozzle=' + nozzle : ''), { method: 'POST' }),
+        (kind === 'nozzle' && nozzle != null ? '&nozzle=' + nozzle : ''), { method: 'POST' }),
+
+  // ---- printer-page control surface -------------------------------------
+  // Airduct: a two-mode toggle ('cooling' | 'heating'), not a percentage.
+  // Cooling filters and cools chamber air; heating circulates and shuts the top
+  // exhaust flap. P2S / H2* only; reads back on status as `airduct_mode`.
+  airductMode: (id, mode) =>
+    req('/engine/api/v1/printers/' + id + '/airduct-mode?mode=' + encodeURIComponent(mode), { method: 'POST' }),
+
+  // Per-printer timelapse + live view. Live view is a privacy switch at the
+  // machine: turning it off stops the printer serving video to everyone.
+  setTimelapse: (id, enabled) =>
+    req('/engine/api/v1/printers/' + id + '/timelapse?enabled=' + (enabled ? 'true' : 'false'), { method: 'POST' }),
+  setLiveview: (id, enabled) =>
+    req('/engine/api/v1/printers/' + id + '/liveview?enabled=' + (enabled ? 'true' : 'false'), { method: 'POST' }),
+
+  // What the camera can actually do for this printer (webrtc vs snapshot,
+  // routed through a connector or not). The control-plane has always been able
+  // to answer this; the stream component used to find out by trying.
+  cameraCapability: (id) => req('/camera/capability/' + id),
+
+  // Objects on the current plate, and skipping some of them mid-print.
+  // `reload` re-pulls the 3MF from the printer over FTP, which is slow — only
+  // pass it when the cached list looks wrong.
+  printObjects: (id, reload = false) =>
+    req('/engine/api/v1/printers/' + id + '/print/objects' + (reload ? '?reload=true' : '')),
+  // The engine wants a BARE array of ids here, not an object.
+  skipObjects: (id, objectIds) =>
+    req('/engine/api/v1/printers/' + id + '/print/skip-objects', {
+      method: 'POST', body: JSON.stringify(objectIds)
+    }),
+
+  // AI/monitoring modules: spaghetti_detector, first_layer_inspector,
+  // printing_monitor, buildplate_marker_detector, allow_skip_parts,
+  // pileup_detector, clump_detector, airprint_detector, auto_recovery_step_loss.
+  setPrintOption: (id, { module_name, enabled, print_halt = true, sensitivity = 'medium' }) =>
+    req('/engine/api/v1/printers/' + id + '/print-options?module_name=' + encodeURIComponent(module_name) +
+        '&enabled=' + (enabled ? 'true' : 'false') +
+        '&print_halt=' + (print_halt ? 'true' : 'false') +
+        '&sensitivity=' + encodeURIComponent(sensitivity), { method: 'POST' }),
+
+  // Calibration routines. At least one flag must be true. These move the
+  // machine for several minutes, so the UI confirms first.
+  calibrate: (id, flags) =>
+    req('/engine/api/v1/printers/' + id + '/calibration?' +
+        Object.entries(flags).filter(([, v]) => v).map(([k]) => k + '=true').join('&'), { method: 'POST' }),
+
+  // Filament presets the printer knows about — feeds the slot editor.
+  availableFilaments: () => req('/engine/api/v1/printers/available-filaments'),
+  // Write a slot's filament metadata (type, colour, temp window). Colour is
+  // RRGGBBAA hex without the leading '#'.
+  configureSlot: (id, amsId, trayId, cfg) =>
+    req('/engine/api/v1/printers/' + id + '/slots/' + amsId + '/' + trayId + '/configure?' +
+        new URLSearchParams(cfg).toString(), { method: 'POST' }),
+  // Clear a slot back to "unknown filament".
+  resetSlot: (id, amsId, trayId) =>
+    req('/engine/api/v1/printers/' + id + '/ams/' + amsId + '/tray/' + trayId + '/reset', { method: 'POST' }),
   queue: () => req('/engine/api/v1/queue/'),
   queueUpdate: (id, body) =>
     req('/engine/api/v1/queue/' + id, { method: 'PATCH', body: JSON.stringify(body) }),
