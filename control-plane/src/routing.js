@@ -13,6 +13,7 @@
 // field — teach the engine to honour `endpoint_overrides` for that role. The
 // engine keeps `ip_address` as the (relay) host and reads a per-role PORT from
 // `endpoint_overrides`, so a single relay host serves every port a printer uses.
+import { spawn } from 'node:child_process';
 import { getInstanceForUser, getAutomation, setRouteDirect, listActiveRoutes, setPlugRoute } from './db.js';
 import { openTcpRelay, closeRelay, connectorOnline, RELAY_HOST, relayPort, proxyViaConnector, onConnectorOnline } from './connector.js';
 import { dbg } from './debuglog.js';
@@ -249,20 +250,50 @@ export async function reconcileRoutes() {
 const PLUG_RELAY_BASE = 41000;
 export function plugRelayPort(plugId) { return PLUG_RELAY_BASE + (Number(plugId) % 900); }
 
+// Write the map into the tenant's engine container. A file rather than an env
+// var because relays open and close while that container is running, and env
+// can only change by recreating it.
+async function writeLanProxyMap(userId, text) {
+  // The container name is derived from the subdomain; there is no
+  // container_name column, so reading one silently produced undefined and this
+  // whole function returned without writing anything or reporting why.
+  const inst = await getInstanceForUser(userId);
+  const name = inst?.subdomain ? `ophq-${inst.subdomain}` : null;
+  if (!name) throw new Error('no instance container for this user');
+  await new Promise((resolve, reject) => {
+    const p = spawn('docker', ['exec', '-i', name, 'sh', '-c', 'cat > /app/data/lan_proxy.map']);
+    p.on('error', reject);
+    p.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`docker exec exited ${code}`))));
+    p.stdin.end(text);
+  });
+}
+
 export async function reconcileSmartPlugs(userId, connectorId, base) {
   if (!base || !connectorId) return 0;
   let plugs = [];
   try { plugs = await eng(base, '/api/v1/smart-plugs/'); } catch { return 0; }
   const list = Array.isArray(plugs) ? plugs : (plugs.items || plugs.smart_plugs || []);
+  const mapping = [];
   let n = 0;
   for (const plug of list) {
     const lanIp = String(plug.ip_address || '').split(':')[0];
     if (!lanIp || !plug.enabled) continue;
     await setPlugRoute(userId, plug.id, lanIp).catch(() => {});
-    openTcpRelay(userId, lanIp, 80, plugRelayPort(plug.id), connectorId);
+    const port = plugRelayPort(plug.id);
+    openTcpRelay(userId, lanIp, 80, port, connectorId);
+    mapping.push(`${lanIp}=${RELAY_HOST}:${port}`);
     n++;
   }
-  if (n) dbg('routing', 'smart plug relays open', { count: n });
+  // Hand the engine the LAN -> relay mapping. It applies this at request time,
+  // so the plug's stored ip_address stays a bare IPv4 address and the smart-plug
+  // API keeps serialising. Writing host:port into that field broke every list
+  // request and made plugs vanish from the UI.
+  if (mapping.length) {
+    try {
+      await writeLanProxyMap(userId, mapping.join(','));
+      dbg('routing', 'smart plug relays open', { count: n, mapping: mapping.join(',') });
+    } catch (e) { dbg('routing', 'could not publish plug proxy map', { error: e?.message }); }
+  }
   return n;
 }
 
