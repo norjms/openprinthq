@@ -6,12 +6,16 @@
 
   let {
     printerId, status = null, isBambu = true, acting = null,
+    // Hysteresis-smoothed reachability from the page, NOT status.connected —
+    // the raw flag blips for a second or two on transient MQTT reconnects and
+    // this panel is the most visible thing on the page.
+    online = true,
     onpause = () => {}, onresume = () => {}, onstop = () => {},
     onclearplate = () => {}, refresh = () => {}
   } = $props();
 
   const st = $derived(status || {});
-  const stateStr = $derived((st.state || (st.connected ? 'idle' : 'offline')).toString());
+  const stateStr = $derived((st.state || (online ? 'idle' : 'offline')).toString());
   const isPrinting = $derived(/run|print/i.test(stateStr));
   const isPaused = $derived(/pause/i.test(stateStr));
   const hasJob = $derived(isPrinting || isPaused);
@@ -29,14 +33,14 @@
   // Idle reads "Ready", never the previous job's outcome — that only lingers
   // while the plate still needs clearing.
   const headline = $derived(
-    !st.connected ? 'Offline' :
+    !online ? 'Offline' :
     isPrinting ? 'Printing' :
     isPaused ? 'Paused' :
     awaitingClear ? 'Print finished' :
     'Ready'
   );
   const tone = $derived(
-    !st.connected ? 'danger' : isPrinting ? 'primary' : isPaused ? 'accent' : awaitingClear ? 'accent' : 'ok'
+    !online ? 'danger' : isPrinting ? 'primary' : isPaused ? 'accent' : awaitingClear ? 'accent' : 'ok'
   );
 
   let confirmStop = $state(false);
@@ -77,14 +81,14 @@
         {:else if awaitingClear}
           <span class="muted tiny">Clear the build plate, then mark it clear.</span>
         {:else}
-          <span class="muted tiny">{st.connected ? 'Nothing printing.' : 'Printer offline.'}</span>
+          <span class="muted tiny">{online ? 'Nothing printing.' : 'Printer offline.'}</span>
         {/if}
       </div>
     </div>
 
     <div class="jobctl">
       {#if awaitingClear}
-        <button class="btn btn-primary btn-sm" onclick={onclearplate} disabled={!st.connected || !!acting}
+        <button class="btn btn-primary btn-sm" onclick={onclearplate} disabled={!online || !!acting}
                 data-tip="Mark the build plate as cleared" aria-label="Mark the build plate as cleared">
           ✓ Clear plate
         </button>

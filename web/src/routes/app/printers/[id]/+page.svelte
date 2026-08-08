@@ -36,7 +36,7 @@
   import PrinterLayoutBar from '$lib/components/PrinterLayoutBar.svelte';
 
   import { printerLabel, printerImage } from '$lib/models.js';
-  import { recentlyOnline } from '$lib/online.js';
+  import { markSeen, recentlyOnline } from '$lib/online.js';
   import { appearance, saveAppearance as persistAppearance } from '$lib/stores/appearance';
   import {
     orderedSections, resolveLayout, hasOverride, layoutFromDraft, mergeLayout
@@ -67,7 +67,7 @@
   const showBedEjection = $derived(!!meta?.show_bed_ejection);
 
   // ---- offline relocate ---------------------------------------------------
-  const isOffline = $derived(!!st && !st.connected && !recentlyOnline(id));
+  const isOffline = $derived(!!st && !online);
   const printerForLocate = $derived(
     meta ? {
       id: meta.id ?? Number(id), name: meta.name || 'Printer',
@@ -84,6 +84,11 @@
     if (initial) { loading = true; error = null; }
     try {
       st = await api.printerStatus(id);
+      // Feed the online-hysteresis cache on every poll. The deleted
+      // BambuDashboard was the only thing on this page that did this; without it
+      // the grace window expires after 90s and a single MQTT blip makes the page
+      // declare the printer offline and pop the relocate banner.
+      markSeen(id, st?.connected);
       error = null;
     } catch (e) {
       if (e.status === 404) error = 'not-found';
@@ -118,7 +123,16 @@
   });
 
   // ---- state helpers ------------------------------------------------------
-  const stateStr = $derived((st?.state || (st?.connected ? 'idle' : 'offline')).toString());
+  // `connected` flaps for a second or two whenever the printer's MQTT session
+  // reconnects, even though it never went anywhere. Everything user-visible reads
+  // this smoothed value instead; only genuinely-absent-for-90s counts as offline.
+  const online = $derived(!!st?.connected || (!!st && recentlyOnline(id)));
+  // A stale 'offline' from the engine during a blip must not leak through either.
+  const stateStr = $derived.by(() => {
+    const raw = (st?.state || '').toString();
+    if (raw && !/offline/i.test(raw)) return raw;
+    return online ? 'idle' : 'offline';
+  });
   const isPrinting = $derived(/run|print/i.test(stateStr));
   const isPaused = $derived(/pause/i.test(stateStr));
   const isKlipper = $derived((meta?.connection_type || '').toLowerCase() === 'klipper');
@@ -201,7 +215,7 @@
     } finally { acting = null; }
   }
   async function toggleConnection() {
-    await control(st?.connected ? 'disconnect' : 'connect', st?.connected ? 'disconnect' : 'connect');
+    await control(online ? 'disconnect' : 'connect', online ? 'disconnect' : 'connect');
   }
   async function clearPlate() {
     acting = 'clear';
@@ -243,9 +257,9 @@
     if (!live || alerts.length) a.add('alerts');
     if (!live || camAvailable || st?.cover_url) a.add('camera');
     if (isBambu && showFilamentPanel && (!live || hasFilamentUnit || hasNozzleInfo)) a.add('filament');
-    if (isKlipper) { a.add('klipper-tuning'); if (!live || st?.connected) a.add('console'); }
+    if (isKlipper) { a.add('klipper-tuning'); if (!live || online) a.add('console'); }
     if (showBedEjection) a.add('eject');
-    if (!isKlipper && (!live || st?.connected)) a.add('gcode');
+    if (!isKlipper && (!live || online)) a.add('gcode');
     return a;
   }
   const potentialKeys = $derived(availableKeys(false));
@@ -349,17 +363,17 @@
         <div class="pactions">
           <span class="chip {tone(stateStr)}">{stateStr}</span>
           <button class="btn btn-ghost btn-sm"
-                  data-tip={st?.connected ? 'Disconnect from the printer' : 'Connect to the printer'}
-                  aria-label={st?.connected ? 'Disconnect from the printer' : 'Connect to the printer'}
+                  data-tip={online ? 'Disconnect from the printer' : 'Connect to the printer'}
+                  aria-label={online ? 'Disconnect from the printer' : 'Connect to the printer'}
                   onclick={toggleConnection} disabled={!!acting}>
-            {st?.connected ? 'Disconnect' : 'Connect'}
+            {online ? 'Disconnect' : 'Connect'}
           </button>
           <button class="btn btn-ghost btn-sm" data-tip="Printer settings" aria-label="Printer settings"
                   onclick={() => (settingsOpen = true)}>
             <span aria-hidden="true">⚙</span> Settings
           </button>
           <button class="estop" type="button" onclick={emergencyStop}
-                  disabled={!st?.connected || acting === 'estop'}
+                  disabled={!online || acting === 'estop'}
                   data-tip="Emergency stop — immediate, no confirmation" data-tip-pos="below"
                   aria-label="Emergency stop — immediate, no confirmation">
             <span class="estop-oct"><span class="estop-txt">{acting === 'estop' ? '…' : 'STOP'}</span></span>
@@ -385,11 +399,11 @@
 
     {:else if s.key === 'camera'}
       <PrinterCameraPanel printerId={id} printerName={meta?.name || 'printer'} status={st}
-                          connected={!!st?.connected} isBambu={isBambu} tick={camTick}
+                          connected={online} isBambu={isBambu} tick={camTick}
                           onerror={() => (camAvailable = false)} onopen={openCamera} />
 
     {:else if s.key === 'progress'}
-      <PrinterProgressPanel printerId={id} status={st} isBambu={isBambu} acting={acting}
+      <PrinterProgressPanel printerId={id} status={st} isBambu={isBambu} acting={acting} online={online}
                             onpause={() => control('print/pause', 'pause')}
                             onresume={() => control('print/resume', 'resume')}
                             onstop={() => control('print/stop', 'stop')}
@@ -399,14 +413,14 @@
     {:else if s.key === 'control'}
       <PrinterControlPanel printerId={id} status={st} meta={meta} printing={isPrinting || isPaused}
                            isBambu={isBambu} isKlipper={isKlipper} chamberHeater={chamberHeaterOn}
-                           homedAxes={klipperHomed} refresh={() => loadStatus(false)} />
+                           homedAxes={klipperHomed} online={online} refresh={() => loadStatus(false)} />
 
     {:else if s.key === 'filament'}
       <PrinterFilamentPanel printerId={id} status={st} isBambu={isBambu}
                             refresh={() => loadStatus(false)} />
 
     {:else if s.key === 'console'}
-      <KlipperConsole printerId={id} connected={st?.connected} printing={isPrinting}
+      <KlipperConsole printerId={id} connected={online} printing={isPrinting}
                       onhomed={(h) => (klipperHomed = h)} />
 
     {:else if s.key === 'power'}
@@ -416,10 +430,10 @@
       <MaintenancePanel printerId={id} />
 
     {:else if s.key === 'klipper-tuning'}
-      <KlipperTuning printerId={id} connected={st?.connected} printing={isPrinting} />
+      <KlipperTuning printerId={id} connected={online} printing={isPrinting} />
 
     {:else if s.key === 'eject'}
-      <EjectPanel printerId={id} connected={st?.connected} kind={meta?.connection_type} status={st} />
+      <EjectPanel printerId={id} connected={online} kind={meta?.connection_type} status={st} />
 
     {:else if s.key === 'gcode'}
       <GcodeConsole printerId={id} kind={meta?.connection_type} printing={isPrinting} />
