@@ -17,12 +17,16 @@
   let {
     printerId, status = null, meta = null, printing = false,
     isBambu = true, isKlipper = false, chamberHeater = false,
-    homedAxes = null, refresh = () => {}
+    homedAxes = null, online = true, refresh = () => {}
   } = $props();
 
   const st = $derived(status || {});
   const T = $derived(st.temperatures || {});
-  const connected = $derived(!!st.connected);
+  // Reachability comes from the page already smoothed over MQTT blips. Gating on
+  // the raw flag made every control on this panel flicker disabled and back.
+  // A command sent during a real disconnect still fails cleanly with the
+  // engine's 400, which is the guard that actually matters.
+  const connected = $derived(!!online);
   const num = (v) => (v != null && v !== '' ? Number(v) : null);
 
   // ---- capability gates (derived, never probed) ---------------------------
