@@ -25,6 +25,13 @@
   import { printerLabel, printerImage } from '$lib/models.js';
   import { recentlyOnline } from '$lib/online.js';
   import PageTitle from '$lib/components/PageTitle.svelte';
+  import SectionFrame from '$lib/components/SectionFrame.svelte';
+  import PrinterLayoutBar from '$lib/components/PrinterLayoutBar.svelte';
+  import { get } from 'svelte/store';
+  import { appearance, saveAppearance as persistAppearance } from '$lib/stores/appearance';
+  import {
+    orderedSections, resolveLayout, hasOverride, layoutFromDraft, mergeLayout
+  } from '$lib/printerSections';
 
   const id = $derived($page.params.id);
 
@@ -380,6 +387,166 @@
     await control(st?.connected ? 'disconnect' : 'connect', st?.connected ? 'disconnect' : 'connect');
   }
 
+  // ---- arrangeable sections ------------------------------------------------
+  // The page is a stack of independent sections. Each user can reorder them and
+  // hide the ones they don't want, either as a default for every printer or as
+  // an override for this one. The saved layout lives in the per-user appearance
+  // config (same place as the left-nav prefs), so it follows them between
+  // browsers and never touches the printer record.
+  let editing = $state(false);
+  let layoutScope = $state('global');    // 'global' = every printer | 'printer'
+  let layoutSaving = $state(false);
+  let layoutMsg = $state(null);
+  // Working copies while arranging; null when not editing.
+  let draftPage = $state(null);
+  let draftDash = $state(null);
+
+  const variant = $derived(isBambu ? 'bambu' : 'classic');
+  const savedLayout = $derived(resolveLayout($appearance?.printerSections, id));
+  const printerHasOverride = $derived(hasOverride($appearance?.printerSections, id));
+
+  const hasFans = $derived(
+    [st?.cooling_fan_speed, st?.big_fan1_speed, st?.big_fan2_speed].some((v) => v != null)
+  );
+  const hasNozzleRack = $derived((st?.nozzle_rack || []).length > 0);
+
+  // Which sections belong to this printer at all (`live: false` — used while
+  // arranging, so an offline printer or an unplugged AMS can still be placed)
+  // versus which have something to draw this second (`live: true` — used to
+  // render). Anything structurally irrelevant (Klipper tuning on a Bambu, the
+  // dashboard blocks on a Klipper machine) is absent from both.
+  function availableKeys(live) {
+    const a = new Set(['power', 'maintenance']);
+    if (isBambu) {
+      a.add('bambu-dashboard');
+      a.add('bambu-header'); a.add('bambu-status'); a.add('bambu-temps');
+      a.add('bambu-controls'); a.add('bambu-footer');
+      if (!live || hasFans) a.add('bambu-fans');
+      if (!live || hasNozzleRack) a.add('bambu-nozzles');
+      if (!live || hasFilamentUnit) a.add('bambu-filaments');
+    } else {
+      a.add('title'); a.add('job'); a.add('temps');
+    }
+    if (!live || alerts.length) a.add('alerts');
+    if (!live || st?.connected) a.add('move');
+    if (showFilamentPanel && (!live || hasFilamentUnit)) a.add('filament');
+    if (isKlipper) a.add('klipper-tuning');
+    if (showBedEjection) a.add('eject');
+    if (!isKlipper && (!live || st?.connected)) a.add('gcode');
+    if (!live || camAvailable || st?.cover_url) a.add('camera');
+    return a;
+  }
+  const potentialKeys = $derived(availableKeys(false));
+  const liveKeys = $derived(availableKeys(true));
+
+  // The page-level stack. While arranging, hidden sections stay in the list as
+  // stubs so they can be brought back; otherwise they're dropped outright.
+  const pageList = $derived.by(() => {
+    const base = editing
+      ? (draftPage || [])
+      : orderedSections(savedLayout.layout, { variant, scope: 'page', available: liveKeys })
+          .filter((s) => !s.hidden);
+    return base.map((s, i, arr) => ({
+      ...s,
+      unavailable: editing && !liveKeys.has(s.key),
+      first: i === 0,
+      last: i === arr.length - 1
+    }));
+  });
+
+  // Current job and Temperatures are half-width cards that sit side by side when
+  // they end up adjacent, exactly as they always have. A half with no partner —
+  // or any section while arranging — takes the full width instead of leaving a
+  // hole beside it.
+  const pageRows = $derived.by(() => {
+    const rows = [];
+    for (let i = 0; i < pageList.length; i++) {
+      const a = pageList[i], b = pageList[i + 1];
+      if (!editing && a.def.width === 'half' && b && b.def.width === 'half') {
+        rows.push([a, b]); i++;
+      } else {
+        rows.push([a]);
+      }
+    }
+    return rows;
+  });
+
+  // The blocks inside the Bambu dashboard card, ordered the same way.
+  const dashList = $derived.by(() => {
+    const base = editing
+      ? (draftDash || [])
+      : orderedSections(savedLayout.layout, { variant, scope: 'dashboard', available: liveKeys });
+    return base.map((s) => ({ ...s, unavailable: editing && !liveKeys.has(s.key) }));
+  });
+
+  function seedDraft(layout) {
+    const opts = { variant, available: potentialKeys };
+    draftPage = orderedSections(layout, { ...opts, scope: 'page' });
+    draftDash = orderedSections(layout, { ...opts, scope: 'dashboard' });
+  }
+  function startEditing() {
+    seedDraft(savedLayout.layout);
+    layoutScope = savedLayout.scope;
+    layoutMsg = null;
+    editing = true;
+  }
+  function cancelEditing() {
+    editing = false; draftPage = null; draftDash = null; layoutMsg = null;
+  }
+  function resetDraft() {
+    seedDraft({ order: [], hidden: [] });
+    layoutMsg = null;
+  }
+
+  function moveIn(list, key, dir) {
+    const i = list.findIndex((s) => s.key === key);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= list.length) return list;
+    const next = [...list];
+    [next[i], next[j]] = [next[j], next[i]];
+    return next;
+  }
+  function toggleIn(list, key) {
+    return list.map((s) => (s.key === key && !s.def?.lockHide ? { ...s, hidden: !s.hidden } : s));
+  }
+  const movePage = (key, dir) => (draftPage = moveIn(draftPage || [], key, dir));
+  const togglePage = (key) => (draftPage = toggleIn(draftPage || [], key));
+  const moveDash = (key, dir) => (draftDash = moveIn(draftDash || [], key, dir));
+  const toggleDash = (key) => (draftDash = toggleIn(draftDash || [], key));
+
+  async function saveLayout() {
+    layoutSaving = true; layoutMsg = null;
+    try {
+      const cfg = get(appearance);
+      const ps = { ...(cfg.printerSections || {}) };
+      const byPrinter = { ...(ps.byPrinter || {}) };
+      // Merge onto the layout we started from so section keys that weren't on
+      // screen (the Bambu blocks while arranging a Klipper printer, say) survive.
+      const merged = mergeLayout(
+        savedLayout.layout,
+        layoutFromDraft(draftPage || []),
+        layoutFromDraft(draftDash || [])
+      );
+      if (layoutScope === 'printer') {
+        byPrinter[String(id)] = merged;
+      } else {
+        // Saving as the default also drops this printer's override — otherwise
+        // the new default would appear to do nothing on the page you set it from.
+        delete byPrinter[String(id)];
+        ps.order = merged.order;
+        ps.hidden = merged.hidden;
+      }
+      ps.byPrinter = byPrinter;
+      await persistAppearance({ ...cfg, printerSections: ps });
+      editing = false; draftPage = null; draftDash = null;
+      layoutMsg = { ok: true, text: layoutScope === 'printer'
+        ? 'Layout saved for this printer.'
+        : 'Layout saved as your default for every printer.' };
+    } catch (e) {
+      layoutMsg = { ok: false, text: e?.message || 'Could not save the layout.' };
+    } finally { layoutSaving = false; }
+  }
+
   // Emergency stop — immediate, NO confirmation (the regular Stop is confirm-gated).
   // Klipper gets a true firmware halt (M112); others get an immediate print-stop.
   async function emergencyStop() {
@@ -397,11 +564,202 @@
 
 <PageTitle page={st?.name || meta?.name || 'Printer'} />
 
+<!-- One arrangeable section of the page. The frame is edit-mode chrome only:
+     outside edit mode it adds no wrapper element at all, so an unarranged page
+     renders exactly the markup it always did. -->
+{#snippet pageSection(s)}
+  <SectionFrame def={s.def} hidden={s.hidden} unavailable={s.unavailable} {editing}
+                first={s.first} last={s.last}
+                onmove={(d) => movePage(s.key, d)} ontoggle={() => togglePage(s.key)}>
+    {#if s.key === 'bambu-dashboard'}
+      <BambuDashboard printerId={id} status={st} meta={meta} refresh={() => loadStatus(false)}
+        oncamera={openCamera} onsettings={() => (settingsOpen = true)}
+        sections={dashList} {editing} onmove={moveDash} ontoggle={toggleDash} />
+
+    {:else if s.key === 'title'}
+      <div class="title">
+        <div class="title-id">
+          {#if printerImage(meta?.connection_type, meta?.model)}
+            <div class="pthumb"><img src={printerImage(meta?.connection_type, meta?.model)} alt="{printerLabel(meta?.connection_type, meta?.model) || 'printer'}" /></div>
+          {/if}
+          <div>
+            <h1>{st?.name || meta?.name || 'Printer'}</h1>
+            <div class="meta mono">
+              {#if printerLabel(meta?.connection_type, meta?.model)}<span>{printerLabel(meta?.connection_type, meta?.model)}</span>{/if}
+              <span>#{id}</span>
+            </div>
+          </div>
+        </div>
+        <div class="actions">
+          <div class="flex gap center">
+            <span class="chip {tone(stateStr)}">{stateStr}</span>
+            <button class="btn btn-ghost btn-sm" data-tip={st?.connected ? 'Disconnect from the printer' : 'Connect to the printer'} aria-label={st?.connected ? 'Disconnect from the printer' : 'Connect to the printer'} onclick={toggleConnection} disabled={!!acting}>
+              {st?.connected ? 'Disconnect' : 'Connect'}
+            </button>
+            <button class="estop" type="button" onclick={emergencyStop} disabled={!st?.connected || acting === 'estop'}
+                    data-tip="Emergency stop — immediate, no confirmation" data-tip-pos="below" aria-label="Emergency stop — immediate, no confirmation">
+              <span class="estop-oct"><span class="estop-txt">{acting === 'estop' ? '…' : 'STOP'}</span></span>
+            </button>
+          </div>
+          <button class="btn btn-ghost btn-sm gear" data-tip="Printer settings" aria-label="Printer settings" onclick={() => (settingsOpen = true)}>
+            <span aria-hidden="true">⚙</span> Settings
+          </button>
+        </div>
+      </div>
+
+    {:else if s.key === 'alerts'}
+      <div class="alerts">
+        {#each alerts as a}
+          <div class="alert {a.severe ? 'sev' : ''}">
+            <span class="ai">⚠</span>
+            <span class="atext">
+              {#if a.desc}{a.desc}{:else}Printer alert — check the printer's screen for details.{/if}
+              <span class="mono acode">HMS {a.code}</span>
+            </span>
+          </div>
+        {/each}
+        <button class="btn btn-ghost btn-sm clr" onclick={clearHms} disabled={clearingHms}>
+          {clearingHms ? 'Clearing…' : 'Clear alerts'}
+        </button>
+      </div>
+
+    {:else if s.key === 'job'}
+      <div class="card card-pad job">
+        <h3>Current job</h3>
+        {#if hasJob}
+          <div class="jobname">{st?.subtask_name || st?.gcode_file || st?.current_print || 'Printing'}</div>
+          <div class="bar"><div class="fill" style="width:{Math.min(100, Math.max(0, st?.progress || 0))}%"></div></div>
+          <div class="jobmeta mono">
+            <span>{Math.round(st?.progress || 0)}%</span>
+            {#if st?.layer_num != null && st?.total_layers}<span>layer {st.layer_num}/{st.total_layers}</span>{/if}
+            {#if fmtEta(st?.remaining_time)}<span>~{fmtEta(st?.remaining_time)} left</span>{/if}
+          </div>
+          <div class="controls flex gap">
+            {#if isPrinting}
+              <button class="btn btn-ghost" onclick={() => control('print/pause', 'pause')} disabled={!!acting}>
+                {acting === 'pause' ? 'Pausing…' : 'Pause'}
+              </button>
+            {/if}
+            {#if isPaused}
+              <button class="btn btn-primary" onclick={() => control('print/resume', 'resume')} disabled={!!acting}>
+                {acting === 'resume' ? 'Resuming…' : 'Resume'}
+              </button>
+            {/if}
+            {#if isPrinting || isPaused}
+              {#if confirmStop}
+                <button class="btn btn-danger" onclick={() => control('print/stop', 'stop')} disabled={!!acting}>
+                  {acting === 'stop' ? 'Stopping…' : 'Confirm stop'}
+                </button>
+                <button class="btn btn-ghost" onclick={() => (confirmStop = false)} disabled={!!acting}>Cancel</button>
+              {:else}
+                <button class="btn btn-ghost danger-text" onclick={() => (confirmStop = true)} disabled={!!acting}>Stop</button>
+              {/if}
+            {/if}
+          </div>
+        {:else}
+          <p class="muted">No active print. {st?.connected ? 'Printer is idle and ready.' : 'Printer is offline.'}</p>
+        {/if}
+      </div>
+
+    {:else if s.key === 'temps'}
+      <div class="card card-pad temps">
+        <h3>Temperatures</h3>
+        {#if tempCards.length === 0}
+          <p class="muted">No temperature data{st?.connected ? '' : ' — printer offline'}.</p>
+        {:else}
+          {#each tempCards as c}
+            <div class="temp">
+              <div class="tinfo">
+                <span class="tlabel">{c.label}</span>
+                <span class="tval mono">
+                  {c.current.toFixed(1)}°<span class="tgt"> / {c.target || '—'}{c.target ? '°' : ''}</span>
+                  {#if c.heating}<span class="chip accent heat">heating</span>{/if}
+                </span>
+              </div>
+              {#if c.settable}
+                <div class="tset">
+                  <input class="input" type="number" min="0" placeholder="target °C"
+                         bind:value={targets[c.key]} />
+                  <button class="btn btn-ghost btn-sm" data-tip={`Set ${c.label.toLowerCase()} target`} aria-label={`Set ${c.label} target temperature`} onclick={() => setTemp(c.kind, c.key, c.nozzle)}
+                          disabled={acting === `set-${c.key}`}>Set</button>
+                  {#if c.target}
+                    <button class="btn btn-ghost btn-sm" data-tip={`Turn ${c.label.toLowerCase()} heater off`} aria-label={`Turn ${c.label} heater off`} onclick={() => { targets[c.key] = 0; setTemp(c.kind, c.key, c.nozzle); }}
+                            disabled={acting === `set-${c.key}`}>Off</button>
+                  {/if}
+                </div>
+              {/if}
+            </div>
+          {/each}
+        {/if}
+      </div>
+
+    {:else if s.key === 'move'}
+      <div id="move"><span id="temps"></span>
+      {#if st?.connected}
+        {#if isKlipper}
+          <div class="move-console">
+            <ControlPanel printerId={id} status={st} refresh={() => loadStatus(false)} kind={meta?.connection_type} homedAxes={klipperHomed} />
+            <KlipperConsole printerId={id} connected={st?.connected} printing={isPrinting} onhomed={(h) => (klipperHomed = h)} />
+          </div>
+        {:else}
+          <ControlPanel printerId={id} status={st} refresh={() => loadStatus(false)} kind={meta?.connection_type} />
+        {/if}
+      {/if}
+      </div>
+
+    {:else if s.key === 'filament'}
+      <AmsPanel printerId={id} status={st} refresh={() => loadStatus(false)} />
+      {#if hasAms}
+        <label class="opt bkp standalone">
+          <input type="checkbox" checked={st?.ams_filament_backup} onchange={toggleAmsBackup} disabled={amsBackupBusy} />
+          <span>Filament backup — auto-switch to another spool of the same type when one runs out</span>
+        </label>
+      {/if}
+
+    {:else if s.key === 'power'}
+      <PowerPanel printerId={id} />
+
+    {:else if s.key === 'maintenance'}
+      <MaintenancePanel printerId={id} />
+
+    {:else if s.key === 'klipper-tuning'}
+      <KlipperTuning printerId={id} connected={st?.connected} printing={isPrinting} />
+
+    {:else if s.key === 'eject'}
+      <EjectPanel printerId={id} connected={st?.connected} kind={meta?.connection_type} status={st} />
+
+    {:else if s.key === 'gcode'}
+      <GcodeConsole printerId={id} kind={meta?.connection_type} printing={isPrinting} />
+
+    {:else if s.key === 'camera'}
+      {#if camAvailable}
+        <div class="card card-pad cover" id="camera">
+          <h3>Camera</h3>
+          <CameraStream printerId={id} tick={camTick} alt="{meta?.name || 'printer'} camera live view" mode="detail"
+               onerror={() => (camAvailable = false)} onclick={openCamera} title="Open camera in a new tab" />
+        </div>
+      {:else if st?.cover_url}
+        <div class="card card-pad cover">
+          <h3>Preview</h3>
+          <img src={st.cover_url} alt="print preview" />
+        </div>
+      {/if}
+    {/if}
+  </SectionFrame>
+{/snippet}
+
 <div class="head">
   <a href="/app/printers" class="btn btn-ghost btn-sm" data-tip="Back to all printers" aria-label="Back to all printers">← Printers</a>
-  <button class="btn btn-ghost btn-sm" data-tip="Refresh live status now" aria-label="Refresh live status" onclick={() => control('refresh-status', 'refresh')} disabled={!!acting}>
-    {acting === 'refresh' ? 'Refreshing…' : 'Refresh'}
-  </button>
+  <div class="head-actions">
+    {#if !editing && !loading && !error}
+      <button class="btn btn-ghost btn-sm" data-tip="Reorder or hide the sections on this page" aria-label="Arrange sections" onclick={startEditing}>
+        <span aria-hidden="true">⇅</span> Arrange
+      </button>
+    {/if}
+    <button class="btn btn-ghost btn-sm" data-tip="Refresh live status now" aria-label="Refresh live status" onclick={() => control('refresh-status', 'refresh')} disabled={!!acting}>
+      {acting === 'refresh' ? 'Refreshing…' : 'Refresh'}
+    </button>
+  </div>
 </div>
 
 {#if loading}
@@ -419,6 +777,15 @@
 {:else}
   {#if error}<p class="err banner">{error}</p>{/if}
 
+  {#if editing}
+    <PrinterLayoutBar scope={layoutScope} printerName={st?.name || meta?.name || 'this printer'}
+      hasOverride={printerHasOverride} saving={layoutSaving} msg={layoutMsg}
+      onscope={(v) => (layoutScope = v)} onsave={saveLayout}
+      oncancel={cancelEditing} onreset={resetDraft} />
+  {:else if layoutMsg}
+    <p class={layoutMsg.ok ? 'ok-msg banner' : 'err banner'}>{layoutMsg.text}</p>
+  {/if}
+
   {#if isOffline && printerForLocate}
     <div class="offline-locate">
       <div class="ol-head">
@@ -429,186 +796,16 @@
     </div>
   {/if}
 
-  {#if isBambu}
-    <BambuDashboard printerId={id} status={st} meta={meta} refresh={() => loadStatus(false)}
-      oncamera={openCamera} onsettings={() => (settingsOpen = true)} />
-  {/if}
-
-  {#if !isBambu}
-  <div class="title">
-    <div class="title-id">
-      {#if printerImage(meta?.connection_type, meta?.model)}
-        <div class="pthumb"><img src={printerImage(meta?.connection_type, meta?.model)} alt="{printerLabel(meta?.connection_type, meta?.model) || 'printer'}" /></div>
-      {/if}
-      <div>
-        <h1>{st?.name || meta?.name || 'Printer'}</h1>
-        <div class="meta mono">
-          {#if printerLabel(meta?.connection_type, meta?.model)}<span>{printerLabel(meta?.connection_type, meta?.model)}</span>{/if}
-          <span>#{id}</span>
-        </div>
-      </div>
-    </div>
-    <div class="actions">
-      <div class="flex gap center">
-        <span class="chip {tone(stateStr)}">{stateStr}</span>
-        <button class="btn btn-ghost btn-sm" data-tip={st?.connected ? 'Disconnect from the printer' : 'Connect to the printer'} aria-label={st?.connected ? 'Disconnect from the printer' : 'Connect to the printer'} onclick={toggleConnection} disabled={!!acting}>
-          {st?.connected ? 'Disconnect' : 'Connect'}
-        </button>
-        <button class="estop" type="button" onclick={emergencyStop} disabled={!st?.connected || acting === 'estop'}
-                data-tip="Emergency stop — immediate, no confirmation" data-tip-pos="below" aria-label="Emergency stop — immediate, no confirmation">
-          <span class="estop-oct"><span class="estop-txt">{acting === 'estop' ? '…' : 'STOP'}</span></span>
-        </button>
-      </div>
-      <button class="btn btn-ghost btn-sm gear" data-tip="Printer settings" aria-label="Printer settings" onclick={() => (settingsOpen = true)}>
-        <span aria-hidden="true">⚙</span> Settings
-      </button>
-    </div>
-  </div>
-  {/if}
-
-  {#if alerts.length}
-    <div class="alerts">
-      {#each alerts as a}
-        <div class="alert {a.severe ? 'sev' : ''}">
-          <span class="ai">⚠</span>
-          <span class="atext">
-            {#if a.desc}{a.desc}{:else}Printer alert — check the printer's screen for details.{/if}
-            <span class="mono acode">HMS {a.code}</span>
-          </span>
-        </div>
-      {/each}
-      <button class="btn btn-ghost btn-sm clr" onclick={clearHms} disabled={clearingHms}>
-        {clearingHms ? 'Clearing…' : 'Clear alerts'}
-      </button>
-    </div>
-  {/if}
-
-  {#if !isBambu}
-  <div class="cols">
-    <!-- Current job -->
-    <div class="card card-pad job">
-      <h3>Current job</h3>
-      {#if hasJob}
-        <div class="jobname">{st?.subtask_name || st?.gcode_file || st?.current_print || 'Printing'}</div>
-        <div class="bar"><div class="fill" style="width:{Math.min(100, Math.max(0, st?.progress || 0))}%"></div></div>
-        <div class="jobmeta mono">
-          <span>{Math.round(st?.progress || 0)}%</span>
-          {#if st?.layer_num != null && st?.total_layers}<span>layer {st.layer_num}/{st.total_layers}</span>{/if}
-          {#if fmtEta(st?.remaining_time)}<span>~{fmtEta(st?.remaining_time)} left</span>{/if}
-        </div>
-        <div class="controls flex gap">
-          {#if isPrinting}
-            <button class="btn btn-ghost" onclick={() => control('print/pause', 'pause')} disabled={!!acting}>
-              {acting === 'pause' ? 'Pausing…' : 'Pause'}
-            </button>
-          {/if}
-          {#if isPaused}
-            <button class="btn btn-primary" onclick={() => control('print/resume', 'resume')} disabled={!!acting}>
-              {acting === 'resume' ? 'Resuming…' : 'Resume'}
-            </button>
-          {/if}
-          {#if isPrinting || isPaused}
-            {#if confirmStop}
-              <button class="btn btn-danger" onclick={() => control('print/stop', 'stop')} disabled={!!acting}>
-                {acting === 'stop' ? 'Stopping…' : 'Confirm stop'}
-              </button>
-              <button class="btn btn-ghost" onclick={() => (confirmStop = false)} disabled={!!acting}>Cancel</button>
-            {:else}
-              <button class="btn btn-ghost danger-text" onclick={() => (confirmStop = true)} disabled={!!acting}>Stop</button>
-            {/if}
-          {/if}
-        </div>
-      {:else}
-        <p class="muted">No active print. {st?.connected ? 'Printer is idle and ready.' : 'Printer is offline.'}</p>
-      {/if}
-    </div>
-
-    <!-- Temperatures -->
-    <div class="card card-pad temps">
-      <h3>Temperatures</h3>
-      {#if tempCards.length === 0}
-        <p class="muted">No temperature data{st?.connected ? '' : ' — printer offline'}.</p>
-      {:else}
-        {#each tempCards as c}
-          <div class="temp">
-            <div class="tinfo">
-              <span class="tlabel">{c.label}</span>
-              <span class="tval mono">
-                {c.current.toFixed(1)}°<span class="tgt"> / {c.target || '—'}{c.target ? '°' : ''}</span>
-                {#if c.heating}<span class="chip accent heat">heating</span>{/if}
-              </span>
-            </div>
-            {#if c.settable}
-              <div class="tset">
-                <input class="input" type="number" min="0" placeholder="target °C"
-                       bind:value={targets[c.key]} />
-                <button class="btn btn-ghost btn-sm" data-tip={`Set ${c.label.toLowerCase()} target`} aria-label={`Set ${c.label} target temperature`} onclick={() => setTemp(c.kind, c.key, c.nozzle)}
-                        disabled={acting === `set-${c.key}`}>Set</button>
-                {#if c.target}
-                  <button class="btn btn-ghost btn-sm" data-tip={`Turn ${c.label.toLowerCase()} heater off`} aria-label={`Turn ${c.label} heater off`} onclick={() => { targets[c.key] = 0; setTemp(c.kind, c.key, c.nozzle); }}
-                          disabled={acting === `set-${c.key}`}>Off</button>
-                {/if}
-              </div>
-            {/if}
-          </div>
-        {/each}
-      {/if}
-    </div>
-  </div>
-
-  {/if}
-
-  <div id="move"><span id="temps"></span>
-  {#if st?.connected}
-    {#if isKlipper}
-      <div class="move-console">
-        <ControlPanel printerId={id} status={st} refresh={() => loadStatus(false)} kind={meta?.connection_type} homedAxes={klipperHomed} />
-        <KlipperConsole printerId={id} connected={st?.connected} printing={isPrinting} onhomed={(h) => (klipperHomed = h)} />
+  {#each pageRows as row (row[0].key)}
+    {#if row.length === 2}
+      <div class="cols">
+        {@render pageSection(row[0])}
+        {@render pageSection(row[1])}
       </div>
     {:else}
-      <ControlPanel printerId={id} status={st} refresh={() => loadStatus(false)} kind={meta?.connection_type} />
+      {@render pageSection(row[0])}
     {/if}
-  {/if}
-  </div>
-
-  {#if showFilamentPanel && hasFilamentUnit}
-    <AmsPanel printerId={id} status={st} refresh={() => loadStatus(false)} />
-    {#if hasAms}
-      <label class="opt bkp standalone">
-        <input type="checkbox" checked={st?.ams_filament_backup} onchange={toggleAmsBackup} disabled={amsBackupBusy} />
-        <span>Filament backup — auto-switch to another spool of the same type when one runs out</span>
-      </label>
-    {/if}
-  {/if}
-
-  <PowerPanel printerId={id} />
-
-  <MaintenancePanel printerId={id} />
-
-  {#if isKlipper}
-    <KlipperTuning printerId={id} connected={st?.connected} printing={isPrinting} />
-  {/if}
-
-  {#if showBedEjection}
-    <EjectPanel printerId={id} connected={st?.connected} kind={meta?.connection_type} status={st} />
-  {/if}
-
-  {#if st?.connected && !isKlipper}
-    <GcodeConsole printerId={id} kind={meta?.connection_type} printing={isPrinting} />
-  {/if}
-
-  {#if camAvailable}
-    <div class="card card-pad cover" id="camera">
-      <h3>Camera</h3>
-      <CameraStream printerId={id} tick={camTick} alt="{meta?.name || 'printer'} camera live view" mode="detail"
-           onerror={() => (camAvailable = false)} onclick={openCamera} title="Open camera in a new tab" />
-    </div>
-  {:else if st?.cover_url}
-    <div class="card card-pad cover">
-      <h3>Preview</h3>
-      <img src={st.cover_url} alt="print preview" />
-    </div>
-  {/if}
+  {/each}
 {/if}
 
 {#if settingsOpen}
@@ -626,6 +823,8 @@
 
 <style>
   .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+  .head-actions { display: flex; gap: 0.5rem; align-items: center; }
+  .ok-msg { color: var(--ophq-success); font-size: 0.9rem; }
   .banner { margin: 0 0 1rem; }
   .title { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 1.4rem; }
   .title h1 { margin: 0 0 0.3rem; }
