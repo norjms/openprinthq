@@ -22,7 +22,7 @@ import { registerConnectorRoutes, connectorOnline, isConnectorOnline, proxyViaCo
 import { provisionForUser } from './provisioner.js';
 import { startBatch, activeBatchForUser, advanceBatch, cancelBatch, startOrchestrator } from './batch.js';
 import { activateRoute, deactivateRoute, reconcileRoutes } from './routing.js';
-import { generateKeyPair, encryptPrivate, invalidateSigningCache } from './signing.js';
+import { generateKeyPair, encryptPrivate, invalidateSigningCache, ensureKeyPair, fingerprint } from './signing.js';
 import { ensureStream, iceServers, turnCredentials, mintTurn, supportsRtsp, GO2RTC_URL } from './go2rtc.js';
 import { setSink, sinkConfigured, shipServer } from './logship.js';
 import { dbg } from './debuglog.js';
@@ -598,6 +598,11 @@ app.get('/api/connectors', async (req, reply) => {
 app.post('/api/connectors', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
   const name = (req.body?.name || 'connector').toString().slice(0, 60);
+  // Provision the command-signing key pair alongside the connector. Without
+  // this, a fresh account holds a connector it cannot send signed commands to,
+  // and the first job would have to generate the key on the hot path.
+  try { await ensureKeyPair(user.id); }
+  catch (err) { app.log.error({ err, userId: user.id }, 'ensureKeyPair failed on connector create'); }
   return await createConnector(user.id, name);
 });
 app.delete('/api/connectors/:id', async (req, reply) => {
@@ -741,14 +746,22 @@ app.post('/api/connectors/tcp-test', async (req, reply) => {
 app.get('/api/connector/signing-key', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
   const k = await getSigningPublic(user.id);
-  return { public_pem: k?.public_pem || null, created_at: k?.created_at || null };
+  if (!k?.public_pem) return { public_pem: null, fingerprint: null, created_at: null };
+  // The fingerprint is what an operator compares against the value their agent
+  // prints when it pins the key. Without it, trust-on-first-use has no
+  // out-of-band confirmation step and the pin is only as good as the network
+  // during pairing.
+  return { public_pem: k.public_pem, fingerprint: fingerprint(k.public_pem), created_at: k.created_at || null };
 });
 app.post('/api/connector/signing-key', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
   const { publicPem, privatePem } = generateKeyPair();
   await setSigningKey(user.id, publicPem, encryptPrivate(privatePem));
   invalidateSigningCache(user.id);
-  return { public_pem: publicPem };
+  // Rotation invalidates the pin held by every paired connector. Those
+  // connectors reject all commands until they are re-paired.
+  app.log.warn({ userId: user.id, fingerprint: fingerprint(publicPem) }, 'connector signing key rotated');
+  return { public_pem: publicPem, fingerprint: fingerprint(publicPem) };
 });
 app.delete('/api/connector/signing-key', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
