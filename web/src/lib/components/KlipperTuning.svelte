@@ -13,6 +13,8 @@
   let nozzleTarget = $state(240);
   let bedTarget = $state(60);
   let paValue = $state(0.040);
+  let speedFactor = $state(100);
+  let flowFactor = $state(100);
 
   let pending = $state(null);   // { label, run, danger }
   let busy = $state(false);
@@ -67,6 +69,20 @@
       <button class="btn btn-ghost btn-sm" onclick={() => ask(`PID calibrate bed @ ${bedTarget}°C`, g(`PID_CALIBRATE HEATER=heater_bed TARGET=${bedTarget}`), true)}>Run</button>
     </div>
     <p class="muted tiny">Heats to target and cycles the heater. Follow with <b>Save config</b> to keep the result.</p>
+  </fieldset>
+
+  <!-- Speed and flow used to live on the old jog panel, which the new control
+       cluster replaced. They are the two knobs worth reaching for mid-print, so
+       they are NOT disabled while printing the way the calibration groups are. -->
+  <fieldset class="grp" disabled={!connected || busy}>
+    <span class="gl">Live factors</span>
+    <div class="row">
+      <label>Speed <input class="input sm" type="number" min="10" max="300" step="5" bind:value={speedFactor} /> %</label>
+      <button class="btn btn-ghost btn-sm" onclick={() => api.sendGcode(printerId, `M220 S${speedFactor}`)}>Set</button>
+      <label>Flow <input class="input sm" type="number" min="50" max="200" step="1" bind:value={flowFactor} /> %</label>
+      <button class="btn btn-ghost btn-sm" onclick={() => api.sendGcode(printerId, `M221 S${flowFactor}`)}>Set</button>
+    </div>
+    <p class="muted tiny">Safe to change while a print is running — both take effect immediately.</p>
   </fieldset>
 
   <fieldset class="grp" disabled={!connected || printing || busy}>
