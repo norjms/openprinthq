@@ -66,11 +66,17 @@ echo "== attaching the agent =="
 # this pins the runtime to the version the client actually ships with.
 AGENT_CT="livecheck-agent-$$"
 finish_agent() { docker rm -f "$AGENT_CT" >/dev/null 2>&1 || true; }
+# The agent fails closed without a pinned command-signing key, which is correct:
+# an unpinned connector would execute unauthenticated commands against someone's
+# LAN. Give it a writable path so it pins on first run, exactly as a real install
+# does, rather than disabling the check with OPHQ_ALLOW_UNSIGNED and testing a
+# configuration no user should ever run.
 docker run -d --name "$AGENT_CT" \
   ${NPM_IP:+--add-host "$HOST_ONLY:$NPM_IP"} \
   -v "$WORK/client:/client:ro" -v "$WORK:/state" \
   -e OPHQ_CONTROL_URL="$BASE_URL" -e OPHQ_CONNECTOR_TOKEN="$TOKEN" \
   -e OPHQ_CONNECTOR_NAME="$NAME" -e OPHQ_CLIENT_KEY_FILE="/state/key.pem" \
+  -e OPHQ_SIGNING_PUBKEY_FILE="/state/signing.pem" \
   -e NODE_TLS_REJECT_UNAUTHORIZED=0 \
   node:22-alpine node /client/agent/src/agent.js >/dev/null
 AGENT_PID=""
