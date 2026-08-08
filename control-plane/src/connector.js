@@ -11,7 +11,7 @@ import crypto from 'node:crypto';
 import net from 'node:net';
 import { EventEmitter } from 'node:events';
 import { getConnectorByToken, touchConnector, setConnectorClientKey, setConnectorHostCidr } from './db.js';
-import { signJobIfKeyed } from './signing.js';
+import { signJob } from './signing.js';
 import { dbg } from './debuglog.js';
 
 // connectorId -> { raw, userId, name, lastSeen, heartbeat }
@@ -144,13 +144,19 @@ export function proxyViaConnector(userId, job, timeoutMs = 22000, connectorId = 
   return new Promise((resolve) => {
     const timer = setTimeout(() => { pending.delete(id); dbg('connector', 'proxyViaConnector: TIMEOUT', { id, userId }); resolve({ status: 504, error: 'connector timeout' }); }, timeoutMs);
     pending.set(id, { resolve, timer });
-    signJobIfKeyed(userId, j).then(() => {
+    signJob(userId, j).then(() => {
       // Must go through the transport, not target.raw: a WebSocket session has
       // no raw stream, so writing directly here failed every job on the
       // multiplexed tunnel while the SSE path kept working.
       try { writeToConnector(target, j); }
       catch { clearTimeout(timer); pending.delete(id); resolve({ status: 502, error: 'connector write failed' }); }
-    }).catch(() => { clearTimeout(timer); pending.delete(id); resolve({ status: 500, error: 'signing failed' }); });
+    }).catch((err) => {
+      // Never fall through to an unsigned send. A job we cannot sign is a job
+      // we do not send.
+      dbg('connector', 'proxyViaConnector: SIGNING FAILED', { id, userId, kind: job.kind, err: String(err && err.message || err) });
+      clearTimeout(timer); pending.delete(id);
+      resolve({ status: 503, error: 'unable to sign command for this account' });
+    });
   });
 }
 
@@ -180,10 +186,14 @@ export function openTcpStream(userId, host, port, connectorId = null) {
   // falls back to base64 JSON.
   const openJob = { id, kind: 'tcp-open', host, port };
   if (target.idxFor) openJob.sidx = target.idxFor(id);
-  signJobIfKeyed(userId, openJob).then(() => {
+  signJob(userId, openJob).then(() => {
     try { writeToConnector(target, openJob); }
     catch { tcpStreams.delete(id); em.emit('close', 'connector write failed'); }
-  }).catch(() => { tcpStreams.delete(id); em.emit('close', 'signing failed'); });
+  }).catch((err) => {
+    dbg('connector', 'openTcpStream: SIGNING FAILED', { id, userId, host, port, err: String(err && err.message || err) });
+    tcpStreams.delete(id);
+    em.emit('close', 'unable to sign tcp-open for this account');
+  });
   return em;
 }
 
