@@ -65,6 +65,12 @@
   const watts = $derived(status?.energy?.power);
   const kwhToday = $derived(status?.energy?.today);
   const kwhTotal = $derived(status?.energy?.total);
+  // Many Tasmota plugs are a plain relay with no metering chip: they report
+  // whether the relay is closed and nothing else. Three dashes under "Draw",
+  // "Today" and "Total" read as a fault, so distinguish "this device cannot
+  // measure" from "the measurement is missing". Only claim that once we have
+  // actually heard from the device, since an unreachable plug tells us nothing.
+  const noMetering = $derived(Boolean(status?.reachable) && status?.energy == null);
 
   let confirmOff = $state(false);
   async function control(action) {
@@ -125,9 +131,16 @@
     <p class="muted">Loading…</p>
   {:else if plug}
     <div class="pgrid">
-      <div class="pm"><span class="muted">Draw</span><b>{watts != null ? Math.round(watts) + ' W' : '—'}</b></div>
-      <div class="pm"><span class="muted">Today</span><b>{kwhToday != null ? kwhToday.toFixed(2) + ' kWh' : '—'}</b></div>
-      <div class="pm"><span class="muted">Total</span><b>{kwhTotal != null ? kwhTotal.toFixed(1) + ' kWh' : '—'}</b></div>
+      {#if noMetering}
+        <p class="muted tiny nometer">
+          This plug switches power but does not measure it, so there is no usage to show.
+          Energy figures need a plug with a built-in power monitor.
+        </p>
+      {:else}
+        <div class="pm"><span class="muted">Draw</span><b>{watts != null ? Math.round(watts) + ' W' : '—'}</b></div>
+        <div class="pm"><span class="muted">Today</span><b>{kwhToday != null ? kwhToday.toFixed(2) + ' kWh' : '—'}</b></div>
+        <div class="pm"><span class="muted">Total</span><b>{kwhTotal != null ? kwhTotal.toFixed(1) + ' kWh' : '—'}</b></div>
+      {/if}
     </div>
     <div class="prow">
       <span class="mono muted plabel">{plug.name}</span>
@@ -213,4 +226,5 @@
   .tiny { font-size: 0.8rem; }
   .ok-msg { color: var(--ophq-success); font-size: 0.9rem; margin: 0.6rem 0 0; }
   .err { color: var(--ophq-danger); font-size: 0.9rem; margin: 0.6rem 0 0; }
+  .nometer { margin: 0.2rem 0 0.4rem; line-height: 1.4; }
 </style>
