@@ -8,6 +8,8 @@
 // contrast, and seed the Custom mode. Per-mode user edits are stored as sparse
 // `overrides` and applied over the preset (inline on <html>, winning over CSS).
 
+import { normalizePrinterSections } from '$lib/printerSections';
+
 // The editable colour tokens, in display order, grouped for the editor UI.
 export const TOKEN_GROUPS = [
   {
@@ -187,7 +189,11 @@ export function normalizeConfig(raw) {
       // Always keep the three logo slots present, even for older saved configs.
       logos: { ...DEFAULT_BRANDING.logos, ...((c.branding && c.branding.logos) || {}) }
     },
-    nav: normalizeNav(c.nav)
+    nav: normalizeNav(c.nav),
+    // Per-user printer-page section layout (order / hidden, plus per-printer
+    // overrides). Kept here so it round-trips through save + load like the nav
+    // prefs; normalizeConfig drops anything it doesn't name.
+    printerSections: normalizePrinterSections(c.printerSections)
   };
 }
 

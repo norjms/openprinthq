@@ -5,11 +5,23 @@
   // AMS/filament grid, and a print/camera footer. All colours come from --ophq-*
   // theme variables so it follows Light / Dark / Accessible.
   // SPDX-License-Identifier: AGPL-3.0-or-later
+  //
+  // The blocks below (header, status, temps, fans, nozzles, controls, filaments,
+  // footer) are individually arrangeable: the printer page resolves the user's
+  // saved layout and hands it down as `sections`, in render order. This
+  // component stays dumb about where that layout came from.
   import { api } from '$lib/api';
   import { printerLabel, nozzleType, printerImage } from '$lib/models.js';
   import { markSeen, recentlyOnline } from '$lib/online.js';
+  import SectionFrame from '$lib/components/SectionFrame.svelte';
 
-  let { printerId, status = null, meta = null, refresh = () => {}, oncamera = () => {}, onsettings = () => {} } = $props();
+  let {
+    printerId, status = null, meta = null, refresh = () => {},
+    oncamera = () => {}, onsettings = () => {},
+    // [{ key, def, hidden, unavailable }] in the order they should render.
+    sections = [], editing = false,
+    onmove = () => {}, ontoggle = () => {}
+  } = $props();
 
   const st = $derived(status || {});
 
@@ -287,227 +299,235 @@
 </script>
 
 <div class="pdash card">
-  <!-- ============ HEADER ============ -->
-  <div class="pd-head">
-    <div class="pd-thumb" title="{model || 'Printer'}">
-      {#if modelImg}
-        <img src={modelImg} alt="{model || 'printer'}" />
-      {:else}
-        <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" aria-hidden="true">
-          <rect x="8" y="8" width="48" height="48" rx="5" />
-          <line x1="8" y1="21" x2="56" y2="21" />
-          <rect x="25" y="21" width="14" height="8" rx="1.5" fill="currentColor" stroke="none" />
-          <line x1="14" y1="47" x2="50" y2="47" />
-        </svg>
-      {/if}
-    </div>
-    <div class="pd-idbox">
-      <h1 class="pd-name">{name}</h1>
-      <div class="pd-sub">
-        {#if model}<span>{model}</span>{/if}
-        {#if nozzleDia}<span>· {nozzleDia}mm</span>{/if}
-        {#if printHours != null}<span>· ⏱ {printHours}h</span>{/if}
-      </div>
-      <div class="pd-chips">
-        <span class="pchip {online ? 'ok' : 'danger'}">🔗 {online ? 'Connected' : 'Offline'}</span>
-        {#if wifi != null}<span class="pchip ok">▂▄▆ {wifi}dBm</span>{/if}
-        <span class="pchip {faultCount ? 'warn' : 'ok'}">{faultCount ? '⚠' : '✓'} {faultCount ? faultCount : 'OK'}</span>
-        {#if faultCount}<span class="pchip danger">🔧 {faultCount}</span>{/if}
-        {#if firmware}<span class="pchip ok">✓ {firmware}</span>{/if}
-        {#if doorOpen}<span class="pchip warn">🚪 Door</span>{/if}
-      </div>
-    </div>
-    <button class="estop" type="button" onclick={emergencyStop} disabled={!online || acting === 'estop'}
-            data-tip="Emergency stop — immediate, no confirmation" data-tip-pos="below" aria-label="Emergency stop — immediate, no confirmation">
-      <span class="estop-oct"><span class="estop-txt">{acting === 'estop' ? '…' : 'STOP'}</span></span>
-    </button>
-  </div>
-
-  <!-- ============ STATUS ============ -->
-  <div class="pd-label">STATUS</div>
-  <div class="pd-status" class:idle={!hasJob}>
-    {#if hasJob}
-      <div class="pd-cover">
-        {#if st?.cover_url}<img src={st.cover_url} alt="current print" />{:else}<span class="pd-cube" aria-hidden="true">◲</span>{/if}
-      </div>
-    {/if}
-    <div class="pd-status-body">
-      <div class="pd-status-hd">
-        <span class="pd-state {dispTone}">{dispState}</span>
-        {#if awaitingClear}
-          <button class="btn btn-primary btn-sm clearbtn" data-tip="Mark the build plate as cleared" aria-label="Mark the build plate as cleared" onclick={clearPlate} disabled={acting === 'clear' || !st?.connected}>
-            {acting === 'clear' ? 'Clearing…' : '✓ Clear plate'}
-          </button>
-        {/if}
-      </div>
-      {#if hasJob}
-        <div class="pd-job">{jobName || 'Printing'}</div>
-        <div class="pd-bar"><div class="fill" style="width:{progress}%"></div></div>
-      {/if}
-      <div class="pd-ready">
-        {readyLine}
-        {#if hasJob && fmtEta(st?.remaining_time)}<span class="mono"> · ~{fmtEta(st.remaining_time)} left</span>{/if}
-        {#if hasJob && st?.layer_num != null && st?.total_layers}<span class="mono"> · layer {st.layer_num}/{st.total_layers}</span>{/if}
-      </div>
-    </div>
-    {#if hasJob}<div class="pd-pct mono">{Math.round(progress)}%</div>{/if}
-  </div>
-
-  <!-- temps (settable) + nozzle / rack -->
-  <div class="pd-temps">
-    {#each tempCards as c (c.key)}
-      <div class="tcard settable" class:heating={c.heating}>
-        <div class="tc-hd">
-          <span class="tico" aria-hidden="true">🌡</span>
-          <span class="tk">{c.label}</span>
-          {#if c.heating}<span class="heatchip">heating</span>{/if}
+  {#each sections as s, i (s.key)}
+    <SectionFrame def={s.def} hidden={s.hidden} unavailable={s.unavailable} {editing}
+                  first={i === 0} last={i === sections.length - 1}
+                  onmove={(d) => onmove(s.key, d)} ontoggle={() => ontoggle(s.key)}>
+      {#if s.key === 'bambu-header'}
+      <!-- ============ HEADER ============ -->
+      <div class="pd-head">
+        <div class="pd-thumb" title="{model || 'Printer'}">
+          {#if modelImg}
+            <img src={modelImg} alt="{model || 'printer'}" />
+          {:else}
+            <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" aria-hidden="true">
+              <rect x="8" y="8" width="48" height="48" rx="5" />
+              <line x1="8" y1="21" x2="56" y2="21" />
+              <rect x="25" y="21" width="14" height="8" rx="1.5" fill="currentColor" stroke="none" />
+              <line x1="14" y1="47" x2="50" y2="47" />
+            </svg>
+          {/if}
         </div>
-        <span class="tv mono">{c.cur != null ? c.cur.toFixed(0) + '°' : '—'}{#if c.target}<span class="tgt"> / {c.target.toFixed(0)}°</span>{/if}</span>
-        {#if c.settable}
-          <div class="tset">
-            <input class="tinput mono" type="number" min="0" placeholder="set °C"
-                   bind:value={tset[c.key]}
-                   onkeydown={(e) => { if (e.key === 'Enter') setTempCard(c); }}
-                   disabled={!online} aria-label="{c.label} target temperature" />
-            <button class="tsetbtn" data-tip={`Set ${c.label.toLowerCase()} target`} aria-label={`Set ${c.label} target temperature`} onclick={() => setTempCard(c)} disabled={!online || acting === 'temp-' + c.key}>Set</button>
-            {#if c.target > 0}<button class="tsetbtn off" data-tip={`Turn ${c.label.toLowerCase()} heater off`} aria-label={`Turn ${c.label} heater off`} onclick={() => tempOff(c)} disabled={!online || acting === 'temp-' + c.key}>Off</button>{/if}
+        <div class="pd-idbox">
+          <h1 class="pd-name">{name}</h1>
+          <div class="pd-sub">
+            {#if model}<span>{model}</span>{/if}
+            {#if nozzleDia}<span>· {nozzleDia}mm</span>{/if}
+            {#if printHours != null}<span>· ⏱ {printHours}h</span>{/if}
+          </div>
+          <div class="pd-chips">
+            <span class="pchip {online ? 'ok' : 'danger'}">🔗 {online ? 'Connected' : 'Offline'}</span>
+            {#if wifi != null}<span class="pchip ok">▂▄▆ {wifi}dBm</span>{/if}
+            <span class="pchip {faultCount ? 'warn' : 'ok'}">{faultCount ? '⚠' : '✓'} {faultCount ? faultCount : 'OK'}</span>
+            {#if faultCount}<span class="pchip danger">🔧 {faultCount}</span>{/if}
+            {#if firmware}<span class="pchip ok">✓ {firmware}</span>{/if}
+            {#if doorOpen}<span class="pchip warn">🚪 Door</span>{/if}
+          </div>
+        </div>
+        <button class="estop" type="button" onclick={emergencyStop} disabled={!online || acting === 'estop'}
+                data-tip="Emergency stop — immediate, no confirmation" data-tip-pos="below" aria-label="Emergency stop — immediate, no confirmation">
+          <span class="estop-oct"><span class="estop-txt">{acting === 'estop' ? '…' : 'STOP'}</span></span>
+        </button>
+      </div>
+      {:else if s.key === 'bambu-status'}
+      <!-- ============ STATUS ============ -->
+      <div class="pd-label">STATUS</div>
+      <div class="pd-status" class:idle={!hasJob}>
+        {#if hasJob}
+          <div class="pd-cover">
+            {#if st?.cover_url}<img src={st.cover_url} alt="current print" />{:else}<span class="pd-cube" aria-hidden="true">◲</span>{/if}
+          </div>
+        {/if}
+        <div class="pd-status-body">
+          <div class="pd-status-hd">
+            <span class="pd-state {dispTone}">{dispState}</span>
+            {#if awaitingClear}
+              <button class="btn btn-primary btn-sm clearbtn" data-tip="Mark the build plate as cleared" aria-label="Mark the build plate as cleared" onclick={clearPlate} disabled={acting === 'clear' || !st?.connected}>
+                {acting === 'clear' ? 'Clearing…' : '✓ Clear plate'}
+              </button>
+            {/if}
+          </div>
+          {#if hasJob}
+            <div class="pd-job">{jobName || 'Printing'}</div>
+            <div class="pd-bar"><div class="fill" style="width:{progress}%"></div></div>
+          {/if}
+          <div class="pd-ready">
+            {readyLine}
+            {#if hasJob && fmtEta(st?.remaining_time)}<span class="mono"> · ~{fmtEta(st.remaining_time)} left</span>{/if}
+            {#if hasJob && st?.layer_num != null && st?.total_layers}<span class="mono"> · layer {st.layer_num}/{st.total_layers}</span>{/if}
+          </div>
+        </div>
+        {#if hasJob}<div class="pd-pct mono">{Math.round(progress)}%</div>{/if}
+      </div>
+      {:else if s.key === 'bambu-temps'}
+      <!-- temps (settable) + nozzle / rack -->
+      <div class="pd-temps">
+        {#each tempCards as c (c.key)}
+          <div class="tcard settable" class:heating={c.heating}>
+            <div class="tc-hd">
+              <span class="tico" aria-hidden="true">🌡</span>
+              <span class="tk">{c.label}</span>
+              {#if c.heating}<span class="heatchip">heating</span>{/if}
+            </div>
+            <span class="tv mono">{c.cur != null ? c.cur.toFixed(0) + '°' : '—'}{#if c.target}<span class="tgt"> / {c.target.toFixed(0)}°</span>{/if}</span>
+            {#if c.settable}
+              <div class="tset">
+                <input class="tinput mono" type="number" min="0" placeholder="set °C"
+                       bind:value={tset[c.key]}
+                       onkeydown={(e) => { if (e.key === 'Enter') setTempCard(c); }}
+                       disabled={!online} aria-label="{c.label} target temperature" />
+                <button class="tsetbtn" data-tip={`Set ${c.label.toLowerCase()} target`} aria-label={`Set ${c.label} target temperature`} onclick={() => setTempCard(c)} disabled={!online || acting === 'temp-' + c.key}>Set</button>
+                {#if c.target > 0}<button class="tsetbtn off" data-tip={`Turn ${c.label.toLowerCase()} heater off`} aria-label={`Turn ${c.label} heater off`} onclick={() => tempOff(c)} disabled={!online || acting === 'temp-' + c.key}>Off</button>{/if}
+              </div>
+            {/if}
+          </div>
+        {/each}
+        {#if !nozzleInfo.length && (diaL || diaR)}
+          <div class="tcard nz">
+            <div class="tc-hd"><span class="tico" aria-hidden="true">⬇</span><span class="tk">Nozzle</span></div>
+            <span class="tv mono nzv">{diaL ? `L ${diaL}` : ''}{diaR ? ` · R ${diaR}` : ''}</span>
           </div>
         {/if}
       </div>
-    {/each}
-    {#if !nozzleInfo.length && (diaL || diaR)}
-      <div class="tcard nz">
-        <div class="tc-hd"><span class="tico" aria-hidden="true">⬇</span><span class="tk">Nozzle</span></div>
-        <span class="tv mono nzv">{diaL ? `L ${diaL}` : ''}{diaR ? ` · R ${diaR}` : ''}</span>
-      </div>
-    {/if}
-  </div>
-
-  {#if fans.length}
-    <div class="pd-fans">
-      {#each fans as f (f.key)}
-        <div class="fanctl">
-          <div class="fanhd"><span class="fanlbl"><span aria-hidden="true">✽</span> {f.label}</span><span class="fanpct mono">{fanVal(f)}%</span></div>
-          <input class="fanrange" type="range" min="0" max="100" step="1"
-                 value={fanVal(f)}
-                 oninput={(e) => (fanUI[f.label] = Number(e.target.value))}
-                 onchange={(e) => commitFan(f, Number(e.target.value))}
-                 disabled={!online} aria-label="{f.label} fan speed percent" />
-        </div>
-      {/each}
-    </div>
-  {/if}
-
-  {#if nozzleInfo.length}
-    <!-- ============ NOZZLES (toolhead + rack) ============ -->
-    <div class="pd-label">NOZZLES</div>
-    <div class="nzpanel">
-      <div class="nz-head">
-        <span class="nz-cap">In toolhead</span>
-        {#if toolheadNozzles.length}
-          {#each toolheadNozzles as n}
-            <span class="nz-inhead" data-tip={`${n.side ? n.side + ' nozzle · ' : ''}${n.nozzle_diameter} mm · ${nozzleType(n.nozzle_type).full || n.nozzle_type || 'nozzle'}`}>
-              {#if n.side}<span class="nz-side">{n.side}</span>{/if}
-              <b class="mono">{n.nozzle_diameter} mm</b>
-              <span class="nz-mat">{nozzleType(n.nozzle_type).full || n.nozzle_type || '—'}</span>
-            </span>
+      {:else if s.key === 'bambu-fans'}
+      {#if fans.length}
+        <div class="pd-fans">
+          {#each fans as f (f.key)}
+            <div class="fanctl">
+              <div class="fanhd"><span class="fanlbl"><span aria-hidden="true">✽</span> {f.label}</span><span class="fanpct mono">{fanVal(f)}%</span></div>
+              <input class="fanrange" type="range" min="0" max="100" step="1"
+                     value={fanVal(f)}
+                     oninput={(e) => (fanUI[f.label] = Number(e.target.value))}
+                     onchange={(e) => commitFan(f, Number(e.target.value))}
+                     disabled={!online} aria-label="{f.label} fan speed percent" />
+            </div>
           {/each}
+        </div>
+      {/if}
+      {:else if s.key === 'bambu-nozzles'}
+      {#if nozzleInfo.length}
+        <!-- ============ NOZZLES (toolhead + rack) ============ -->
+        <div class="pd-label">NOZZLES</div>
+        <div class="nzpanel">
+          <div class="nz-head">
+            <span class="nz-cap">In toolhead</span>
+            {#if toolheadNozzles.length}
+              {#each toolheadNozzles as n}
+                <span class="nz-inhead" data-tip={`${n.side ? n.side + ' nozzle · ' : ''}${n.nozzle_diameter} mm · ${nozzleType(n.nozzle_type).full || n.nozzle_type || 'nozzle'}`}>
+                  {#if n.side}<span class="nz-side">{n.side}</span>{/if}
+                  <b class="mono">{n.nozzle_diameter} mm</b>
+                  <span class="nz-mat">{nozzleType(n.nozzle_type).full || n.nozzle_type || '—'}</span>
+                </span>
+              {/each}
+            {:else}
+              <span class="muted">— no nozzle installed</span>
+            {/if}
+          </div>
+          {#if rackSlots.length}
+            <div class="nz-rack">
+              <span class="nz-cap">Rack</span>
+              <div class="nz-slots">
+                {#each rackSlots as s (s.id)}
+                  <span class="nz-slot"
+                        data-tip={`Rack position ${s.pos} · ${s.nozzle_diameter} mm · ${nozzleType(s.nozzle_type).full || s.nozzle_type || 'nozzle'}`}>
+                    <span class="nz-pos">P{s.pos}</span>
+                    <span class="nz-dia mono">{s.nozzle_diameter}</span>
+                    <span class="nz-ty">{nozzleType(s.nozzle_type).short || s.nozzle_type}</span>
+                  </span>
+                {/each}
+              </div>
+            </div>
+          {/if}
+        </div>
+      {/if}
+      {:else if s.key === 'bambu-controls'}
+      <!-- ============ CONTROLS ============ -->
+      <div class="pd-label">CONTROLS</div>
+      <div class="pd-controls">
+        <button class="ctl" class:on={st?.chamber_light} data-tip="Toggle chamber light" aria-label="Toggle chamber light"
+                onclick={toggleLight} disabled={acting === 'light' || !st?.connected}>💡</button>
+        <a class="ctl" href="#temps" data-tip="Temperatures & preheat" aria-label="Temperatures and preheat">🔥</a>
+        <a class="ctl" href="#move" data-tip="Move / jog controls" aria-label="Move and jog controls">✥</a>
+        <a class="ctl" href="#camera" data-tip="Open camera" aria-label="Open camera" onclick={oncamera}>📷</a>
+        <button class="ctl" type="button" data-tip="Printer settings" aria-label="Printer settings" onclick={onsettings}>⚙</button>
+        <span class="ctl-sp"></span>
+        <button class="btn btn-ghost" data-tip={isPaused ? 'Resume the print' : 'Pause the print'}
+                aria-label={isPaused ? 'Resume the print' : 'Pause the print'}
+                onclick={() => act(isPaused ? 'print/resume' : 'print/pause', 'pp')}
+                disabled={!!acting || (!isPrinting && !isPaused)}>
+          {isPaused ? '▶ Resume' : '❙❙ Pause'}
+        </button>
+        {#if confirmStop}
+          <button class="btn btn-danger" data-tip="Confirm — stop the print" aria-label="Confirm stop the print" onclick={() => act('print/stop', 'stop')} disabled={!!acting}>Confirm stop</button>
+          <button class="btn btn-ghost" data-tip="Cancel — keep printing" aria-label="Cancel, keep printing" onclick={() => (confirmStop = false)} disabled={!!acting}>Cancel</button>
         {:else}
-          <span class="muted">— no nozzle installed</span>
+          <button class="btn btn-ghost stopb" data-tip="Stop the print (asks to confirm)" aria-label="Stop the print"
+                  onclick={() => (confirmStop = true)}
+                  disabled={!isPrinting && !isPaused}>◻ Stop</button>
         {/if}
       </div>
-      {#if rackSlots.length}
-        <div class="nz-rack">
-          <span class="nz-cap">Rack</span>
-          <div class="nz-slots">
-            {#each rackSlots as s (s.id)}
-              <span class="nz-slot"
-                    data-tip={`Rack position ${s.pos} · ${s.nozzle_diameter} mm · ${nozzleType(s.nozzle_type).full || s.nozzle_type || 'nozzle'}`}>
-                <span class="nz-pos">P{s.pos}</span>
-                <span class="nz-dia mono">{s.nozzle_diameter}</span>
-                <span class="nz-ty">{nozzleType(s.nozzle_type).short || s.nozzle_type}</span>
-              </span>
-            {/each}
-          </div>
+      {:else if s.key === 'bambu-filaments'}
+      <!-- ============ FILAMENTS ============ -->
+      {#if hasFilaments}
+        <div class="pd-label">FILAMENTS</div>
+        <div class="pd-ams">
+          {#each amsUnits as u}
+            <div class="amsbox">
+              <div class="amsbox-hd">
+                <span class="amsname">{u.label}{#if u.side}<span class="sidebadge {u.side === 'L' ? 'l' : 'r'}">{u.side}</span>{/if}</span>
+                <span class="amsmeta">
+                  {#if u.humidity != null}<span title="Humidity">💧 {u.humidity}%</span>{/if}
+                  {#if u.temp != null}<span title="Temperature">🌡 {u.temp.toFixed(1)}°C</span>{/if}
+                </span>
+              </div>
+              <div class="slots" style="--n:{u.slots.length}">
+                {#each u.slots as s}
+                  <div class="slot" class:active={s.active} class:empty={s.empty}>
+                    <span class="slotnum">{s.n}</span>
+                    <span class="slottype">{s.empty ? 'Empty' : s.type}</span>
+                    <span class="slotbar"><span class="slotfill" style="width:{s.remain ?? (s.empty ? 0 : 100)}%; background:{s.color || 'var(--ophq-primary)'}"></span></span>
+                  </div>
+                {/each}
+              </div>
+            </div>
+          {/each}
+          {#if externals.length}
+            <div class="amsbox ext">
+              <div class="amsbox-hd"><span class="amsname">External</span></div>
+              <div class="slots" style="--n:{externals.length}">
+                {#each externals as e}
+                  <div class="slot" class:active={e.active} class:empty={e.empty}>
+                    {#if e.side}<span class="slotnum sq {e.side === 'L' ? 'l' : 'r'}">{e.side}</span>{/if}
+                    <span class="slottype">{e.empty ? 'Empty' : e.type}</span>
+                    <span class="slotbar"><span class="slotfill" style="width:{e.remain ?? (e.empty ? 0 : 100)}%; background:{e.color || 'var(--ophq-primary)'}"></span></span>
+                  </div>
+                {/each}
+              </div>
+            </div>
+          {/if}
         </div>
       {/if}
-    </div>
-  {/if}
-
-  <!-- ============ CONTROLS ============ -->
-  <div class="pd-label">CONTROLS</div>
-  <div class="pd-controls">
-    <button class="ctl" class:on={st?.chamber_light} data-tip="Toggle chamber light" aria-label="Toggle chamber light"
-            onclick={toggleLight} disabled={acting === 'light' || !st?.connected}>💡</button>
-    <a class="ctl" href="#temps" data-tip="Temperatures & preheat" aria-label="Temperatures and preheat">🔥</a>
-    <a class="ctl" href="#move" data-tip="Move / jog controls" aria-label="Move and jog controls">✥</a>
-    <a class="ctl" href="#camera" data-tip="Open camera" aria-label="Open camera" onclick={oncamera}>📷</a>
-    <button class="ctl" type="button" data-tip="Printer settings" aria-label="Printer settings" onclick={onsettings}>⚙</button>
-    <span class="ctl-sp"></span>
-    <button class="btn btn-ghost" data-tip={isPaused ? 'Resume the print' : 'Pause the print'}
-            aria-label={isPaused ? 'Resume the print' : 'Pause the print'}
-            onclick={() => act(isPaused ? 'print/resume' : 'print/pause', 'pp')}
-            disabled={!!acting || (!isPrinting && !isPaused)}>
-      {isPaused ? '▶ Resume' : '❙❙ Pause'}
-    </button>
-    {#if confirmStop}
-      <button class="btn btn-danger" data-tip="Confirm — stop the print" aria-label="Confirm stop the print" onclick={() => act('print/stop', 'stop')} disabled={!!acting}>Confirm stop</button>
-      <button class="btn btn-ghost" data-tip="Cancel — keep printing" aria-label="Cancel, keep printing" onclick={() => (confirmStop = false)} disabled={!!acting}>Cancel</button>
-    {:else}
-      <button class="btn btn-ghost stopb" data-tip="Stop the print (asks to confirm)" aria-label="Stop the print"
-              onclick={() => (confirmStop = true)}
-              disabled={!isPrinting && !isPaused}>◻ Stop</button>
-    {/if}
-  </div>
-
-  <!-- ============ FILAMENTS ============ -->
-  {#if hasFilaments}
-    <div class="pd-label">FILAMENTS</div>
-    <div class="pd-ams">
-      {#each amsUnits as u}
-        <div class="amsbox">
-          <div class="amsbox-hd">
-            <span class="amsname">{u.label}{#if u.side}<span class="sidebadge {u.side === 'L' ? 'l' : 'r'}">{u.side}</span>{/if}</span>
-            <span class="amsmeta">
-              {#if u.humidity != null}<span title="Humidity">💧 {u.humidity}%</span>{/if}
-              {#if u.temp != null}<span title="Temperature">🌡 {u.temp.toFixed(1)}°C</span>{/if}
-            </span>
-          </div>
-          <div class="slots" style="--n:{u.slots.length}">
-            {#each u.slots as s}
-              <div class="slot" class:active={s.active} class:empty={s.empty}>
-                <span class="slotnum">{s.n}</span>
-                <span class="slottype">{s.empty ? 'Empty' : s.type}</span>
-                <span class="slotbar"><span class="slotfill" style="width:{s.remain ?? (s.empty ? 0 : 100)}%; background:{s.color || 'var(--ophq-primary)'}"></span></span>
-              </div>
-            {/each}
-          </div>
-        </div>
-      {/each}
-      {#if externals.length}
-        <div class="amsbox ext">
-          <div class="amsbox-hd"><span class="amsname">External</span></div>
-          <div class="slots" style="--n:{externals.length}">
-            {#each externals as e}
-              <div class="slot" class:active={e.active} class:empty={e.empty}>
-                {#if e.side}<span class="slotnum sq {e.side === 'L' ? 'l' : 'r'}">{e.side}</span>{/if}
-                <span class="slottype">{e.empty ? 'Empty' : e.type}</span>
-                <span class="slotbar"><span class="slotfill" style="width:{e.remain ?? (e.empty ? 0 : 100)}%; background:{e.color || 'var(--ophq-primary)'}"></span></span>
-              </div>
-            {/each}
-          </div>
-        </div>
+      {:else if s.key === 'bambu-footer'}
+      <!-- ============ FOOTER ============ -->
+      <div class="pd-foot">
+        <span class="foot-sp"></span>
+        <a class="footbtn" href="#camera" onclick={oncamera} data-tip="Open camera" aria-label="Open camera">📷</a>
+        <a class="footbtn" href="/app/files" data-tip="Browse files to print" aria-label="Browse files to print">🗐</a>
+        <a class="footbtn print" href="/app/files" data-tip="Choose a file and start a print" aria-label="Start a print">🖨 Print</a>
+      </div>
       {/if}
-    </div>
-  {/if}
-
-  <!-- ============ FOOTER ============ -->
-  <div class="pd-foot">
-    <span class="foot-sp"></span>
-    <a class="footbtn" href="#camera" onclick={oncamera} data-tip="Open camera" aria-label="Open camera">📷</a>
-    <a class="footbtn" href="/app/files" data-tip="Browse files to print" aria-label="Browse files to print">🗐</a>
-    <a class="footbtn print" href="/app/files" data-tip="Choose a file and start a print" aria-label="Start a print">🖨 Print</a>
-  </div>
+    </SectionFrame>
+  {/each}
 </div>
 
 <style>
