@@ -18,16 +18,14 @@
 // An absent / empty layout means "built-in defaults", so a user who has never
 // customised anything renders exactly what they rendered before this existed.
 
-// Two independent ordering scopes:
-//   'page'      — the top-level stack on /app/printers/[id]
-//   'dashboard' — the blocks inside the Bambu skinned dashboard card
-// Blocks can't move between the two: the dashboard's children live inside its
-// own card, so ordering them against page-level cards has no meaning.
+// Every printer type gets the same shell. A section that a given machine can't
+// do simply isn't offered — the availability set the page passes in decides
+// that — so `variant` is 'both' throughout and kept only so a future
+// vendor-specific section has somewhere to declare itself.
 //
-// `variant` narrows a section to the layout that actually renders it:
-//   'bambu'   — only on Bambu printers (which get the skinned dashboard)
-//   'classic' — only on non-Bambu printers
-//   'both'    — shared sections that render either way
+// `scope` is likewise vestigial at one value ('page'); it earned its keep while
+// the Bambu dashboard had its own internal ordering, and costs nothing to leave
+// in place for the next nested layout.
 //
 // `lockHide` marks a section that can be reordered but never hidden, because
 // it carries identity or safety-critical controls (the emergency stop, printer
@@ -35,83 +33,40 @@
 // neighbour is also a half.
 
 export const PRINTER_SECTIONS = [
-  // ---- Bambu skinned dashboard, block by block ----
   {
-    key: 'bambu-header', scope: 'dashboard', variant: 'bambu', lockHide: true,
+    key: 'header', scope: 'page', variant: 'both', lockHide: true,
     label: 'Printer header',
-    hint: 'Name, model, connection chips and the emergency stop.'
-  },
-  {
-    key: 'bambu-status', scope: 'dashboard', variant: 'bambu',
-    label: 'Status & progress',
-    hint: 'Current state, job name, progress bar, ETA and the clear-plate button.'
-  },
-  {
-    key: 'bambu-temps', scope: 'dashboard', variant: 'bambu',
-    label: 'Temperatures',
-    hint: 'Nozzle, bed and chamber cards with target controls.'
-  },
-  {
-    key: 'bambu-fans', scope: 'dashboard', variant: 'bambu',
-    label: 'Fans',
-    hint: 'Part, aux and chamber fan sliders.'
-  },
-  {
-    key: 'bambu-nozzles', scope: 'dashboard', variant: 'bambu',
-    label: 'Nozzles',
-    hint: 'What is in the toolhead, plus the tool-changer rack.'
-  },
-  {
-    key: 'bambu-controls', scope: 'dashboard', variant: 'bambu',
-    label: 'Quick controls',
-    hint: 'Chamber light, jump links, pause / resume / stop.'
-  },
-  {
-    key: 'bambu-filaments', scope: 'dashboard', variant: 'bambu',
-    label: 'Filaments',
-    hint: 'AMS units and external spools, at a glance.'
-  },
-  {
-    key: 'bambu-footer', scope: 'dashboard', variant: 'bambu',
-    label: 'Dashboard footer',
-    hint: 'Camera, files and the Print button.'
-  },
-
-  // ---- page-level stack ----
-  {
-    key: 'bambu-dashboard', scope: 'page', variant: 'bambu', lockHide: true,
-    label: 'Printer dashboard',
-    hint: 'The skinned Bambu dashboard. Its own blocks are arranged inside it.'
-  },
-  {
-    key: 'title', scope: 'page', variant: 'classic', lockHide: true,
-    label: 'Printer header',
-    hint: 'Name, model, connection state and the emergency stop.'
+    hint: 'Name, model, connection state, settings and the emergency stop.'
   },
   {
     key: 'alerts', scope: 'page', variant: 'both', lockHide: true,
     label: 'Printer alerts',
-    hint: 'HMS faults reported by the printer. Only appears when something is wrong.'
+    hint: 'Faults reported by the printer. Only appears when something is wrong.'
   },
   {
-    key: 'job', scope: 'page', variant: 'classic', width: 'half',
-    label: 'Current job',
-    hint: 'Progress, layer, ETA and pause / resume / stop.'
+    key: 'camera', scope: 'page', variant: 'both',
+    label: 'Camera',
+    hint: 'Live view, still capture, and the timelapse and feed switches.'
   },
   {
-    key: 'temps', scope: 'page', variant: 'classic', width: 'half',
-    label: 'Temperatures',
-    hint: 'Live readings with per-heater target controls.'
+    key: 'progress', scope: 'page', variant: 'both',
+    label: 'Printing progress',
+    hint: 'Plate preview, layer and ETA, pause / stop and skipping objects.'
   },
   {
-    key: 'move', scope: 'page', variant: 'both',
-    label: 'Move & control',
-    hint: 'Jog controls, homing and extrusion (plus the Klipper console).'
+    key: 'control', scope: 'page', variant: 'both',
+    label: 'Control',
+    hint: 'Temperatures, fans, lamp, the move wheel, bed steps and the extruder.'
   },
   {
     key: 'filament', scope: 'page', variant: 'both',
-    label: 'Multi-material unit',
-    hint: 'AMS / CFS / MMU slots, load and unload, drying and filament backup.'
+    label: 'Filament & hotends',
+    hint: 'AMS slots, loading, drying and the nozzle hardware fitted.'
+  },
+  {
+    key: 'console', scope: 'page', variant: 'both',
+    label: 'Klipper console',
+    hint: 'Live gcode_store output with a command line.'
   },
   {
     key: 'power', scope: 'page', variant: 'both',
@@ -126,7 +81,7 @@ export const PRINTER_SECTIONS = [
   {
     key: 'klipper-tuning', scope: 'page', variant: 'both',
     label: 'Klipper tuning',
-    hint: 'Pressure advance, input shaping and friends.'
+    hint: 'Homing, mesh, PID, pressure advance, input shaping and live factors.'
   },
   {
     key: 'eject', scope: 'page', variant: 'both',
@@ -136,12 +91,7 @@ export const PRINTER_SECTIONS = [
   {
     key: 'gcode', scope: 'page', variant: 'both',
     label: 'G-code console',
-    hint: 'Send raw G-code and read the replies.'
-  },
-  {
-    key: 'camera', scope: 'page', variant: 'both',
-    label: 'Camera',
-    hint: 'Live view, or the last print preview when no camera is reachable.'
+    hint: 'Send raw G-code to the printer.'
   }
 ];
 
