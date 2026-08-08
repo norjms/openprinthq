@@ -506,6 +506,22 @@ export async function setSigningKey(userId, publicPem, privateEnc) {
      ON CONFLICT (user_id) DO UPDATE SET public_pem = EXCLUDED.public_pem, private_enc = EXCLUDED.private_enc, created_at = now()`,
     [userId, publicPem, privateEnc]);
 }
+// Insert only when the account has no key. Returns the key now in force,
+// whether this call created it or lost the race to a concurrent one.
+//
+// setSigningKey() above is an UPSERT and is correct for a deliberate rotation.
+// It is the wrong primitive for provisioning: two concurrent first-use requests
+// would both generate, and the loser's key would overwrite the winner's. A
+// connector that had already pinned the first would then reject every command
+// with a signature error that looks nothing like a race.
+export async function ensureSigningKey(userId, publicPem, privateEnc) {
+  await pool.query(
+    `INSERT INTO signing_keys (user_id, public_pem, private_enc, created_at) VALUES ($1, $2, $3, now())
+     ON CONFLICT (user_id) DO NOTHING`,
+    [userId, publicPem, privateEnc]);
+  const { rows } = await pool.query('SELECT public_pem FROM signing_keys WHERE user_id = $1', [userId]);
+  return rows[0]?.public_pem || null;
+}
 export async function deleteSigningKey(userId) {
   await pool.query('DELETE FROM signing_keys WHERE user_id = $1', [userId]);
 }
