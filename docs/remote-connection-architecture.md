@@ -142,3 +142,27 @@ Handshake probes are not sufficient. A bug where `proxyViaConnector` wrote to
 green: the upgrade succeeded, the connector reported online, and every job
 failed. `e2e/live-connector-check.sh` attaches a real agent and makes it do
 work; it is a gate in `promote.sh`.
+
+## Tiers (updated 2026-08)
+
+The dev tier was retired. Images are built on the test VM and pushed straight to
+`:test`, so **test is where unvalidated code lands** and prod is the only thing
+promotion protects.
+
+    build on test  ->  :test  ->  deploy test  ->  gates  ->  promote to prod
+
+That is one gate rather than two. It was a deliberate trade: dev existed mostly
+to be a build host, and running a whole extra tier to protect a tier that is
+itself disposable was not worth a machine. The gate that matters -- the one in
+front of prod -- is unchanged, and it still runs the full Playwright suite plus
+a real agent attaching over the tunnel and completing a job.
+
+Practical consequences:
+
+- `promote.sh test-to-prod` is the only promotion. `dev-to-test` is accepted as
+  an alias and does the same thing.
+- The regression suite runs against test, so the `ophq-e2e` tenant lives there
+  now. It needs a camera-backed printer or the browser camera tests silently
+  skip and camera rendering stops being checked at all.
+- Multi-arch builds are mandatory: prod is aarch64. The build host must be a VM,
+  not an LXC container, because binfmt_misc cannot be registered inside LXC.
