@@ -6,8 +6,10 @@
 name: build
 
 on:
-  push:
-    branches: [dev]
+  # Automatic building on push is off: images are built locally and pushed to
+  # GHCR, so an Actions build races the local one and can leave :dev pointing at
+  # a different commit than the branch. Run it by hand when that is what you
+  # want.
   workflow_dispatch:
 
 permissions:
