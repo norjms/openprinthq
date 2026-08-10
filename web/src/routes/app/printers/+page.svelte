@@ -174,6 +174,7 @@
   </div>
   <div class="flex gap">
     <button class="btn btn-ghost btn-sm" onclick={() => load(false)}>Refresh</button>
+    <a class="btn btn-ghost btn-sm" href="/app/printers/groups">Groups</a>
     {#if deploymentMode === 'remote' && !hasPairedClient}
       <span class="btn btn-primary btn-sm disabled" aria-disabled="true" title="Install and pair a Cloud Client on your printers' network first — then you can add printers.">+ Add printer</span>
     {:else}

@@ -103,6 +103,23 @@ export const api = {
   printerCatalogMechanisms: () => req('/engine/api/v1/printers/catalog/mechanisms'),
   printerCatalogCommands: (catalogId) => req('/engine/api/v1/printers/catalog/' + catalogId + '/commands'),
   printer: (id) => req('/engine/api/v1/printers/' + id),
+  // ---- Printer groups ----
+  // A group is a queue target: a job aimed at a group runs on whichever member
+  // frees up first (engine scheduler picks per tick). Membership is many-to-many,
+  // so a printer can sit in several groups.
+  printerGroups: () => req('/engine/api/v1/printer-groups'),
+  printerGroup: (id) => req('/engine/api/v1/printer-groups/' + id),
+  createPrinterGroup: (body) =>
+    req('/engine/api/v1/printer-groups', { method: 'POST', body: JSON.stringify(body) }),
+  updatePrinterGroup: (id, body) =>
+    req('/engine/api/v1/printer-groups/' + id, { method: 'PUT', body: JSON.stringify(body) }),
+  // 409 when pending queue items still target the group; surface the detail.
+  deletePrinterGroup: (id) =>
+    req('/engine/api/v1/printer-groups/' + id, { method: 'DELETE' }),
+  addPrinterToGroup: (id, printerId) =>
+    req('/engine/api/v1/printer-groups/' + id + '/printers/' + printerId, { method: 'POST' }),
+  removePrinterFromGroup: (id, printerId) =>
+    req('/engine/api/v1/printer-groups/' + id + '/printers/' + printerId, { method: 'DELETE' }),
   // Update a printer record (name, ip_address, mac_address, chamber_heater,
   // show_filament_panel, …). Changing ip_address re-links + reconnects engine-side.
   updatePrinter: (id, body) =>
