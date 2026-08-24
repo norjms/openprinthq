@@ -18,7 +18,7 @@ import { migrate, upsertUser, getUserByEmail, getInstanceForUser, getCompatibleP
   getAppSetting, setAppSetting, setSecretSetting, friendlyModelName,
   getUserLogSink, setUserLogSink, listUserLogSinks } from './db.js';
 import { createAuthentikUser, linkAuthentikUser, authentikUserExists, authentikConfigured, OWNER_GROUP } from './authentik.js';
-import { registerConnectorRoutes, connectorOnline, isConnectorOnline, proxyViaConnector, openTcpStream } from './connector.js';
+import { registerConnectorRoutes, connectorOnline, isConnectorOnline, proxyViaConnector, openTcpStream, connectorEvictionCount, connectorHasDuplicateAgents } from './connector.js';
 import { provisionForUser } from './provisioner.js';
 import { startBatch, activeBatchForUser, advanceBatch, cancelBatch, startOrchestrator } from './batch.js';
 import { activateRoute, deactivateRoute, reconcileRoutes } from './routing.js';
@@ -593,7 +593,15 @@ registerConnectorRoutes(app);
 app.get('/api/connectors', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
   const list = await listConnectors(user.id);
-  return list.map((c) => ({ ...c, online: isConnectorOnline(c.id) }));
+  // duplicate_agents surfaces the eviction alarm: repeated session replacement
+  // means two agents are sharing this token and evicting each other, which the
+  // user otherwise only sees as printers mysteriously flapping offline.
+  return list.map((c) => ({
+    ...c,
+    online: isConnectorOnline(c.id),
+    recent_session_replacements: connectorEvictionCount(c.id),
+    duplicate_agents: connectorHasDuplicateAgents(c.id)
+  }));
 });
 app.post('/api/connectors', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
