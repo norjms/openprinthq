@@ -237,6 +237,82 @@ export function connectorOnline(userId, connectorId = null) {
 
 export function isConnectorOnline(connectorId) { return streams.has(connectorId); }
 
+// ---------------------------------------------------------------------------
+// Session eviction: replacing a connector's live session, loudly.
+// ---------------------------------------------------------------------------
+// A new session for a connector id unconditionally replaces the old one, in
+// both transports. That is the right behaviour for a reconnect after a dropped
+// tunnel, and it is a disaster when two agents hold the same token: they
+// reconnect in turn, evict each other, and every eviction tears down the tunnels
+// the loser owned. It happened on 2026-08-08 and again on 2026-08-24, and both
+// times cost hours, because this replacement was silent — the operator saw
+// Bambu printers flapping offline, not "you are running two clients".
+//
+// So evictions are logged at info level, never behind OPHQ_DEBUG, and counted.
+// A connector whose session is replaced repeatedly in a short window is a
+// duplicate-agent alarm and says so in plain words.
+
+const EVICTION_WINDOW_MS = 5 * 60 * 1000;
+// A reconnecting agent evicts itself once per drop-out. Several within five
+// minutes is a flaky link; this many is two agents taking turns.
+const EVICTION_ALARM_COUNT = 4;
+const evictions = new Map(); // connectorId -> { times: number[], alarmed: boolean }
+
+function recordEviction(connectorId) {
+  const now = Date.now();
+  let e = evictions.get(connectorId);
+  if (!e) { e = { times: [], alarmed: false }; evictions.set(connectorId, e); }
+  e.times = e.times.filter((t) => now - t < EVICTION_WINDOW_MS);
+  e.times.push(now);
+  return e;
+}
+
+/** Recent session replacements for a connector, for the UI to surface. */
+export function connectorEvictionCount(connectorId) {
+  const e = evictions.get(connectorId);
+  if (!e) return 0;
+  const now = Date.now();
+  return e.times.filter((t) => now - t < EVICTION_WINDOW_MS).length;
+}
+
+/** True when a connector is being replaced often enough to mean two agents. */
+export function connectorHasDuplicateAgents(connectorId) {
+  return connectorEvictionCount(connectorId) >= EVICTION_ALARM_COUNT;
+}
+
+/**
+ * Tear down the previous session for this connector, saying who lost and who
+ * won. Safe to call with no previous session.
+ */
+function evictPrevious(prev, conn, incoming) {
+  if (!prev) return;
+  try { clearInterval(prev.heartbeat); prev.closeSession?.(); } catch { /* already gone */ }
+  const e = recordEviction(conn.id);
+  const heldMs = prev.lastSeen ? Date.now() - prev.lastSeen : null;
+  console.log(
+    `[control-plane][connector] session REPLACED connectorId=${conn.id} user=${conn.user_id} ` +
+    `outgoing={name:"${prev.name}",transport:${prev.transport}} ` +
+    `incoming={name:"${incoming.name}",transport:${incoming.transport},ip:${incoming.ip || 'unknown'}} ` +
+    `replacements_in_last_5min=${e.times.length}` +
+    (heldMs !== null ? ` previous_session_last_seen_ms_ago=${heldMs}` : '')
+  );
+  if (e.times.length >= EVICTION_ALARM_COUNT && !e.alarmed) {
+    e.alarmed = true;
+    console.log(
+      `[control-plane][connector] DUPLICATE AGENT ALARM connectorId=${conn.id} user=${conn.user_id} — ` +
+      `this connector's session has been replaced ${e.times.length} times in five minutes. That is what ` +
+      'two agents sharing one connector token look like: they evict each other on every reconnect and ' +
+      'every eviction drops the tunnels the loser owned, which shows up as printers flapping offline and ' +
+      'commands never landing. Find the second agent (a duplicate autostart entry, a second machine, or a ' +
+      'service and a desktop app both running) and stop it. Newer agents refuse to start a second copy on ' +
+      'one machine, but an older agent or a second host still can.'
+    );
+  } else if (e.times.length < EVICTION_ALARM_COUNT) {
+    e.alarmed = false;
+  }
+}
+
+
 export function registerConnectorRoutes(app) {
   // Agent → cloud: fetch the account's command-signing public key so the agent
   // can pin it.
@@ -273,7 +349,11 @@ export function registerConnectorRoutes(app) {
     // reconnects on drop-outs, and we replace any stale stream on reconnect.
     try { raw.socket.setKeepAlive(true, 15000); raw.socket.setTimeout(0); } catch { /* */ }
     const prev = streams.get(conn.id);
-    if (prev) { try { clearInterval(prev.heartbeat); prev.closeSession?.(); } catch { /* */ } }
+    evictPrevious(prev, conn, {
+      name: (req.query?.name || conn.name || 'connector').toString(),
+      transport: 'sse',
+      ip: req.ip
+    });
     raw.writeHead(200, {
       'content-type': 'text/event-stream',
       'cache-control': 'no-cache, no-transform',
@@ -378,7 +458,11 @@ export function registerConnectorRoutes(app) {
     const conn = req.ophqConnector;
     if (!conn) { try { socket.close(4401, 'invalid connector token'); } catch { /* */ } return; }
     const prev = streams.get(conn.id);
-    if (prev) { try { clearInterval(prev.heartbeat); prev.closeSession?.(); } catch { /* */ } }
+    evictPrevious(prev, conn, {
+      name: (req.query?.name || conn.name || 'connector').toString(),
+      transport: 'ws',
+      ip: req.ip
+    });
 
     const name = (req.query?.name || conn.name || 'connector').toString();
     const hostCidr = (req.query?.host_cidr || '').toString().slice(0, 64);
