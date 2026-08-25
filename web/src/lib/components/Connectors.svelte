@@ -170,11 +170,16 @@
   function fmt(v) { if (!v) return 'never'; const d = new Date(v); return isNaN(d) ? 'never' : d.toLocaleString(); }
 
   const tok = $derived(created?.token || '<connector-token>');
+  // These used to walk the user through copying files out of a connector/
+  // folder in the source repo. That agent was retired on 2026-08-25 — the Cloud
+  // Client supersedes it on every platform, and it is the build that actually
+  // receives fixes (the single-instance guard among them). Point at installers
+  // and the published image instead of at source.
   const instructions = $derived({
-    docker: `# On a machine on the same LAN as your printers:\ncp .env.example .env\n# set OPHQ_CONTROL_URL=${base}\n# set OPHQ_CONNECTOR_TOKEN=${tok}\ndocker compose up -d`,
-    linux: `sudo cp -r src package.json /opt/openprinthq-connector/\nsudo cp packaging/systemd/openprinthq-connector.service /etc/systemd/system/\n# put OPHQ_CONTROL_URL=${base} and OPHQ_CONNECTOR_TOKEN=${tok}\n#   into /etc/openprinthq-connector.env\nsudo systemctl enable --now openprinthq-connector`,
-    macos: `cp -r src package.json "$HOME/Library/Application Support/openprinthq-connector/"\ncp packaging/launchd/org.openprinthq.connector.plist ~/Library/LaunchAgents/\n# edit the plist: OPHQ_CONTROL_URL=${base}, OPHQ_CONNECTOR_TOKEN=${tok}\nlaunchctl load ~/Library/LaunchAgents/org.openprinthq.connector.plist`,
-    windows: `# PowerShell (Administrator):\n.\\packaging\\windows\\install-service.ps1 \`\n  -ControlUrl "${base}" \`\n  -Token "${tok}" -Name "windows-pc"`
+    docker: `# On a machine on the same LAN as your printers:\ndocker run -d --name openprinthq-connector --restart unless-stopped \\\n  --network host \\\n  -e OPHQ_CONTROL_URL=${base} \\\n  -e OPHQ_CONNECTOR_TOKEN=${tok} \\\n  ghcr.io/norjms/openprinthq-connector:latest`,
+    linux: `# Download the .deb or .rpm from the Cloud Client releases page,\n# install it, then enter this instance URL and token in the app:\n#   ${base}\n#   ${tok}\nsudo apt install ./OpenPrintHQ.Cloud.Client_*_amd64.deb`,
+    macos: `# Download the .pkg from the Cloud Client releases page and run it,\n# then enter this instance URL and token in the menu-bar app:\n#   ${base}\n#   ${tok}`,
+    windows: `# Download the .msi from the Cloud Client releases page and run it,\n# then enter this instance URL and token in the tray app:\n#   ${base}\n#   ${tok}`
   });
   let snipCopied = $state(false);
   async function copySnip() { try { await navigator.clipboard.writeText(instructions[os]); snipCopied = true; setTimeout(() => (snipCopied = false), 2000); } catch { /* */ } }
@@ -210,7 +215,7 @@
         {/each}
       </div>
       <div class="snip"><button class="cbtn" onclick={copySnip}>{snipCopied ? 'Copied' : 'Copy'}</button><pre>{instructions[os]}</pre></div>
-      <p class="muted tiny">Get the agent from the <code>connector/</code> folder of the OpenPrintHQ repo. Full steps in its README.</p>
+      <p class="muted tiny">Installers and the Docker image come from the <a href="https://github.com/norjms/openprinthq-cloud-client/releases" target="_blank" rel="noreferrer">Cloud Client releases page</a>.</p>
       <button class="btn btn-ghost btn-xs" onclick={() => (created = null)}>Dismiss</button>
     </div>
   {/if}

@@ -22,7 +22,7 @@ const PSS = {
   saltLength: crypto.constants.RSA_PSS_SALTLEN_DIGEST
 };
 
-// --- agent-side reference, transcribed from connector/src/agent.js ---------
+// --- agent-side reference, transcribed from the shipped connector agent ----
 function agentCanonJob(j) {
   return Buffer.from(JSON.stringify([
     j.id ?? null, j.ts ?? null, j.kind ?? null,
