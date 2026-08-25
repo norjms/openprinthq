@@ -24,16 +24,19 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const src = fs.readFileSync(path.resolve(here, '../src/connector.js'), 'utf8');
 
 function loadEvictionBlock(sink) {
-  const start = src.indexOf('const EVICTION_WINDOW_MS');
+  // Starts at the identity block, not at EVICTION_WINDOW_MS: evictPrevious now
+  // calls describeIdentity and sameHost to name the machine on each side, so
+  // extracting the eviction code alone leaves those undefined.
+  const start = src.indexOf('const IDENTITY_MAX_B64');
   const end = src.indexOf('\n\nexport function registerConnectorRoutes');
-  assert.ok(start > -1, 'EVICTION_WINDOW_MS not found in connector.js — did the eviction block move or get renamed?');
+  assert.ok(start > -1, 'IDENTITY_MAX_B64 not found in connector.js — did the identity block move or get renamed?');
   assert.ok(end > start, 'registerConnectorRoutes not found after the eviction block');
   const block = src.slice(start, end).replace(/^export /gm, '');
   const make = new Function(
-    'console',
+    'console', 'Buffer',
     `${block}\nreturn { evictPrevious, connectorEvictionCount, connectorHasDuplicateAgents, EVICTION_ALARM_COUNT };`
   );
-  return make({ log: (m) => sink.push(m) });
+  return make({ log: (m) => sink.push(m) }, Buffer);
 }
 
 const conn = { id: 10, user_id: 1 };
@@ -65,9 +68,41 @@ test('an eviction names both sessions, at info level, not behind a debug flag', 
   assert.equal(lines.length, 1);
   const l = lines[0];
   assert.match(l, /connectorId=10/);
-  assert.match(l, /outgoing=\{name:"test3",transport:sse\}/);
-  assert.match(l, /incoming=\{name:"test3",transport:ws,ip:203\.0\.113\.5\}/);
+  assert.match(l, /outgoing=\{name:"test3",transport:sse,/);
+  assert.match(l, /incoming=\{name:"test3",transport:ws,ip:203\.0\.113\.5,/);
   assert.match(l, /replacements_in_last_5min=1/, 'the running count is what turns one line into a pattern');
+  // Agents predating identity reporting must be described as such rather than
+  // left blank, so the line never reads as if the host were simply unknown.
+  assert.match(l, /unidentified/);
+});
+
+test('an eviction names the machine on each side when the agents report it', () => {
+  const lines = [];
+  const E = loadEvictionBlock(lines);
+  const idy = (host, install) => ({ hostname: host, install_id: install, pid: 7, version: '0.0.18', platform: 'win32', arch: 'x64' });
+  E.evictPrevious(
+    { ...priorSession('test3', 'ws'), identity: idy('DRYAN01', 'aaaaaaaaaaaa') },
+    conn,
+    { name: 'test3', transport: 'ws', ip: '203.0.113.5', identity: idy('DRYAN01', 'bbbbbbbbbbbb') }
+  );
+  const l = lines[0];
+  assert.match(l, /host=DRYAN01/);
+  // Two installs on one box (different install ids, one hostname) — a service
+  // and the app, or a duplicate autostart entry. The line must say SAME HOST,
+  // because telling someone to look for a second machine would waste their day.
+  assert.match(l, /SAME HOST/);
+});
+
+test('two different machines are called out as such, because the fix differs', () => {
+  const lines = [];
+  const E = loadEvictionBlock(lines);
+  const idy = (host) => ({ hostname: host, install_id: null, pid: 7 });
+  E.evictPrevious(
+    { ...priorSession('test3', 'ws'), identity: idy('DRYAN01') },
+    conn,
+    { name: 'test3', transport: 'ws', identity: idy('LAPTOP') }
+  );
+  assert.match(lines[0], /DIFFERENT HOSTS/);
 });
 
 test('a single replacement is not an alarm — a reconnecting agent does this', () => {
