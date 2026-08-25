@@ -5,9 +5,14 @@
 // different people. When they disagree the symptom is a clean "bad signature"
 // rejection that looks like a key problem and costs a day to find.
 //
-// These tests read connector/src/agent.js as TEXT rather than importing it,
-// because importing runs the agent. Crude, but it fails loudly the moment
-// someone changes one side without the other, which is the entire point.
+// The agent is read as TEXT rather than imported, because importing runs it.
+// Crude, but it fails loudly the moment someone changes one side without the
+// other, which is the entire point.
+//
+// It reads the agent that actually SHIPS, from openprinthq-cloud-client. Until
+// 2026-08-25 it read an in-repo copy at connector/src/agent.js that nothing
+// deployed any more, so the parity it proved was with a file no user ran. CI
+// fetches the shipped agent and points OPHQ_AGENT_SRC at it; see ci.yml.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -17,7 +22,23 @@ import { fileURLToPath } from 'node:url';
 import { isCommand } from '../src/signing.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const agentSrc = fs.readFileSync(path.resolve(here, '../../connector/src/agent.js'), 'utf8');
+// Resolution order: an explicit path (CI sets this to the freshly fetched
+// agent), then a sibling checkout of the client repo for local work. Failing
+// loudly beats skipping: a parity test that quietly does not run is worse than
+// no parity test, because it reads as a passing guarantee.
+function resolveAgentSrc() {
+  const explicit = process.env.OPHQ_AGENT_SRC;
+  if (explicit) return explicit;
+  const sibling = path.resolve(here, '../../../openprinthq-cloud-client/agent/src/agent.js');
+  if (fs.existsSync(sibling)) return sibling;
+  throw new Error(
+    'Cannot find the connector agent to check parity against.\n' +
+    'Set OPHQ_AGENT_SRC to a checkout of openprinthq-cloud-client/agent/src/agent.js, e.g.\n' +
+    '  curl -sSL https://raw.githubusercontent.com/norjms/openprinthq-cloud-client/main/agent/src/agent.js -o /tmp/agent.js\n' +
+    '  OPHQ_AGENT_SRC=/tmp/agent.js npm test'
+  );
+}
+const agentSrc = fs.readFileSync(resolveAgentSrc(), 'utf8');
 const signingSrc = fs.readFileSync(path.resolve(here, '../src/signing.js'), 'utf8');
 
 function streamKindsIn(src) {
