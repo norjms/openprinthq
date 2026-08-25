@@ -51,7 +51,65 @@ test('the detail view says whether video is live or a snapshot', async ({ page, 
   // is worse than no badge at all.
   const live = text === 'LIVE';
   const videoVisible = await page.locator('video:not(.hidden)').count();
-  if (live) expect(videoVisible, 'badge says LIVE but no video element is showing').toBeGreaterThan(0);
-  else expect(await page.locator('img[src*="camera/snapshot"]').count(),
-    'badge says SNAPSHOT but no snapshot image is present').toBeGreaterThan(0);
+  if (live) {
+    expect(videoVisible, 'badge says LIVE but no video element is showing').toBeGreaterThan(0);
+
+    // A visible video element is not a moving picture. The badge once flipped to
+    // LIVE the instant a track was negotiated, which threw away the snapshot
+    // fallback and left a paused element showing black, or a single frozen
+    // frame, under a badge asserting live video. That is the precise failure
+    // this whole badge exists to prevent, so assert on playback rather than on
+    // the element's presence.
+    const advanced = await page.evaluate(async () => {
+      const v = document.querySelector('video:not(.hidden)');
+      if (!v) return { ok: false, why: 'no video element' };
+      const t0 = v.currentTime;
+      await new Promise((r) => setTimeout(r, 1500));
+      return { ok: !v.paused && v.videoWidth > 0 && v.currentTime > t0,
+               paused: v.paused, w: v.videoWidth, t0, t1: v.currentTime };
+    });
+    expect(advanced.ok,
+      `badge says LIVE but the video is not playing: ${JSON.stringify(advanced)}`).toBe(true);
+  } else {
+    expect(await page.locator('img[src*="camera/snapshot"]').count(),
+      'badge says SNAPSHOT but no snapshot image is present').toBeGreaterThan(0);
+  }
+});
+
+// The Cameras grid is the case that actually broke, and it differs from the
+// detail page in the two ways that mattered: it is reachable without a click on
+// a card first (so the browser may refuse to autoplay), and it mounts several
+// videos at once. Every tile claiming LIVE must be playing.
+test('every tile on the Cameras grid that claims LIVE is actually playing', async ({ page, request }) => {
+  const res = await request.get('/api/engine/api/v1/printers/', { failOnStatusCode: false });
+  if (!res.ok()) test.skip(true, 'engine unavailable on this tier');
+  const body = await res.json();
+  const printers = Array.isArray(body) ? body : (body.printers || body.items || []);
+  if (!printers.length) test.skip(true, 'no printers on this tier');
+
+  await page.goto('/app/cameras');
+  await page.waitForLoadState('networkidle');
+
+  // Give negotiation a fair chance; a tile still on snapshots is a valid state
+  // and is not what this test is about.
+  await page.waitForTimeout(12000);
+
+  const verdict = await page.evaluate(async () => {
+    const tiles = [...document.querySelectorAll('.feed')];
+    const before = tiles.map((f) => {
+      const b = f.parentElement.querySelector('.badge') || f.querySelector('.badge');
+      const v = f.querySelector('video');
+      return { live: !!(b && b.textContent.trim() === 'LIVE'), t: v ? v.currentTime : null };
+    });
+    await new Promise((r) => setTimeout(r, 1500));
+    return tiles.map((f, i) => {
+      const v = f.querySelector('video');
+      return { i, claimsLive: before[i].live, paused: v ? v.paused : null,
+               w: v ? v.videoWidth : null,
+               advanced: v ? v.currentTime > before[i].t : null };
+    });
+  });
+
+  const lying = verdict.filter((t) => t.claimsLive && !(t.advanced && !t.paused && t.w > 0));
+  expect(lying, `tiles badged LIVE that are not playing: ${JSON.stringify(lying)}`).toEqual([]);
 });
