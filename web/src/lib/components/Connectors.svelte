@@ -269,6 +269,15 @@
               {:else}<span class="lock open" title="No client paired yet. The first Cloud Client that connects with this token locks onto its key (trust-on-first-use).">🔓 awaiting first client</span>{/if}
             </div>
             <div class="cmeta muted mono">last seen {fmt(c.last_seen)}</div>
+            {#if c.duplicate_agents}
+              <div class="dupwarn">
+                <strong>Two clients are sharing this connector's token.</strong>
+                Its session has been replaced {c.recent_session_replacements} times in the last five
+                minutes. They evict each other on every reconnect, and each eviction drops the tunnels
+                the loser owned, so printers appear to flap offline and commands stop landing. Stop the
+                extra client, or give each site its own connector.
+              </div>
+            {/if}
           </div>
           <div class="flex gap">
             <input class="input subnet mono" placeholder="192.168.1.0/24" value={subnetFor(c)} oninput={(e) => (subnets = { ...subnets, [c.id]: e.target.value })} title="Subnet to scan (defaults to the client's host network; /24 max)" disabled={!c.online} />
@@ -366,6 +375,9 @@
   .st { font-size: 0.78rem; font-weight: 400; }
   .cmeta { font-size: 0.72rem; margin-top: 0.15rem; }
   .err { color: var(--ophq-danger); font-size: 0.88rem; }
+  .dupwarn { margin-top: 0.35rem; padding: 0.5rem 0.6rem; font-size: 0.82rem; line-height: 1.45;
+             border: 1px solid rgba(220,80,80,0.35); background: rgba(220,80,80,0.08);
+             border-radius: 0.4rem; }
   .subnet { width: 9.5rem; font-size: 0.78rem; padding: 0.2rem 0.45rem; }
   .input.invalid { border-color: var(--ophq-danger); }
   .lock { font-size: 0.68rem; color: var(--ophq-success); border: 1px solid rgba(53,196,107,0.3); background: rgba(53,196,107,0.08); padding: 0.05rem 0.4rem; border-radius: 999px; }

@@ -159,8 +159,24 @@
             <span class="dot {c.online ? 'on' : ''}" title={c.online ? 'online' : 'offline'}></span>
             <span class="cs muted">{c.online ? 'online' : 'offline'}</span>
             {#if c.has_client_key}<span class="cpair" title="A client has paired with this connector.">paired</span>{/if}
+            {#if c.duplicate_agents}<span class="cdup" title="Two clients are using this connector's token and evicting each other.">duplicate client</span>{/if}
             <span class="cseen muted tiny mono">last seen {fmtSeen(c.last_seen)}</span>
           </li>
+          {#if c.duplicate_agents}
+            <!-- Said here, on the page whose printers are misbehaving, because
+                 that is where someone lands when this is happening. The symptom
+                 (printers dropping offline, commands not landing) looks nothing
+                 like its cause, which is why it cost hours twice. -->
+            <li class="dupwarn">
+              <strong>Two clients are sharing this connector.</strong>
+              Its session has been replaced {c.recent_session_replacements} times in the last five minutes.
+              They evict each other on every reconnect, and each eviction drops the tunnels the loser
+              owned — which shows up as printers flapping offline and commands never landing.
+              Stop the extra client: a duplicate autostart entry on one machine, a second machine using
+              the same token, or a background service and the desktop app both running. Give each site
+              its own connector instead of sharing a token.
+            </li>
+          {/if}
         {/each}
       </ul>
     </div>
@@ -352,6 +368,11 @@
   .clist .cn { font-weight: 600; }
   .clist .cpair { font-size: 0.68rem; color: var(--ophq-success); border: 1px solid rgba(53,196,107,0.3); background: rgba(53,196,107,0.08); padding: 0.05rem 0.4rem; border-radius: 999px; }
   .clist .cseen { margin-left: auto; }
+  .clist .cdup { font-size: 0.68rem; color: var(--ophq-danger); border: 1px solid rgba(220,80,80,0.35);
+                 background: rgba(220,80,80,0.10); padding: 0.05rem 0.4rem; border-radius: 999px; }
+  .clist .dupwarn { display: block; margin: 0.15rem 0 0.4rem; padding: 0.5rem 0.6rem; font-size: 0.82rem;
+                    line-height: 1.45; color: var(--ophq-text); border: 1px solid rgba(220,80,80,0.35);
+                    background: rgba(220,80,80,0.08); border-radius: 0.4rem; }
   .btn.disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
   .reveal { margin-top: 0.2rem; }
   .connect-more summary { cursor: pointer; font-weight: 600; }
