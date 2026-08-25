@@ -4,10 +4,14 @@
   //
   // Flow: the browser makes a WebRTC offer, exchanges it with go2rtc through a
   // tiny control-plane signaling passthrough, and the video then streams
-  // browser<->go2rtc DIRECTLY — the control-plane never carries video. While
-  // WebRTC negotiates (and if it can't connect — remote NAT/CGNAT until TURN is
-  // added), the cached snapshot from CameraImg shows instantly, so the feed is
-  // always responsive and never blank.
+  // browser<->go2rtc DIRECTLY, so the control-plane never carries video. While
+  // WebRTC negotiates, and whenever it cannot connect, the cached snapshot from
+  // CameraImg shows instead, so the feed is always responsive and never blank.
+  //
+  // The rule that keeps that promise: the snapshot is only given up once the
+  // video element reports it is PLAYING. Negotiating a track is not the same
+  // thing, and treating it as the same thing is what produced black tiles
+  // labelled LIVE on the Cameras grid.
   import { onMount, onDestroy } from 'svelte';
   import CameraImg from './CameraImg.svelte';
 
@@ -24,6 +28,53 @@
   let destroyed = false;
 
   function cleanup() { try { pc && pc.close(); } catch { /* */ } pc = null; }
+
+  // The element itself is the authority on whether video is playing. Anything
+  // else is a guess, and a guess here is what put a LIVE badge over a still
+  // picture.
+  function onPlaying() {
+    live = true;
+    attempts = 0;                         // reset the backoff after success
+    if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
+  }
+
+  // Autoplay is exempt from the browser's user-gesture requirement only while
+  // the element is muted, and it is the muted PROPERTY that the policy reads.
+  // The markup carries the attribute, but Svelte sets media attributes as
+  // properties after insertion, so set it explicitly here rather than trusting
+  // that ordering: it costs nothing and removes a whole class of "works on my
+  // machine, black square on yours".
+  //
+  // A rejected play() is an ordinary outcome, not an error. It means the
+  // browser wants a gesture first, which is exactly why the printer detail page
+  // (reached by clicking a card) always worked while a grid opened directly
+  // from the nav did not.
+  async function startPlayback() {
+    if (!videoEl || destroyed) return;
+    videoEl.muted = true;
+    try {
+      await videoEl.play();
+    } catch {
+      armGestureRetry();                  // stay on snapshots until allowed
+    }
+  }
+
+  // When a gesture is what is missing, the next interaction anywhere on the
+  // page is the moment the browser will relent. Cheaper and far less startling
+  // than making the user hunt for a play button on every tile.
+  let gestureArmed = false;
+  function armGestureRetry() {
+    if (gestureArmed || destroyed) return;
+    gestureArmed = true;
+    const go = () => {
+      window.removeEventListener('pointerdown', go, true);
+      window.removeEventListener('keydown', go, true);
+      gestureArmed = false;
+      startPlayback();
+    };
+    window.addEventListener('pointerdown', go, true);
+    window.addEventListener('keydown', go, true);
+  }
 
   // Falling back is not a permanent verdict. A failed negotiation usually means
   // the connector was momentarily away or go2rtc was restarting, and giving up
@@ -78,9 +129,20 @@
       pc.addEventListener('track', (e) => {
         if (videoEl && e.streams && e.streams[0]) {
           videoEl.srcObject = e.streams[0];
-          live = true;
-          attempts = 0;                       // reset the backoff after success
-          if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
+          // Deliberately NOT `live = true` here.
+          //
+          // A track event means a stream object was negotiated, not that a
+          // single pixel will ever be painted: videoWidth is still 0 at this
+          // point. Declaring victory here was wrong in three ways at once, all
+          // of them irreversible. It unhid the video, it DESTROYED the working
+          // snapshot fallback below, and it disarmed the 9s giveUp timer, which
+          // returns early when live is set. So a browser that declined to
+          // autoplay left a black tile labelled LIVE, with no retry and no way
+          // back short of a page reload.
+          //
+          // Playback is now the only thing that counts as live, and the element
+          // reports that itself through its `playing` event.
+          startPlayback();
         }
       });
       pc.addEventListener('connectionstatechange', () => {
@@ -117,7 +179,8 @@
 
 <!-- svelte-ignore a11y_media_has_caption -->
 <div class="wrap {mode}">
-  <video bind:this={videoEl} class={mode} class:hidden={!live} autoplay muted playsinline onclick={onclick}></video>
+  <video bind:this={videoEl} class={mode} class:hidden={!live} autoplay muted playsinline
+         onplaying={onPlaying} onclick={onclick}></video>
   {#if !live}
     <CameraImg {printerId} {tick} {alt} {title} {mode} {onclick} {onerror} />
   {/if}
