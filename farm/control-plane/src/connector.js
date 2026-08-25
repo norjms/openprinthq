@@ -463,7 +463,9 @@ export function registerConnectorRoutes(app) {
       sendData: null, // SSE has no binary channel; falls back to base64 JSON
       closeSession: () => { try { raw.end(); } catch { /* already gone */ } }
     });
-    dbg('connector', 'stream CONNECTED', { connectorId: conn.id, userId: conn.user_id, name, keyed: !!conn.client_public_pem });
+    // Identity on every connect, not only when a session is replaced: "which
+    // machine is this connector" is worth answering before something goes wrong.
+    dbg('connector', 'stream CONNECTED', { connectorId: conn.id, userId: conn.user_id, name, keyed: !!conn.client_public_pem, client: describeIdentity(identity) });
     announceOnline(conn.id, conn.user_id);
     touchConnector(conn.id).catch(() => {});
     const cleanup = () => {
@@ -568,7 +570,17 @@ export function registerConnectorRoutes(app) {
       return i;
     };
 
-    const heartbeat = setInterval(() => { try { socket.ping(); } catch { /* closed */ } }, 20000);
+    // A protocol ping AND an application one. The protocol ping keeps
+    // intermediaries from idling the socket out, but Node's WebSocket does not
+    // surface ping/pong frames to JavaScript, so an agent cannot use it to tell
+    // a live session from a half-open one. The SSE transport has had a ':ping'
+    // comment and an idle watchdog since the start; this gives the multiplexed
+    // tunnel the same thing. Agents too old to expect it ignore the frame — it
+    // carries no job id, and their handler requires one.
+    const heartbeat = setInterval(() => {
+      try { socket.ping(); } catch { /* closed */ }
+      try { socket.send(JSON.stringify({ kind: 'ping', t: Date.now() })); } catch { /* closed */ }
+    }, 20000);
     streams.set(conn.id, {
       raw: null, userId: conn.user_id, connectorId: conn.id, name, lastSeen: Date.now(), heartbeat,
       transport: 'ws', identity,
@@ -584,7 +596,7 @@ export function registerConnectorRoutes(app) {
       idxFor,
       closeSession: () => { try { socket.close(1000, 'replaced by a newer session'); } catch { /* */ } }
     });
-    dbg('connector', 'ws CONNECTED', { connectorId: conn.id, userId: conn.user_id, name, keyed: !!conn.client_public_pem });
+    dbg('connector', 'ws CONNECTED', { connectorId: conn.id, userId: conn.user_id, name, keyed: !!conn.client_public_pem, client: describeIdentity(identity) });
     touchConnector(conn.id).catch(() => {});
     announceOnline(conn.id, conn.user_id);
 
