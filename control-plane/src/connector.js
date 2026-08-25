@@ -237,6 +237,11 @@ export function connectorOnline(userId, connectorId = null) {
 
 export function isConnectorOnline(connectorId) { return streams.has(connectorId); }
 
+/** The identity reported by the currently-connected agent, if any. */
+export function connectorClientIdentity(connectorId) {
+  return streams.get(connectorId)?.identity || null;
+}
+
 // ---------------------------------------------------------------------------
 // Session eviction: replacing a connector's live session, loudly.
 // ---------------------------------------------------------------------------
@@ -252,11 +257,83 @@ export function isConnectorOnline(connectorId) { return streams.has(connectorId)
 // A connector whose session is replaced repeatedly in a short window is a
 // duplicate-agent alarm and says so in plain words.
 
+// ---------------------------------------------------------------------------
+// Client identity
+// ---------------------------------------------------------------------------
+// Agents report who and where they are on connect (x-ophq-client-identity, a
+// base64 JSON blob). Before this the server knew a connector's name and token
+// and nothing else, so "which machine is reporting through this connector"
+// could not be answered — least of all during a duplicate-agent fight, when it
+// is the whole question.
+//
+// Treated as untrusted decoration, never as authentication: it is self-reported
+// and trivially forgeable. Authentication is the token plus the pinned client
+// key, and that is unchanged. So every field is clamped and coerced rather than
+// trusted, and a malformed header costs nothing.
+const IDENTITY_MAX_B64 = 4096;
+
+function str(v, max) {
+  if (v === null || v === undefined) return null;
+  return String(v).slice(0, max);
+}
+
+export function parseClientIdentity(req) {
+  const raw = req?.headers?.['x-ophq-client-identity'];
+  if (!raw || typeof raw !== 'string' || raw.length > IDENTITY_MAX_B64) return null;
+  try {
+    const o = JSON.parse(Buffer.from(raw, 'base64').toString('utf8'));
+    if (!o || typeof o !== 'object') return null;
+    const pid = Number(o.pid);
+    return {
+      install_id: str(o.install_id, 32),
+      hostname: str(o.hostname, 128),
+      pid: Number.isFinite(pid) ? pid : null,
+      platform: str(o.platform, 32),
+      arch: str(o.arch, 16),
+      version: str(o.version, 32),
+      node: str(o.node, 32),
+      started_at: str(o.started_at, 40)
+    };
+  } catch { return null; }
+}
+
+/** One-line rendering for logs; "unidentified" for pre-identity agents. */
+export function describeIdentity(idy) {
+  if (!idy) return 'unidentified (agent predates identity reporting)';
+  const bits = [];
+  if (idy.hostname) bits.push(`host=${idy.hostname}`);
+  if (idy.install_id) bits.push(`install=${idy.install_id}`);
+  if (idy.pid !== null) bits.push(`pid=${idy.pid}`);
+  if (idy.version) bits.push(`v${idy.version}`);
+  if (idy.platform) bits.push(`${idy.platform}/${idy.arch || '?'}`);
+  return bits.join(' ') || 'unidentified';
+}
+
 const EVICTION_WINDOW_MS = 5 * 60 * 1000;
 // A reconnecting agent evicts itself once per drop-out. Several within five
 // minutes is a flaky link; this many is two agents taking turns.
 const EVICTION_ALARM_COUNT = 4;
 const evictions = new Map(); // connectorId -> { times: number[], alarmed: boolean }
+
+/**
+ * true when both sessions are the same install, false when demonstrably not,
+ * null when it cannot be told (an agent too old to report identity). The
+ * distinction matters: same host means one box with two autostart entries,
+ * different hosts means two installs sharing a token, and the fixes differ.
+ */
+function sameHost(a, b) {
+  if (!a || !b) return null;
+  // Identical install ids settle it: the same install cannot be two machines.
+  if (a.install_id && b.install_id && a.install_id === b.install_id) return true;
+  // Otherwise the HOSTNAME decides, not the install id. Two installs on one box
+  // — a background service and the desktop app, or a duplicate autostart entry —
+  // each hold their own client key and so report different install ids while
+  // being the same machine. Preferring the install id here would report "two
+  // machines are sharing this token" for the single commonest cause of this
+  // fault and send the reader hunting a second computer that does not exist.
+  if (a.hostname && b.hostname) return a.hostname === b.hostname;
+  return null;
+}
 
 function recordEviction(connectorId) {
   const now = Date.now();
@@ -289,12 +366,21 @@ function evictPrevious(prev, conn, incoming) {
   try { clearInterval(prev.heartbeat); prev.closeSession?.(); } catch { /* already gone */ }
   const e = recordEviction(conn.id);
   const heldMs = prev.lastSeen ? Date.now() - prev.lastSeen : null;
+  // Naming the machine on each side is the point: two entries with the same
+  // host are one box with a duplicate autostart, two different hosts are two
+  // installs sharing a token. Those need opposite fixes, and until now the log
+  // could not tell them apart.
   console.log(
     `[control-plane][connector] session REPLACED connectorId=${conn.id} user=${conn.user_id} ` +
-    `outgoing={name:"${prev.name}",transport:${prev.transport}} ` +
-    `incoming={name:"${incoming.name}",transport:${incoming.transport},ip:${incoming.ip || 'unknown'}} ` +
+    `outgoing={name:"${prev.name}",transport:${prev.transport},${describeIdentity(prev.identity)}} ` +
+    `incoming={name:"${incoming.name}",transport:${incoming.transport},ip:${incoming.ip || 'unknown'},${describeIdentity(incoming.identity)}} ` +
     `replacements_in_last_5min=${e.times.length}` +
-    (heldMs !== null ? ` previous_session_last_seen_ms_ago=${heldMs}` : '')
+    (heldMs !== null ? ` previous_session_last_seen_ms_ago=${heldMs}` : '') +
+    (sameHost(prev.identity, incoming.identity) === true
+      ? ' — SAME HOST: a duplicate autostart entry or a service and app both running'
+      : sameHost(prev.identity, incoming.identity) === false
+        ? ' — DIFFERENT HOSTS: two machines are sharing this connector token'
+        : '')
   );
   if (e.times.length >= EVICTION_ALARM_COUNT && !e.alarmed) {
     e.alarmed = true;
@@ -349,10 +435,12 @@ export function registerConnectorRoutes(app) {
     // reconnects on drop-outs, and we replace any stale stream on reconnect.
     try { raw.socket.setKeepAlive(true, 15000); raw.socket.setTimeout(0); } catch { /* */ }
     const prev = streams.get(conn.id);
+    const identity = parseClientIdentity(req);
     evictPrevious(prev, conn, {
       name: (req.query?.name || conn.name || 'connector').toString(),
       transport: 'sse',
-      ip: req.ip
+      ip: req.ip,
+      identity
     });
     raw.writeHead(200, {
       'content-type': 'text/event-stream',
@@ -370,7 +458,7 @@ export function registerConnectorRoutes(app) {
     const heartbeat = setInterval(() => { try { raw.write(': ping\n\n'); } catch { /* closed */ } }, 20000);
     streams.set(conn.id, {
       raw, userId: conn.user_id, connectorId: conn.id, name, lastSeen: Date.now(), heartbeat,
-      transport: 'sse',
+      transport: 'sse', identity,
       send: (obj) => raw.write(`data: ${JSON.stringify(obj)}\n\n`),
       sendData: null, // SSE has no binary channel; falls back to base64 JSON
       closeSession: () => { try { raw.end(); } catch { /* already gone */ } }
@@ -458,10 +546,12 @@ export function registerConnectorRoutes(app) {
     const conn = req.ophqConnector;
     if (!conn) { try { socket.close(4401, 'invalid connector token'); } catch { /* */ } return; }
     const prev = streams.get(conn.id);
+    const identity = parseClientIdentity(req);
     evictPrevious(prev, conn, {
       name: (req.query?.name || conn.name || 'connector').toString(),
       transport: 'ws',
-      ip: req.ip
+      ip: req.ip,
+      identity
     });
 
     const name = (req.query?.name || conn.name || 'connector').toString();
@@ -481,7 +571,7 @@ export function registerConnectorRoutes(app) {
     const heartbeat = setInterval(() => { try { socket.ping(); } catch { /* closed */ } }, 20000);
     streams.set(conn.id, {
       raw: null, userId: conn.user_id, connectorId: conn.id, name, lastSeen: Date.now(), heartbeat,
-      transport: 'ws',
+      transport: 'ws', identity,
       send: (obj) => socket.send(JSON.stringify(obj)),
       sendData: (uuid, chunk) => {
         const head = Buffer.alloc(5);
