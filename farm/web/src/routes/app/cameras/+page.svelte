@@ -25,6 +25,11 @@
   }
   async function load() {
     loading = true; error = null;
+    // camErr latches a printer out of the grid on a single failed snapshot, and
+    // nothing ever cleared it, so one transient failure removed a camera for the
+    // life of the page. Refresh is the button a user presses when a tile looks
+    // wrong; it has to be able to undo that.
+    camErr = {};
     try {
       const base = norm(await api.printers());
       const live = await Promise.all(base.map((p) => api.printerStatus(p.id).catch(() => null)));
