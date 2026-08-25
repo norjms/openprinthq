@@ -53,6 +53,25 @@ jobs:
         working-directory: control-plane
         run: node --check src/server.js
 
+      # The signing parity suite checks this control-plane against the agent
+      # that actually ships, which lives in the client repo. Fetch it rather
+      # than trusting a copy in this one.
+      - name: Fetch the shipped connector agent
+        run: |
+          set -euo pipefail
+          curl -sSfL \
+            https://raw.githubusercontent.com/norjms/openprinthq-cloud-client/main/agent/src/agent.js \
+            -o "$RUNNER_TEMP/agent.js"
+          wc -l "$RUNNER_TEMP/agent.js"
+
+      # These existed but nothing ran them in CI, so the parity guarantee was
+      # only as good as whoever remembered to run it by hand.
+      - name: Tests
+        working-directory: control-plane
+        env:
+          OPHQ_AGENT_SRC: ${{ runner.temp }}/agent.js
+        run: npm test
+
   images:
     name: Images build
     runs-on: ubuntu-latest
