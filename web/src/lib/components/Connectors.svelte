@@ -273,7 +273,7 @@
               {#if c.has_client_key}<span class="lock" title="A client is paired. The connector is locked to that client's key; reset to pair a different one.">🔒 paired</span>
               {:else}<span class="lock open" title="No client paired yet. The first Cloud Client that connects with this token locks onto its key (trust-on-first-use).">🔓 awaiting first client</span>{/if}
             </div>
-            <div class="cmeta muted mono">last seen {fmt(c.last_seen)}</div>
+            <div class="cmeta muted mono">last seen {fmt(c.last_seen)}{#if c.client?.hostname} · {c.client.hostname}{#if c.client.platform} ({c.client.platform}/{c.client.arch}){/if}{#if c.client.version} · client {c.client.version}{/if}{/if}</div>
             {#if c.duplicate_agents}
               <div class="dupwarn">
                 <strong>Two clients are sharing this connector's token.</strong>
