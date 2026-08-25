@@ -160,6 +160,7 @@
             <span class="cs muted">{c.online ? 'online' : 'offline'}</span>
             {#if c.has_client_key}<span class="cpair" title="A client has paired with this connector.">paired</span>{/if}
             {#if c.duplicate_agents}<span class="cdup" title="Two clients are using this connector's token and evicting each other.">duplicate client</span>{/if}
+            {#if c.client?.hostname}<span class="chost muted tiny mono" title="The machine currently reporting through this connector{c.client.version ? `, running client ${c.client.version}` : ''}">{c.client.hostname}</span>{/if}
             <span class="cseen muted tiny mono">last seen {fmtSeen(c.last_seen)}</span>
           </li>
           {#if c.duplicate_agents}
@@ -368,6 +369,7 @@
   .clist .cn { font-weight: 600; }
   .clist .cpair { font-size: 0.68rem; color: var(--ophq-success); border: 1px solid rgba(53,196,107,0.3); background: rgba(53,196,107,0.08); padding: 0.05rem 0.4rem; border-radius: 999px; }
   .clist .cseen { margin-left: auto; }
+  .clist .chost { opacity: 0.8; }
   .clist .cdup { font-size: 0.68rem; color: var(--ophq-danger); border: 1px solid rgba(220,80,80,0.35);
                  background: rgba(220,80,80,0.10); padding: 0.05rem 0.4rem; border-radius: 999px; }
   .clist .dupwarn { display: block; margin: 0.15rem 0 0.4rem; padding: 0.5rem 0.6rem; font-size: 0.82rem;
