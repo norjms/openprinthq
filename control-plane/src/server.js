@@ -50,7 +50,12 @@ const ENGINE_HOST = process.env.OPHQ_ENGINE_HOST || '10.10.10.109';
 // LAN host reaching the app directly can't forge X-authentik-* identity.
 const GATEWAY_SECRET = process.env.OPHQ_GATEWAY_SECRET || '';
 // Dev sign-in is disabled unless explicitly enabled (production = SSO only).
-const ALLOW_DEV_LOGIN = !!process.env.OPHQ_ALLOW_DEV_LOGIN;
+// Every non-empty string is truthy in JS, so a plain !! here treats
+// OPHQ_ALLOW_DEV_LOGIN=0 (and "false", and "off") as ENABLED. That is the one
+// value an operator would reach for to switch it off, so it is parsed properly.
+const ALLOW_DEV_LOGIN = /^(1|true|yes|on)$/i.test(
+  String(process.env.OPHQ_ALLOW_DEV_LOGIN ?? '').trim()
+);
 // Optional shared secret for dev-login. When set, /api/auth/dev-login also
 // requires a matching `x-ophq-dev-login` header, so enabling dev sign-in on a
 // reachable non-prod tier is "bypass WITH a test key" rather than wide open.
