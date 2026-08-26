@@ -8,10 +8,19 @@
 // All config is env-driven so the tier is swappable with no code change. Nothing
 // here knows or cares where the Kasm deployment actually lives.
 import { randomBytes } from 'node:crypto';
+import { request as httpsRequest } from 'node:https';
 
+// Public base URL. This is what the BROWSER is given in the connect link, so it
+// must always be the internet-facing name even when we talk to Kasm privately.
 const KASM_URL = (process.env.OPHQ_KASM_URL || '').replace(/\/+$/, '');
+
+// Optional private base URL for server-to-server API calls, so a session launch
+// does not have to leave the network and come back. Falls back to the public URL.
+const KASM_API_URL = (process.env.OPHQ_KASM_API_URL || '').replace(/\/+$/, '') || KASM_URL;
+
 const API_KEY = process.env.OPHQ_KASM_API_KEY || '';
 const API_SECRET = process.env.OPHQ_KASM_API_SECRET || '';
+
 // Provisioned users are placed in this Kasm group. It carries the slicer
 // workspace images and nothing else, so a tenant never needs Administrators
 // (which is where the OrcaSlicer Nightly image was originally assigned).
@@ -22,21 +31,76 @@ const SLICER_GROUP = process.env.OPHQ_KASM_GROUP_ID || '';
 let IMAGES = {};
 try { IMAGES = JSON.parse(process.env.OPHQ_KASM_IMAGES || '{}'); } catch { IMAGES = {}; }
 
+// A private endpoint is typically an IP, and the origin usually presents a
+// self-signed certificate, so neither the public hostname nor the IP will
+// validate against a public trust store. Rather than turning verification off,
+// the origin certificate is pinned as the trust anchor and matched against the
+// CN it actually carries (OPHQ_KASM_API_CA_NAME).
+const API_HOST = (() => { try { return new URL(KASM_URL).host; } catch { return ''; } })();
+const PRIVATE_API = KASM_API_URL !== KASM_URL;
+const CA_PEM = process.env.OPHQ_KASM_API_CA_B64
+  ? Buffer.from(process.env.OPHQ_KASM_API_CA_B64, 'base64').toString('utf8')
+  : null;
+const CA_NAME = process.env.OPHQ_KASM_API_CA_NAME || '';
+
+if (PRIVATE_API && !(CA_PEM && CA_NAME)) {
+  throw new Error('OPHQ_KASM_API_URL requires OPHQ_KASM_API_CA_B64 and OPHQ_KASM_API_CA_NAME');
+}
+
+// fetch() cannot be given a CA or an SNI override without pulling in undici as a
+// dependency, so the private path uses node:https directly. Same contract back:
+// { status, text }.
+function privatePost(pathname, payload) {
+  const u = new URL(KASM_API_URL);
+  return new Promise((resolve, reject) => {
+    const req = httpsRequest({
+      host: u.hostname,
+      port: u.port || 443,
+      path: pathname,
+      method: 'POST',
+      ca: CA_PEM,
+      servername: CA_NAME,
+      headers: {
+        'content-type': 'application/json',
+        // Kasm routes on Host; the URL carries an IP here, so the public name
+        // has to be supplied explicitly.
+        host: API_HOST,
+        'content-length': Buffer.byteLength(payload)
+      }
+    }, (res) => {
+      let body = '';
+      res.setEncoding('utf8');
+      res.on('data', (c) => { body += c; });
+      res.on('end', () => resolve({ status: res.statusCode, text: body }));
+    });
+    req.on('error', reject);
+    req.write(payload);
+    req.end();
+  });
+}
+
 export function kasmConfigured() { return !!(KASM_URL && API_KEY && API_SECRET); }
 export function kasmEngines() { return Object.keys(IMAGES); }
 export function kasmImageFor(engine) { return IMAGES[engine] || null; }
 
 async function kasm(endpoint, body = {}) {
   if (!kasmConfigured()) throw new Error('kasm not configured');
-  const r = await fetch(`${KASM_URL}/api/public/${endpoint}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ api_key: API_KEY, api_key_secret: API_SECRET, ...body })
-  });
-  const text = await r.text();
+  const payload = JSON.stringify({ api_key: API_KEY, api_key_secret: API_SECRET, ...body });
+  let status, text;
+  if (PRIVATE_API) {
+    ({ status, text } = await privatePost(`/api/public/${endpoint}`, payload));
+  } else {
+    const r = await fetch(`${KASM_API_URL}/api/public/${endpoint}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: payload
+    });
+    status = r.status;
+    text = await r.text();
+  }
   let data = null;
   try { data = text ? JSON.parse(text) : null; } catch { /* non-json */ }
-  if (!r.ok) throw new Error(data?.error_message || `HTTP ${r.status}`);
+  if (status < 200 || status >= 300) throw new Error(data?.error_message || `HTTP ${status}`);
   // Kasm answers 200 with an error_message body on permission and validation
   // failures, so status alone is not enough to call it a success.
   if (data?.error_message) throw new Error(data.error_message);
