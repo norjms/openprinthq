@@ -227,6 +227,17 @@ export async function migrate() {
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_invite_codes_expires ON invite_codes (expires_at);`);
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS printhost_tokens (
+      token       TEXT PRIMARY KEY,
+      user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      label       TEXT,
+      expires_at  TIMESTAMPTZ,
+      last_used_at TIMESTAMPTZ,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_printhost_tokens_user ON printhost_tokens (user_id);`);
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS kasm_sessions (
       user_id       INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
       kasm_user_id  TEXT,
@@ -780,4 +791,33 @@ export async function clearKasmSession(userId) {
   await pool.query(
     'UPDATE kasm_sessions SET engine = NULL, kasm_id = NULL, session_token = NULL, updated_at = now() WHERE user_id = $1',
     [userId]);
+}
+
+// ---- print-host tokens ---------------------------------------------------
+// Bearer credentials handed to a containerised slicer so it can upload back
+// into the queue. Deliberately short-lived and scoped to one user: the slicer
+// runs in a desktop the user controls, so this token is the ONLY thing it gets,
+// never printer credentials.
+export async function createPrintHostToken(userId, token, label, expiresAt) {
+  await pool.query(
+    'INSERT INTO printhost_tokens (token, user_id, label, expires_at) VALUES ($1,$2,$3,$4)',
+    [token, userId, label || null, expiresAt || null]);
+  return token;
+}
+export async function resolvePrintHostToken(token) {
+  const { rows } = await pool.query(
+    `SELECT t.user_id, t.expires_at, u.email FROM printhost_tokens t
+     JOIN users u ON u.id = t.user_id
+     WHERE t.token = $1`, [token]);
+  const r = rows[0];
+  if (!r) return null;
+  if (r.expires_at && new Date(r.expires_at).getTime() < Date.now()) return null;
+  pool.query('UPDATE printhost_tokens SET last_used_at = now() WHERE token = $1', [token]).catch(() => {});
+  return { userId: r.user_id, email: r.email };
+}
+export async function purgePrintHostTokens(userId) {
+  await pool.query('DELETE FROM printhost_tokens WHERE user_id = $1', [userId]);
+}
+export async function purgeExpiredPrintHostTokens() {
+  await pool.query('DELETE FROM printhost_tokens WHERE expires_at IS NOT NULL AND expires_at < now()');
 }
