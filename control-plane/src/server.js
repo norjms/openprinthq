@@ -16,8 +16,11 @@ import { migrate, upsertUser, getUserByEmail, getInstanceForUser, getCompatibleP
   createInvite, getValidInvite, consumeInvite, listInvites, revokeInvite,
   listUsers, listAllInstances, countUsers,
   getAppSetting, setAppSetting, setSecretSetting, friendlyModelName,
-  getUserLogSink, setUserLogSink, listUserLogSinks } from './db.js';
+  getUserLogSink, setUserLogSink, listUserLogSinks,
+  getKasmRow, setKasmIdentity, setKasmSession, clearKasmSession } from './db.js';
 import { createAuthentikUser, linkAuthentikUser, authentikUserExists, authentikConfigured, OWNER_GROUP } from './authentik.js';
+import { kasmConfigured, kasmEngines, kasmImageFor, ensureKasmUser, ensureSession as ensureKasmSession,
+  findSession as findKasmSession, destroySession as destroyKasmSession } from './kasm.js';
 import { registerConnectorRoutes, connectorOnline, isConnectorOnline, proxyViaConnector, openTcpStream, connectorEvictionCount, connectorHasDuplicateAgents, connectorClientIdentity } from './connector.js';
 import { provisionForUser } from './provisioner.js';
 import { startBatch, activeBatchForUser, advanceBatch, cancelBatch, startOrchestrator } from './batch.js';
@@ -125,6 +128,87 @@ async function requireOwner(req, reply) {
   if (!isOwner(req, user)) { reply.code(403).send({ error: 'owner access required' }); return null; }
   return user;
 }
+
+// ---- in-browser slicer (Kasm) -------------------------------------------
+// The Slice tab embeds a containerised desktop slicer. The control-plane owns
+// the Kasm identity for each user and the lifecycle of their session, so the
+// browser never sees an API key and never picks its own image.
+function slicerEngine(raw) {
+  const engines = kasmEngines();
+  const want = String(raw || '').toLowerCase();
+  return engines.find((e) => e.toLowerCase() === want) || engines[0] || null;
+}
+
+app.get('/api/slicer/engines', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  return { configured: kasmConfigured(), engines: kasmEngines() };
+});
+
+// Current session without starting anything. Lets the tab render a live iframe
+// on reload instead of cold-starting a second container.
+app.get('/api/slicer/session', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  if (!kasmConfigured()) return { configured: false, running: false };
+  const row = await getKasmRow(user.id);
+  const engine = slicerEngine(req.query?.engine || row?.engine);
+  const imageId = engine && kasmImageFor(engine);
+  if (!row?.kasm_user_id || !row?.kasm_id || !imageId) return { configured: true, running: false, engine };
+  try {
+    const live = await findKasmSession(row.kasm_user_id, imageId);
+    if (!live || String(live.kasm_id).replace(/-/g, '') !== String(row.kasm_id).replace(/-/g, '')) {
+      await clearKasmSession(user.id);
+      return { configured: true, running: false, engine };
+    }
+    const s = await ensureKasmSession(row.kasm_user_id, imageId, { kasmId: row.kasm_id, sessionToken: row.session_token });
+    return { configured: true, running: true, engine, status: s.status, url: s.url };
+  } catch (e) {
+    req.log.error({ err: e.message }, 'slicer session lookup failed');
+    return { configured: true, running: false, engine, error: e.message };
+  }
+});
+
+// Start or reattach. Idempotent from the caller's point of view even though
+// Kasm's own request_kasm is not.
+app.post('/api/slicer/session', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  if (!kasmConfigured()) { reply.code(503).send({ error: 'slicer not configured' }); return; }
+  const engine = slicerEngine(req.body?.engine);
+  const imageId = engine && kasmImageFor(engine);
+  if (!imageId) { reply.code(400).send({ error: 'unknown slicer engine' }); return; }
+
+  const row = await getKasmRow(user.id);
+  try {
+    const acct = await ensureKasmUser(user.email, { existingId: row?.kasm_user_id || null });
+    if (acct.userId !== row?.kasm_user_id) await setKasmIdentity(user.id, acct.userId, acct.username);
+
+    // Switching engines means a different image, so retire the old session
+    // rather than leaving it parked on the host.
+    if (row?.kasm_id && row.engine && row.engine !== engine) {
+      try { await destroyKasmSession(acct.userId, row.kasm_id); } catch { /* best effort */ }
+      await clearKasmSession(user.id);
+    }
+
+    const fresh = await getKasmRow(user.id);
+    const s = await ensureKasmSession(acct.userId, imageId,
+      fresh?.kasm_id ? { kasmId: fresh.kasm_id, sessionToken: fresh.session_token } : null);
+    await setKasmSession(user.id, engine, s.kasmId, s.sessionToken);
+    return { engine, status: s.status, url: s.url, reused: s.reused, provisioned: acct.created };
+  } catch (e) {
+    req.log.error({ err: e.message }, 'slicer session start failed');
+    reply.code(502).send({ error: e.message });
+  }
+});
+
+app.delete('/api/slicer/session', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  const row = await getKasmRow(user.id);
+  if (!row?.kasm_user_id || !row?.kasm_id) return { ok: true, stopped: false };
+  try { await destroyKasmSession(row.kasm_user_id, row.kasm_id); } catch (e) {
+    req.log.warn({ err: e.message }, 'destroy_kasm failed');
+  }
+  await clearKasmSession(user.id);
+  return { ok: true, stopped: true };
+});
 
 // ---- health -------------------------------------------------------------
 app.get('/api/health', async () => ({ ok: true, service: 'control-plane', ts: Date.now() }));

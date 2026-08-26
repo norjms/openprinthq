@@ -226,6 +226,17 @@ export async function migrate() {
     );
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_invite_codes_expires ON invite_codes (expires_at);`);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS kasm_sessions (
+      user_id       INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      kasm_user_id  TEXT,
+      kasm_username TEXT,
+      engine        TEXT,
+      kasm_id       TEXT,
+      session_token TEXT,
+      updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
 
   // Bootstrap: if no owner exists yet, promote the earliest account (covers DBs
   // created before the is_owner column existed).
@@ -742,4 +753,31 @@ export async function setPlugRoute(userId, plugId, lanIp) {
 export async function getPlugRoutes(userId) {
   const { rows } = await pool.query('SELECT plug_id, lan_ip FROM smart_plug_routes WHERE user_id = $1', [userId]);
   return Object.fromEntries(rows.map((r) => [r.plug_id, r.lan_ip]));
+}
+
+// ---- in-browser slicer (Kasm) -------------------------------------------
+// One row per OpenPrintHQ user: their provisioned Kasm account plus whichever
+// session is currently on record. The session token is persisted deliberately --
+// it outlives the session it belongs to, so re-minting would mean starting a
+// second container rather than reconnecting to the running one.
+export async function getKasmRow(userId) {
+  const { rows } = await pool.query('SELECT * FROM kasm_sessions WHERE user_id = $1', [userId]);
+  return rows[0] || null;
+}
+export async function setKasmIdentity(userId, kasmUserId, kasmUsername) {
+  await pool.query(
+    `INSERT INTO kasm_sessions (user_id, kasm_user_id, kasm_username) VALUES ($1,$2,$3)
+     ON CONFLICT (user_id) DO UPDATE SET kasm_user_id = EXCLUDED.kasm_user_id,
+       kasm_username = EXCLUDED.kasm_username, updated_at = now()`,
+    [userId, kasmUserId, kasmUsername]);
+}
+export async function setKasmSession(userId, engine, kasmId, sessionToken) {
+  await pool.query(
+    `UPDATE kasm_sessions SET engine = $2, kasm_id = $3, session_token = $4, updated_at = now()
+     WHERE user_id = $1`, [userId, engine, kasmId, sessionToken]);
+}
+export async function clearKasmSession(userId) {
+  await pool.query(
+    'UPDATE kasm_sessions SET engine = NULL, kasm_id = NULL, session_token = NULL, updated_at = now() WHERE user_id = $1',
+    [userId]);
 }

@@ -339,6 +339,12 @@ export const api = {
   updateEngineSettings: (body) => req('/engine/api/v1/settings', { method: 'PATCH', body: JSON.stringify(body) }),
   slicerModels: () => req('/engine/api/v1/slicer/printer-models'),
   slicerPresets: () => req('/engine/api/v1/slicer/presets'),
+  // In-browser slicer workspace (Kasm). The control-plane owns the session, so
+  // the browser only ever receives a connect URL it can drop into an iframe.
+  slicerWorkspace: (engine) => req('/slicer/session' + (engine ? '?engine=' + encodeURIComponent(engine) : '')),
+  slicerWorkspaceStart: (engine) => req('/slicer/session', { method: 'POST', body: JSON.stringify({ engine }) }),
+  slicerWorkspaceStop: () => req('/slicer/session', { method: 'DELETE' }),
+  slicerWorkspaceEngines: () => req('/slicer/engines'),
   // Compatible process/filament preset names for a printer (control-plane join).
   compatiblePresets: (printer) => req('/slicer/compatible?printer=' + encodeURIComponent(printer)),
   // Bambu HMS error dictionary (short_code -> description) for decoding alerts.
