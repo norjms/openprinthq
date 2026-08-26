@@ -19,10 +19,11 @@ import { migrate, upsertUser, getUserByEmail, getInstanceForUser, getCompatibleP
   getUserLogSink, setUserLogSink, listUserLogSinks,
   getKasmRow, setKasmIdentity, setKasmSession, clearKasmSession,
   createPrintHostToken, resolvePrintHostToken, purgePrintHostTokens,
-  purgeExpiredPrintHostTokens } from './db.js';
+  purgeExpiredPrintHostTokens, userByKasmId } from './db.js';
 import { createAuthentikUser, linkAuthentikUser, authentikUserExists, authentikConfigured, OWNER_GROUP } from './authentik.js';
 import { kasmConfigured, kasmEngines, kasmImageFor, ensureKasmUser, ensureSession as ensureKasmSession,
-  findSession as findKasmSession, destroySession as destroyKasmSession } from './kasm.js';
+  findSession as findKasmSession, destroySession as destroyKasmSession,
+  sessionStatus as kasmSessionStatus } from './kasm.js';
 import { registerConnectorRoutes, connectorOnline, isConnectorOnline, proxyViaConnector, openTcpStream, connectorEvictionCount, connectorHasDuplicateAgents, connectorClientIdentity } from './connector.js';
 import { provisionForUser } from './provisioner.js';
 import { startBatch, activeBatchForUser, advanceBatch, cancelBatch, startOrchestrator } from './batch.js';
@@ -260,6 +261,44 @@ async function printHostUser(req, reply) {
   if (!who) { reply.code(401).send({ error: 'invalid or expired API key' }); return null; }
   return who;
 }
+
+// A containerised slicer bootstraps itself here instead of us pushing a token
+// into the image. The session already knows two things Kasm gave it: its own
+// session id (KASM_ID) and a Kasm-issued JWT. It presents the session id; we
+// look up which OpenPrintHQ user that session belongs to from our own records,
+// then confirm with Kasm that the session is genuinely running before handing
+// anything over.
+//
+// This keeps per-user, per-session credentials out of workspace images entirely,
+// which is the whole point: an image is shared by every tenant.
+app.post('/printhost/bootstrap', async (req, reply) => {
+  const kasmId = String(req.body?.kasm_id || '').trim();
+  if (!kasmId) return reply.code(400).send({ error: 'kasm_id required' });
+
+  const row = await userByKasmId(kasmId);
+  // Deliberately the same answer for "unknown session" and "not running", so
+  // this cannot be used to probe which session ids exist.
+  const deny = () => reply.code(403).send({ error: 'unrecognised session' });
+  if (!row?.user_id || !row?.kasm_user_id) return deny();
+
+  try {
+    const st = await kasmSessionStatus(row.kasm_user_id, kasmId);
+    if (!st || String(st.operational_status || '').toLowerCase() !== 'running') return deny();
+  } catch { return deny(); }
+
+  const token = randomBytes(24).toString('base64url');
+  const expires = new Date(Date.now() + 12 * 60 * 60 * 1000);
+  await purgePrintHostTokens(row.user_id);
+  await createPrintHostToken(row.user_id, token, 'slicer-bootstrap', expires);
+  req.log.info({ userId: row.user_id, kasmId }, 'print-host bootstrap issued');
+  return {
+    url: PUBLIC_URL + '/printhost',
+    api_key: token,
+    host_type: 'octoprint',
+    printer_name: 'OpenPrintHQ',
+    expires_at: expires.toISOString()
+  };
+});
 
 // Slicers probe this to decide whether the host is real before offering Send.
 // Returning OctoPrint's shape is what makes the connection test pass.
