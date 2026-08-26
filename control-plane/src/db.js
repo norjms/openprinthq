@@ -821,3 +821,12 @@ export async function purgePrintHostTokens(userId) {
 export async function purgeExpiredPrintHostTokens() {
   await pool.query('DELETE FROM printhost_tokens WHERE expires_at IS NOT NULL AND expires_at < now()');
 }
+
+/** The OpenPrintHQ user who owns a given Kasm session id. */
+export async function userByKasmId(kasmId) {
+  const norm = String(kasmId || '').replace(/-/g, '');
+  const { rows } = await pool.query(
+    `SELECT user_id, kasm_user_id, engine FROM kasm_sessions
+     WHERE replace(kasm_id, '-', '') = $1`, [norm]);
+  return rows[0] || null;
+}
