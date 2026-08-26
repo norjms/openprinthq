@@ -4,6 +4,7 @@
   import PageTitle from '$lib/components/PageTitle.svelte';
   import CameraStream from '$lib/components/CameraStream.svelte';
   import Timelapses from '$lib/components/Timelapses.svelte';
+  import { markSeen, isOnline } from '$lib/online.js';
 
   let tab = $state('cameras');   // 'cameras' | 'timelapses'
   function setTab(t) {
@@ -32,11 +33,23 @@
     camErr = {};
     try {
       const base = norm(await api.printers());
+
+      // Paint the grid the moment we know WHICH printers exist, rather than
+      // waiting on a status call per printer. Status decides a chip; the camera
+      // is the entire point of this page, and holding every tile back until the
+      // slowest status round-trip returned meant the cached frames had nothing
+      // to paint into during exactly the second they exist to cover.
+      printers = base.map((p) => ({ ...p, connected: null, state: 'checking', progress: null }));
+      loading = false;
+
       const live = await Promise.all(base.map((p) => api.printerStatus(p.id).catch(() => null)));
       printers = base.map((p, i) => {
-        const s = live[i] || {};
-        return { ...p, connected: !!s.connected, state: (s.state || (s.connected ? 'idle' : 'offline')).toString().toLowerCase(),
-                 progress: s.progress ?? null };
+        const s = live[i] || null;
+        if (s) markSeen(p.id, !!s.connected);
+        const on = isOnline(p.id, s);
+        return { ...p, connected: on,
+                 state: (s?.state || (on ? 'idle' : on === null ? 'checking' : 'offline')).toString().toLowerCase(),
+                 progress: s?.progress ?? null };
       });
     } catch (e) { error = e.status === 409 ? 'no-instance' : (e.message || 'engine unreachable'); }
     finally { loading = false; }
@@ -56,7 +69,7 @@
     if (/error|offline|fault|fail/.test(s)) return 'danger';
     return '';
   }
-  const anyCams = $derived(printers.some((p) => p.connected && !camErr[p.id]));
+  const anyCams = $derived(printers.some((p) => p.connected !== false && !camErr[p.id]));
 </script>
 
 <PageTitle page="Cameras" />
@@ -91,12 +104,12 @@
           <span class="chip {tone(p.state)}">{p.state}</span>
         </div>
         <div class="feed">
-          {#if p.connected && !camErr[p.id]}
+          {#if p.connected !== false && !camErr[p.id]}
             <CameraStream printerId={p.id} tick={camTick} alt="{p.name} camera" mode="fill"
                  onerror={() => (camErr = { ...camErr, [p.id]: true })} onclick={() => (zoomId = p.id)} title="Click to expand" />
             {#if /run|print/.test(p.state) && p.progress != null}<span class="cam-prog mono">{Math.round(p.progress)}%</span>{/if}
           {:else}
-            <div class="nocam muted">{p.connected ? 'No camera feed' : 'Offline'}</div>
+            <div class="nocam muted">{p.connected === false ? 'Offline' : 'No camera feed'}</div>
           {/if}
         </div>
       </div>
