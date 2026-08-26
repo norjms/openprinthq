@@ -17,7 +17,9 @@ import { migrate, upsertUser, getUserByEmail, getInstanceForUser, getCompatibleP
   listUsers, listAllInstances, countUsers,
   getAppSetting, setAppSetting, setSecretSetting, friendlyModelName,
   getUserLogSink, setUserLogSink, listUserLogSinks,
-  getKasmRow, setKasmIdentity, setKasmSession, clearKasmSession } from './db.js';
+  getKasmRow, setKasmIdentity, setKasmSession, clearKasmSession,
+  createPrintHostToken, resolvePrintHostToken, purgePrintHostTokens,
+  purgeExpiredPrintHostTokens } from './db.js';
 import { createAuthentikUser, linkAuthentikUser, authentikUserExists, authentikConfigured, OWNER_GROUP } from './authentik.js';
 import { kasmConfigured, kasmEngines, kasmImageFor, ensureKasmUser, ensureSession as ensureKasmSession,
   findSession as findKasmSession, destroySession as destroyKasmSession } from './kasm.js';
@@ -61,6 +63,11 @@ const ALLOW_DEV_LOGIN = /^(1|true|yes|on)$/i.test(
 // reachable non-prod tier is "bypass WITH a test key" rather than wide open.
 // Empty = no extra gate (backward compatible). Never enable dev-login on prod.
 const DEV_LOGIN_SECRET = process.env.OPHQ_DEV_LOGIN_SECRET || '';
+
+// Public base URL of this deployment, used to tell a slicer where to send
+// finished plates. It must be the internet-facing name: the slicer session may
+// be reaching us from a different network than the control-plane sits on.
+const PUBLIC_URL = (process.env.OPHQ_PUBLIC_URL || '').replace(/\/+$/, '');
 
 function engineBase(inst) {
   // Engines are on the internal Docker network, not published to the host —
@@ -197,7 +204,25 @@ app.post('/api/slicer/session', async (req, reply) => {
     const s = await ensureKasmSession(acct.userId, imageId,
       fresh?.kasm_id ? { kasmId: fresh.kasm_id, sessionToken: fresh.session_token } : null);
     await setKasmSession(user.id, engine, s.kasmId, s.sessionToken);
-    return { engine, status: s.status, url: s.url, reused: s.reused, provisioned: acct.created };
+
+    // Mint a print-host token for this session so the slicer can send finished
+    // plates back into the queue. Old ones are dropped first: a session is the
+    // lifetime, so leaving previous tokens valid would quietly accumulate
+    // long-lived credentials for a desktop the user controls.
+    let printHost = null;
+    try {
+      await purgePrintHostTokens(user.id);
+      const token = randomBytes(24).toString('base64url');
+      const expires = new Date(Date.now() + 12 * 60 * 60 * 1000);
+      await createPrintHostToken(user.id, token, 'slicer:' + engine, expires);
+      printHost = { url: PUBLIC_URL + '/printhost', apiKey: token, expiresAt: expires.toISOString() };
+    } catch (e) {
+      // A missing print host makes the slicer read-only, which is worth logging
+      // but not worth failing the launch over.
+      req.log.error({ err: e.message }, 'could not mint print-host token');
+    }
+
+    return { engine, status: s.status, url: s.url, reused: s.reused, provisioned: acct.created, printHost };
   } catch (e) {
     req.log.error({ err: e.message }, 'slicer session start failed');
     reply.code(502).send({ error: e.message });
@@ -213,6 +238,111 @@ app.delete('/api/slicer/session', async (req, reply) => {
   }
   await clearKasmSession(user.id);
   return { ok: true, stopped: true };
+});
+
+// ---- print host (OctoPrint-compatible) ----------------------------------
+// A containerised slicer needs somewhere to send a finished plate. Rather than
+// giving it LAN access and printer credentials, it uploads here and OpenPrintHQ
+// dispatches through the connector as it does for anything else.
+//
+// The protocol is OctoPrint's upload API, because every slicer worth supporting
+// already speaks it: OrcaSlicer, PrusaSlicer and Cura all ship an OctoPrint
+// host type. That buys the whole feature with no plugin and no slicer patch.
+//
+// Auth is a per-user bearer token in X-Api-Key, minted when a slicer session
+// starts and expiring with it. It carries no printer secrets: the worst a stolen
+// token can do is add a job to the owner's own queue.
+async function printHostUser(req, reply) {
+  const key = req.headers['x-api-key'] ||
+    (req.headers['authorization'] || '').replace(/^Bearer\s+/i, '');
+  if (!key) { reply.code(401).send({ error: 'missing API key' }); return null; }
+  const who = await resolvePrintHostToken(String(key).trim());
+  if (!who) { reply.code(401).send({ error: 'invalid or expired API key' }); return null; }
+  return who;
+}
+
+// Slicers probe this to decide whether the host is real before offering Send.
+// Returning OctoPrint's shape is what makes the connection test pass.
+app.get('/printhost/api/version', async (req, reply) => {
+  const who = await printHostUser(req, reply); if (!who) return;
+  return { api: '0.1', server: '1.3.10', text: 'OctoPrint 1.3.10 (OpenPrintHQ)' };
+});
+
+// PrusaSlicer/Orca also probe this one on some host types.
+app.get('/printhost/api/settings', async (req, reply) => {
+  const who = await printHostUser(req, reply); if (!who) return;
+  return { feature: { sdSupport: false }, webcam: { flipH: false, flipV: false } };
+});
+
+app.post('/printhost/api/files/local', async (req, reply) => {
+  const who = await printHostUser(req, reply); if (!who) return;
+  const inst = await getInstanceForUser(who.userId);
+  const base = engineBase(inst);
+  if (!base) return reply.code(409).send({ error: 'no running instance for this account' });
+  if (!Buffer.isBuffer(req.body)) {
+    return reply.code(400).send({ error: 'expected a multipart upload' });
+  }
+  const ct = req.headers['content-type'] || '';
+
+  // Hand the multipart body to the engine library untouched, exactly as the web
+  // uploader does, so there is one upload path rather than two that can drift.
+  let uploaded;
+  try {
+    const res = await fetch(base + '/api/v1/library/files', {
+      method: 'POST',
+      headers: { 'content-type': ct, accept: 'application/json' },
+      body: req.body
+    });
+    const text = await res.text();
+    if (!res.ok) {
+      req.log.error({ status: res.status, text: text.slice(0, 300) }, 'print-host upload rejected by engine');
+      return reply.code(502).send({ error: 'engine rejected the upload' });
+    }
+    uploaded = text ? JSON.parse(text) : {};
+  } catch (e) {
+    return reply.code(502).send({ error: 'engine unreachable: ' + e.message });
+  }
+
+  const fileId = uploaded.id ?? uploaded.file_id ?? uploaded?.file?.id ?? null;
+  const name = uploaded.name ?? uploaded.filename ?? 'upload';
+
+  // OctoPrint clients set print=true to mean "and start it". We treat that as
+  // "queue it" rather than "print right now": the scheduler owns dispatch, and a
+  // slicer has no idea which printer is free or whether one is mid-job.
+  // The `print` field is an ordinary multipart part and clients are free to put
+  // it AFTER the file, so scanning a prefix of the body would miss it. Parse the
+  // part itself, on a latin1 view so binary payloads cannot corrupt the search.
+  const wantsPrint = (() => {
+    const m = /name="(print|select)"\r?\n\r?\n([^\r\n]*)/i.exec(
+      req.body.toString('latin1')
+    );
+    return !!m && /^(true|1|yes)$/i.test(m[2].trim());
+  })();
+
+  let queued = false, queueError = null;
+  if (fileId && wantsPrint) {
+    try {
+      const qr = await fetch(base + '/api/v1/library/files/add-to-queue', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', accept: 'application/json' },
+        body: JSON.stringify({ file_ids: [fileId] })
+      });
+      const qj = await qr.json().catch(() => ({}));
+      if (qr.ok && !(qj?.errors?.length)) queued = true;
+      else queueError = qj?.errors?.[0]?.error || ('queue rejected (' + qr.status + ')');
+    } catch (e) { queueError = e.message; }
+  }
+  if (queueError) req.log.warn({ fileId, queueError }, 'print-host queue failed');
+
+  // OctoPrint's documented 201 response shape. Slicers parse `done`.
+  reply.code(201);
+  return {
+    done: true,
+    files: {
+      local: { name, path: name, origin: 'local' }
+    },
+    openprinthq: { file_id: fileId, queued, queue_error: queueError }
+  };
 });
 
 // ---- health -------------------------------------------------------------
