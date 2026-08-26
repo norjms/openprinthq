@@ -201,29 +201,40 @@ app.post('/api/slicer/session', async (req, reply) => {
       await clearKasmSession(user.id);
     }
 
-    const fresh = await getKasmRow(user.id);
-    const s = await ensureKasmSession(acct.userId, imageId,
-      fresh?.kasm_id ? { kasmId: fresh.kasm_id, sessionToken: fresh.session_token } : null);
-    await setKasmSession(user.id, engine, s.kasmId, s.sessionToken);
-
-    // Mint a print-host token for this session so the slicer can send finished
-    // plates back into the queue. Old ones are dropped first: a session is the
-    // lifetime, so leaving previous tokens valid would quietly accumulate
+    // Mint the print-host token BEFORE launching, because environment can only
+    // be injected at container creation. Old tokens are dropped first: a session
+    // is the lifetime, so leaving previous ones valid would quietly accumulate
     // long-lived credentials for a desktop the user controls.
     let printHost = null;
+    let environment = null;
     try {
       await purgePrintHostTokens(user.id);
       const token = randomBytes(24).toString('base64url');
       const expires = new Date(Date.now() + 12 * 60 * 60 * 1000);
       await createPrintHostToken(user.id, token, 'slicer:' + engine, expires);
       printHost = { url: PUBLIC_URL + '/printhost', apiKey: token, expiresAt: expires.toISOString() };
+      environment = {
+        OPHQ_PRINTHOST_URL: printHost.url,
+        OPHQ_PRINTHOST_KEY: token,
+        OPHQ_URL: PUBLIC_URL
+      };
     } catch (e) {
       // A missing print host makes the slicer read-only, which is worth logging
       // but not worth failing the launch over.
       req.log.error({ err: e.message }, 'could not mint print-host token');
     }
 
-    return { engine, status: s.status, url: s.url, reused: s.reused, provisioned: acct.created, printHost };
+    const fresh = await getKasmRow(user.id);
+    const s = await ensureKasmSession(acct.userId, imageId,
+      fresh?.kasm_id ? { kasmId: fresh.kasm_id, sessionToken: fresh.session_token } : null,
+      environment);
+    await setKasmSession(user.id, engine, s.kasmId, s.sessionToken);
+
+    // A reused session was created before this token existed, so its injected
+    // environment is stale. Say so rather than letting the caller assume the
+    // slicer inside it is configured.
+    return { engine, status: s.status, url: s.url, reused: s.reused, provisioned: acct.created,
+             printHost, envInjected: !!environment && !s.reused };
   } catch (e) {
     req.log.error({ err: e.message }, 'slicer session start failed');
     reply.code(502).send({ error: e.message });
