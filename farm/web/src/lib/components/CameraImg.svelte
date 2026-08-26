@@ -3,12 +3,20 @@
   //
   // The camera feed is a JPEG snapshot polled through the engine gateway. On a
   // cold page load that means a blank box until the first frame arrives. This
-  // component keeps the LAST frame per printer in localStorage and shows it
-  // immediately, then loads the live frame off-screen and swaps it in once ready
-  // (and re-caches it). So the page feels responsive: you see the last picture
-  // instantly, then it goes live. A failed live load leaves the cached frame in
-  // place (with a subtle "reconnecting" hint) rather than blanking out.
+  // component shows the LAST cached frame immediately, then loads the live frame
+  // off-screen and swaps it in once ready (and re-caches it). So the page feels
+  // responsive: you see the last picture instantly, then it goes live. A failed
+  // live load leaves the cached frame in place (with a subtle "reconnecting"
+  // hint) rather than blanking out.
+  //
+  // The cache lives in $lib/camcache.js rather than here, because the same
+  // frames are warmed in the background from the app shell. That move is also
+  // what fixed it: encoding happened at full sensor resolution and the result
+  // was discarded above 300KB, which on real 1680x1080 and 1920x1056 cameras
+  // meant two printers in three never cached a single frame and the instant-load
+  // behaviour above simply never happened.
   import { onMount } from 'svelte';
+  import { readFrame, writeFrame } from '$lib/camcache.js';
 
   let {
     printerId,
@@ -20,38 +28,30 @@
     onerror = null,      // called when a live frame fails to load
   } = $props();
 
-  const cacheKey = (id) => `ophq_cam_${id}`;
   let src = $state('');        // what the visible <img> shows
   let stale = $state(false);   // true when showing a cached frame and live is failing
   let lastTick = tick;
 
+  // `tick` is the parent's poll counter, which restarts at 0 on every page load,
+  // so on its own it busts the cache within a session but not across one: every
+  // cold load asked for ?t=0 again. Mixing in the mount time makes each load ask
+  // for a genuinely fresh frame.
+  const MOUNTED = Date.now();
   function liveUrl(t) {
-    return `/api/engine/api/v1/printers/${printerId}/camera/snapshot?t=${t}`;
-  }
-
-  function cacheFrame(img) {
-    // Draw the just-loaded (same-origin) frame to a canvas and stash a compact
-    // JPEG data-URL. Guarded so a huge frame can't blow the localStorage quota.
-    try {
-      const c = document.createElement('canvas');
-      c.width = img.naturalWidth || 640;
-      c.height = img.naturalHeight || 360;
-      c.getContext('2d').drawImage(img, 0, 0);
-      const data = c.toDataURL('image/jpeg', 0.6);
-      if (data.length < 300000) localStorage.setItem(cacheKey(printerId), data);
-    } catch { /* canvas/quota/tainted — skip caching, live still works */ }
+    return `/api/engine/api/v1/printers/${printerId}/camera/snapshot?t=${MOUNTED}.${t}`;
   }
 
   function loadLive(t) {
     const img = new Image();
     img.decoding = 'async';
-    img.onload = () => { stale = false; src = img.src; cacheFrame(img); };
+    img.onload = () => { stale = false; src = img.src; writeFrame(printerId, img); };
     img.onerror = () => { stale = !!src; if (onerror) onerror(); };
     img.src = liveUrl(t);
   }
 
   onMount(() => {
-    try { const cached = localStorage.getItem(cacheKey(printerId)); if (cached) src = cached; } catch { /* */ }
+    const cached = readFrame(printerId);
+    if (cached) src = cached.d;
     loadLive(tick);
   });
 
