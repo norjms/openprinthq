@@ -21,7 +21,15 @@
     { key: 'elegoo', name: 'ElegooSlicer', abbr: 'E', color: '#2b2b2b', ready: false }
   ];
   let engine = $state('orca');
-  function selectEngine(k) { const e = ENGINES.find((x) => x.key === k); if (e && e.ready) engine = k; }
+  function selectEngine(k) {
+    const e = ENGINES.find((x) => x.key === k);
+    if (!e || !e.ready || k === engine) return;
+    engine = k;
+    // A different engine is a different image, so whatever is on screen belongs
+    // to the old one. Drop it and ask what is running for the new selection.
+    wsUrl = null; wsStatus = null; wsError = null; wsFull = false;
+    wsLoad();
+  }
 
   async function load() {
     loading = true; error = null;
@@ -39,7 +47,54 @@
       loading = false;
     }
   }
-  onMount(load);
+  // ---- workspace (containerised desktop slicer in an iframe) ------------
+  // The control-plane owns the Kasm session; this only ever holds a URL.
+  let wsConfigured = $state(false);
+  let wsUrl = $state(null);
+  let wsStatus = $state(null);
+  let wsBusy = $state(false);
+  let wsError = $state(null);
+  let wsFull = $state(false);
+  let poll = null;
+
+  async function wsLoad() {
+    try {
+      const r = await api.slicerWorkspace(engine);
+      wsConfigured = !!r.configured;
+      wsUrl = r.running ? r.url : null;
+      wsStatus = r.status || null;
+      // A container reports "starting" before it will accept a connection, so
+      // keep polling until it is actually up rather than framing a dead URL.
+      if (r.running && String(r.status || '').toLowerCase() !== 'running') schedulePoll();
+    } catch { wsConfigured = false; }
+  }
+  function schedulePoll() {
+    clearTimeout(poll);
+    poll = setTimeout(wsLoad, 4000);
+  }
+  async function wsStart() {
+    wsBusy = true; wsError = null;
+    try {
+      const r = await api.slicerWorkspaceStart(engine);
+      wsUrl = r.url; wsStatus = r.status;
+      if (String(r.status || '').toLowerCase() !== 'running') schedulePoll();
+    } catch (e) { wsError = e.message || 'could not start the slicer'; }
+    finally { wsBusy = false; }
+  }
+  async function wsStop() {
+    wsBusy = true; wsError = null;
+    try { await api.slicerWorkspaceStop(); wsUrl = null; wsStatus = null; wsFull = false; }
+    catch (e) { wsError = e.message || 'could not stop the slicer'; }
+    finally { wsBusy = false; }
+  }
+  function onKey(e) { if (e.key === 'Escape') wsFull = false; }
+
+  onMount(() => {
+    load();
+    wsLoad();
+    window.addEventListener('keydown', onKey);
+    return () => { clearTimeout(poll); window.removeEventListener('keydown', onKey); };
+  });
 </script>
 
 <PageTitle page="Slicer" />
@@ -70,6 +125,45 @@
       {/each}
     </div>
   </div>
+
+  {#if wsConfigured}
+    <div class="card workspace" class:full={wsFull}>
+      <div class="wsbar">
+        <div class="flex center gap">
+          <span class="dot" class:on={wsStatus === 'running'}></span>
+          <b>Workspace</b>
+          <span class="muted small">
+            {#if !wsUrl}Not running{:else if wsStatus === 'running'}{ENGINES.find((x) => x.key === engine)?.name} running{:else}Starting up{/if}
+          </span>
+        </div>
+        <div class="flex center gap">
+          {#if wsUrl}
+            <button class="btn btn-ghost btn-sm" onclick={() => (wsFull = !wsFull)}>{wsFull ? 'Exit full screen' : 'Full screen'}</button>
+            <button class="btn btn-ghost btn-sm" onclick={wsStop} disabled={wsBusy}>Stop</button>
+          {:else}
+            <button class="btn btn-sm" onclick={wsStart} disabled={wsBusy}>{wsBusy ? 'Starting...' : 'Open slicer'}</button>
+          {/if}
+        </div>
+      </div>
+
+      {#if wsError}
+        <div class="card-pad"><p class="muted">{wsError}</p></div>
+      {:else if wsUrl && wsStatus === 'running'}
+        <iframe
+          title="Slicer workspace"
+          src={wsUrl}
+          allow="clipboard-read; clipboard-write; fullscreen"
+          referrerpolicy="no-referrer"
+        ></iframe>
+      {:else if wsUrl}
+        <div class="wsempty"><p class="muted">Starting your slicer session. This takes a few seconds the first time.</p></div>
+      {:else}
+        <div class="wsempty">
+          <p class="muted">Run the full slicer in your browser, with your own persistent workspace.</p>
+        </div>
+      {/if}
+    </div>
+  {/if}
 
   <div class="card card-pad status glow">
     <div class="flex between center">
@@ -120,6 +214,13 @@
   .ebadge { width: 30px; height: 30px; border-radius: 7px; display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 0.8rem; flex: none; }
   .ename { font-weight: 600; font-size: 0.9rem; }
   .ribbon { position: absolute; top: 7px; right: -26px; transform: rotate(35deg); background: var(--ophq-warn, #f0b429); color: #10131a; font-size: 0.56rem; font-weight: 800; letter-spacing: 0.03em; padding: 2px 26px; text-transform: uppercase; }
+  .workspace { margin-bottom: 1.2rem; overflow: hidden; }
+  .wsbar { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; padding: 0.7rem 1rem; border-bottom: 1px solid var(--ophq-border); }
+  .workspace iframe { display: block; width: 100%; height: 72vh; min-height: 460px; border: 0; background: #0b0e13; }
+  .wsempty { padding: 2.2rem 1rem; text-align: center; }
+  .wsempty p { margin: 0; }
+  .workspace.full { position: fixed; inset: 0; z-index: 200; margin: 0; border-radius: 0; display: flex; flex-direction: column; }
+  .workspace.full iframe { flex: 1; height: auto; min-height: 0; }
   .status { margin-bottom: 1.2rem; }
   .status h3 { margin: 0; font-size: 1.1rem; }
   .status p { margin: 0.2rem 0 0; font-size: 0.9rem; }
