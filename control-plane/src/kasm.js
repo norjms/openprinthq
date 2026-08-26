@@ -204,7 +204,7 @@ export function connectUrl(kasmId, kasmUserId, sessionToken) {
 //     vanished session (not an expired token) trigger a new request.
 //
 // `stored` is the caller's persisted {kasmId, sessionToken} or null.
-export async function ensureSession(kasmUserId, imageId, stored = null) {
+export async function ensureSession(kasmUserId, imageId, stored = null, environment = null) {
   if (stored?.kasmId && stored?.sessionToken) {
     const live = await findSession(kasmUserId, imageId);
     if (live && norm(live.kasm_id) === norm(stored.kasmId)) {
@@ -222,7 +222,15 @@ export async function ensureSession(kasmUserId, imageId, stored = null) {
   const stray = await findSession(kasmUserId, imageId);
   if (stray) { try { await destroySession(kasmUserId, stray.kasm_id); } catch { /* best effort */ } }
 
-  const d = await kasm('request_kasm', { user_id: kasmUserId, image_id: imageId, enable_sharing: false });
+  // Environment is injected at container creation, which is the only moment we
+  // get: it cannot be added to a session already running, and it must not be
+  // baked into the image because one image serves every tenant.
+  const d = await kasm('request_kasm', {
+    user_id: kasmUserId,
+    image_id: imageId,
+    enable_sharing: false,
+    ...(environment && Object.keys(environment).length ? { environment } : {})
+  });
   return {
     kasmId: d.kasm_id,
     sessionToken: d.session_token,
