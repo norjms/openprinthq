@@ -1793,14 +1793,40 @@ app.all('/api/engine/*', async (req, reply) => {
 });
 
 // ---- tenant model library ------------------------------------------------
-// Served under our own origin rather than a subdomain, deliberately. The
-// library has its own cookie session with no SSO, and a cookie can only be
-// handed to the browser for the origin it will be sent back to. Same-origin
-// also means Authentik already gates it: everything here is behind requireUser.
+// Served on its OWN ORIGIN, not a sub-path.
+//
+// The library references every asset absolutely (/css/style.css, /js/app.js)
+// and calls its own API as fetch('/api/...'). Behind a /vault prefix those
+// resolve to the app's origin root, so the stylesheet 404s and its API calls
+// collide with ours. Rewriting them in the proxy would mean rewriting its
+// JavaScript, which breaks on the next upstream release. A separate host makes
+// every one of those paths correct with no rewriting at all.
+//
+// Authentik gates the host at the edge, so everything here is still behind
+// requireUser. The library's own cookie is set for THIS host by the session
+// route below, which is why the origin has to be one we serve.
+const VAULT_HOST = process.env.OPHQ_VAULT_HOST || '';
 
-// Open a library session for the signed-in user and hand its cookie to the
-// browser, scoped to the library path. The tenant never sees the password.
-app.get('/api/vault/session', async (req, reply) => {
+function isVaultHost(req) {
+  const h = String(req.headers.host || '').split(':')[0].toLowerCase();
+  return !!VAULT_HOST && h === VAULT_HOST.toLowerCase();
+}
+
+// Entry point. Opens a library session for the signed-in user, sets the cookie
+// for THIS origin, and bounces to the app. The iframe points here, never at /.
+// Tell the app where the library lives, and whether it is available at all.
+// Separate from the session route because that one runs on the LIBRARY host and
+// this one runs on the app host.
+app.get('/api/vault/status', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  if (!vaultEnabled() || !VAULT_HOST) { reply.code(503).send({ error: 'tenant library not configured' }); return; }
+  const inst = await getInstanceForUser(user.id);
+  if (!inst?.subdomain) return reply.code(409).send({ error: 'no instance for this account' });
+  ensureVault(user.id, inst.subdomain, user.email).catch(() => {});
+  return { url: `https://${VAULT_HOST}/__ophq/session` };
+});
+
+app.get('/__ophq/session', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
   if (!vaultEnabled()) { reply.code(503).send({ error: 'tenant library not configured' }); return; }
   const inst = await getInstanceForUser(user.id);
@@ -1809,26 +1835,22 @@ app.get('/api/vault/session', async (req, reply) => {
     await ensureVault(user.id, inst.subdomain, user.email).catch(() => {});
     const session = await vaultLogin(inst.subdomain);
     if (!session) return reply.code(502).send({ error: 'library not ready' });
-    // Re-emit upstream's cookies on our origin, narrowed to the library path so
-    // they are never sent with an ordinary app request.
-    for (const c of session.setCookie) {
-      reply.header('set-cookie', c.replace(/;\s*Path=[^;]*/i, '') + '; Path=/vault');
-    }
-    return { ready: true };
+    // Re-emitted for this host. Path is left at the root because the library
+    // asks for its assets and API from the root of the origin it is served on.
+    for (const c of session.setCookie) reply.header('set-cookie', c);
+    return reply.redirect('/');
   } catch (e) {
     return reply.code(502).send({ error: 'library unreachable: ' + e.message });
   }
 });
 
-// Proxy the library itself. Streams whatever it returns, including assets, so
-// the tenant's browser only ever talks to our origin.
-app.all('/vault', async (req, reply) => reply.redirect('/vault/'));
-app.all('/vault/*', async (req, reply) => {
+// Everything else on the library host is the library.
+app.all('/*', { constraints: {} }, async (req, reply) => {
+  if (!isVaultHost(req)) return reply.callNotFound();
   const user = await requireUser(req, reply); if (!user) return;
   if (!vaultEnabled()) { reply.code(503).send({ error: 'tenant library not configured' }); return; }
   const inst = await getInstanceForUser(user.id);
   if (!inst?.subdomain) return reply.code(409).send({ error: 'no instance for this account' });
-  const path = req.url.replace(/^\/vault/, '') || '/';
   const headers = {};
   for (const h of ['accept', 'accept-language', 'content-type', 'cookie', 'x-csrf-token', 'range']) {
     if (req.headers[h]) headers[h] = req.headers[h];
@@ -1839,15 +1861,13 @@ app.all('/vault/*', async (req, reply) => {
       : (typeof req.body === 'string' ? req.body : JSON.stringify(req.body));
   }
   try {
-    const res = await fetch(vaultBase(inst.subdomain) + path, { method: req.method, headers, body, redirect: 'manual' });
+    const res = await fetch(vaultBase(inst.subdomain) + req.url, { method: req.method, headers, body, redirect: 'manual' });
     reply.code(res.status);
-    for (const h of ['content-type', 'cache-control', 'content-disposition', 'location', 'accept-ranges', 'content-range']) {
+    for (const h of ['content-type', 'cache-control', 'content-disposition', 'location', 'accept-ranges', 'content-range', 'etag', 'last-modified']) {
       const v = res.headers.get(h);
       if (v) reply.header(h, v);
     }
-    for (const c of (res.headers.getSetCookie?.() || [])) {
-      reply.header('set-cookie', c.replace(/;\s*Path=[^;]*/i, '') + '; Path=/vault');
-    }
+    for (const c of (res.headers.getSetCookie?.() || [])) reply.header('set-cookie', c);
     return reply.send(Buffer.from(await res.arrayBuffer()));
   } catch (e) {
     return reply.code(502).send({ error: 'library unreachable: ' + e.message });
