@@ -1837,18 +1837,6 @@ app.get('/api/vault/status', async (req, reply) => {
 });
 
 app.get('/__ophq/session', async (req, reply) => {
-  // Which identity headers actually survive the edge on THIS host. The library
-  // is framed cross-origin, so both the forward-auth hop and the browser's
-  // third-party cookie rules are in play, and a 401 here is ambiguous without
-  // knowing which of the two dropped the identity.
-  req.log.info({
-    host: req.headers.host,
-    hasAuthentikEmail: !!req.headers['x-authentik-email'],
-    hasGateway: !!req.headers['x-ophq-gateway'],
-    gatewayMatches: req.headers['x-ophq-gateway'] === (process.env.OPHQ_GATEWAY_SECRET || ''),
-    authentikHeaders: Object.keys(req.headers).filter((h) => h.startsWith('x-authentik')),
-    cookieNames: Object.keys(req.cookies || {})
-  }, 'vault session attempt');
   const user = await requireUser(req, reply); if (!user) return;
   if (!vaultEnabled()) { reply.code(503).send({ error: 'tenant library not configured' }); return; }
   const inst = await getInstanceForUser(user.id);
