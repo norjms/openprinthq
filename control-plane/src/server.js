@@ -23,7 +23,9 @@ import { migrate, upsertUser, getUserByEmail, getInstanceForUser, getCompatibleP
   getTenantStorage, setTenantStorage, setTenantQuota, listTenantStorage } from './db.js';
 import { createAuthentikUser, linkAuthentikUser, authentikUserExists, authentikConfigured, OWNER_GROUP } from './authentik.js';
 import { garageConfigured, ensureTenantStorage, usage as storageUsage,
-  setQuota as setBucketQuota, defaultQuotaBytes, clusterHealth as storageHealth } from './garage.js';
+  setQuota as setBucketQuota, defaultQuotaBytes, clusterHealth as storageHealth,
+  s3EndpointPublic, s3EndpointLan, s3PathPrefix, s3Region, presignTtl } from './garage.js';
+import { presign } from './s3sign.js';
 import { kasmConfigured, kasmEngines, kasmImageFor, ensureKasmUser, ensureSession as ensureKasmSession,
   findSession as findKasmSession, destroySession as destroyKasmSession,
   sessionStatus as kasmSessionStatus } from './kasm.js';
@@ -456,10 +458,12 @@ app.post('/printhost/api/files/local', async (req, reply) => {
 // ---- tenant object storage ----------------------------------------------
 // Provisioned on first use: a bucket and a key scoped to it, per tenant.
 //
-// Only provisioning and accounting happen here. The credentials are handed to
-// whatever needs them (a slicer session, the engine) and those talk to the
-// object store DIRECTLY over the network. Bulk data must never be proxied
-// through this service, which may be running off-site.
+// Only provisioning and accounting happen here. Clients that need to move bytes
+// ask for a presigned URL and talk to the object store DIRECTLY. Bulk data must
+// never be proxied through this service, which may be running off-site.
+//
+// The bucket's access key is created here and never leaves: it is persisted so
+// this service can sign on a tenant's behalf, and no client ever sees it.
 async function ensureStorageFor(user, req) {
   let row = await getTenantStorage(user.id);
   if (row) return row;
@@ -489,22 +493,53 @@ app.get('/api/storage', async (req, reply) => {
   }
 });
 
-// Credentials for a client that will talk to the object store directly.
-// Deliberately a separate call from the summary above so the secret is not
-// handed out on every page load.
-app.get('/api/storage/credentials', async (req, reply) => {
+// A short-lived, single-object URL for a client that will talk to the object
+// store directly. Bulk never passes through here.
+//
+// This replaces handing out the bucket's access key. That was a standing
+// credential: readable from devtools, valid until rotated, usable outside the
+// app entirely, and impossible to revoke for one session without breaking the
+// tenant. A presigned URL is scoped to one method and one key and expires in
+// minutes, and the secret stays server-side.
+//
+// Which endpoint gets signed depends on where the caller sits. A browser is
+// off-site and gets the public name; a slicer session or the engine is on the
+// same network as the store and gets the LAN address, so a plate does not
+// hairpin out to the internet and back.
+app.post('/api/storage/presign', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
   if (!garageConfigured()) { reply.code(503).send({ error: 'object storage not configured' }); return; }
+
+  const method = String(req.body?.method || 'PUT').toUpperCase();
+  if (!['GET', 'PUT', 'HEAD', 'DELETE'].includes(method)) {
+    return reply.code(400).send({ error: 'unsupported method' });
+  }
+  const key = String(req.body?.key || '').replace(/^\/+/, '');
+  // Traversal is meaningless to S3, which has no directories, but a key
+  // containing .. is almost certainly a client bug and is worth refusing
+  // rather than silently creating an object with a confusing name.
+  if (!key || key.length > 1024 || key.split('/').includes('..')) {
+    return reply.code(400).send({ error: 'invalid object key' });
+  }
+
   try {
     const row = await ensureStorageFor(user, req);
-    return {
-      endpoint: process.env.OPHQ_GARAGE_S3_ENDPOINT || '',
-      region: process.env.OPHQ_GARAGE_S3_REGION || 'garage',
+    const lan = String(req.body?.scope || '') === 'lan';
+    const signed = presign({
+      method,
+      endpoint: lan ? s3EndpointLan() : s3EndpointPublic(),
+      pathPrefix: lan ? '' : s3PathPrefix(),
       bucket: row.bucket,
+      key,
       accessKeyId: row.access_key_id,
-      secretAccessKey: row.secret_key
-    };
+      secretAccessKey: row.secret_key,
+      region: s3Region(),
+      expiresIn: presignTtl()
+    });
+    req.log.info({ userId: user.id, bucket: row.bucket, method, lan }, 'presigned object url');
+    return { url: signed.url, method: signed.method, expiresAt: signed.expiresAt, bucket: row.bucket, key };
   } catch (e) {
+    req.log.error({ err: e.message }, 'presign failed');
     reply.code(502).send({ error: e.message });
   }
 });
