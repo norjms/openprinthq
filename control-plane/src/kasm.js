@@ -175,6 +175,28 @@ export async function findSession(kasmUserId, imageId) {
   ) || null;
 }
 
+/**
+ * Stop every session this user has, whatever slicer it is running.
+ *
+ * A workspace reserves its cores for as long as it exists, so a user holding
+ * one session per slicer starves the host: three 4-core sessions fill a 12-core
+ * machine and the next launch fails with "no resources are available", which
+ * reads like a fault rather than a queue.
+ *
+ * Stopping is cheap now that profiles persist: the work survives and reopening
+ * resumes, so there is no reason to keep an idle slicer parked.
+ */
+export async function stopAllSessions(kasmUserId, exceptKasmId = null) {
+  const { kasms } = await kasm('get_kasms', {});
+  const mine = (kasms || []).filter((k) =>
+    norm(k.user_id) === norm(kasmUserId) &&
+    (!exceptKasmId || norm(k.kasm_id) !== norm(exceptKasmId)));
+  for (const k of mine) {
+    try { await destroySession(kasmUserId, k.kasm_id); } catch { /* best effort */ }
+  }
+  return mine.length;
+}
+
 export async function sessionStatus(kasmUserId, kasmId) {
   const d = await kasm('get_kasm_status', { user_id: kasmUserId, kasm_id: kasmId });
   return d.kasm || null;
@@ -217,10 +239,10 @@ export async function ensureSession(kasmUserId, imageId, stored = null, environm
       };
     }
   }
-  // No usable session on record. Tear down any stray one for this user+image
-  // first, so a lost token cannot orphan a running 4GB container.
-  const stray = await findSession(kasmUserId, imageId);
-  if (stray) { try { await destroySession(kasmUserId, stray.kasm_id); } catch { /* best effort */ } }
+  // No usable session to resume. Stop everything this user has first, not just a
+  // stray for this same image: opening a slicer should hand its resources over
+  // from whatever was running, rather than failing because the host is full.
+  await stopAllSessions(kasmUserId);
 
   // Environment is injected at container creation, which is the only moment we
   // get: it cannot be added to a session already running, and it must not be
