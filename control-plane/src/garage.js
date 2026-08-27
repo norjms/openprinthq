@@ -33,6 +33,14 @@ const ADMIN_TOKEN = process.env.OPHQ_GARAGE_ADMIN_TOKEN || '';
 const S3_LEGACY = (process.env.OPHQ_GARAGE_S3_ENDPOINT || '').replace(/\/+$/, '');
 const S3_PUBLIC = (process.env.OPHQ_GARAGE_S3_ENDPOINT_PUBLIC || S3_LEGACY).replace(/\/+$/, '');
 const S3_LAN = (process.env.OPHQ_GARAGE_S3_ENDPOINT_LAN || S3_LEGACY).replace(/\/+$/, '');
+// A third address, because "on the LAN" is not one place. Slicer sessions run on
+// a separate VLAN and reach the store by its LAN address. The engine runs as a
+// container on the SAME host as the control-plane, which off-site deployments
+// firewall off from the LAN entirely, so it reaches the store through a
+// host-side forwarder on the bridge IP instead. Handing the engine the VLAN
+// address there produces a silent timeout, not a routing error.
+// Falls back to LAN, which is correct whenever both sit on one network.
+const S3_ENGINE = (process.env.OPHQ_GARAGE_S3_ENDPOINT_ENGINE || '').replace(/\/+$/, '');
 // Set when the store is served under a sub-path the proxy strips before the
 // store sees it. Signed paths must match the store's view, not the URL.
 const S3_PATH_PREFIX = process.env.OPHQ_GARAGE_S3_PATH_PREFIX || '';
@@ -47,6 +55,7 @@ export function garageConfigured() { return !!(ADMIN_URL && ADMIN_TOKEN && S3_PU
 export function defaultQuotaBytes() { return DEFAULT_QUOTA_BYTES; }
 export function s3EndpointPublic() { return S3_PUBLIC; }
 export function s3EndpointLan() { return S3_LAN || S3_PUBLIC; }
+export function s3EndpointEngine() { return S3_ENGINE || S3_LAN || S3_PUBLIC; }
 export function s3PathPrefix() { return S3_PATH_PREFIX; }
 export function s3Region() { return S3_REGION; }
 export function presignTtl() { return PRESIGN_TTL; }
