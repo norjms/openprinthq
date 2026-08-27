@@ -227,6 +227,18 @@ export async function migrate() {
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_invite_codes_expires ON invite_codes (expires_at);`);
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS tenant_storage (
+      user_id       INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      bucket        TEXT NOT NULL,
+      bucket_id     TEXT NOT NULL,
+      access_key_id TEXT NOT NULL,
+      secret_key    TEXT NOT NULL,
+      quota_bytes   BIGINT,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS printhost_tokens (
       token       TEXT PRIMARY KEY,
       user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -829,4 +841,32 @@ export async function userByKasmId(kasmId) {
     `SELECT user_id, kasm_user_id, engine FROM kasm_sessions
      WHERE replace(kasm_id, '-', '') = $1`, [norm]);
   return rows[0] || null;
+}
+
+// ---- tenant object storage ------------------------------------------------
+// The credentials here are the tenant's own S3 key, scoped to their bucket. It
+// is stored because sessions are handed it directly: bulk data goes tenant
+// session -> object store over the network, never through this service.
+export async function getTenantStorage(userId) {
+  const { rows } = await pool.query('SELECT * FROM tenant_storage WHERE user_id = $1', [userId]);
+  return rows[0] || null;
+}
+export async function setTenantStorage(userId, s) {
+  await pool.query(
+    `INSERT INTO tenant_storage (user_id, bucket, bucket_id, access_key_id, secret_key, quota_bytes)
+     VALUES ($1,$2,$3,$4,$5,$6)
+     ON CONFLICT (user_id) DO UPDATE SET bucket = EXCLUDED.bucket, bucket_id = EXCLUDED.bucket_id,
+       access_key_id = EXCLUDED.access_key_id, secret_key = EXCLUDED.secret_key,
+       quota_bytes = EXCLUDED.quota_bytes, updated_at = now()`,
+    [userId, s.bucket, s.bucketId, s.accessKeyId, s.secretAccessKey, s.quotaBytes ?? null]);
+}
+export async function setTenantQuota(userId, quotaBytes) {
+  await pool.query('UPDATE tenant_storage SET quota_bytes = $2, updated_at = now() WHERE user_id = $1',
+    [userId, quotaBytes]);
+}
+export async function listTenantStorage() {
+  const { rows } = await pool.query(
+    `SELECT t.user_id, t.bucket, t.bucket_id, t.quota_bytes, u.email
+     FROM tenant_storage t JOIN users u ON u.id = t.user_id ORDER BY u.email`);
+  return rows;
 }
