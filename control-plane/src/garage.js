@@ -13,18 +13,43 @@
 const ADMIN_URL = (process.env.OPHQ_GARAGE_ADMIN_URL || '').replace(/\/+$/, '');
 const ADMIN_TOKEN = process.env.OPHQ_GARAGE_ADMIN_TOKEN || '';
 
-// The S3 endpoint handed to tenants. Deliberately separate from ADMIN_URL: the
-// admin API must never be reachable by a slicer session, or a tenant could
-// raise their own quota.
-const S3_ENDPOINT = (process.env.OPHQ_GARAGE_S3_ENDPOINT || '').replace(/\/+$/, '');
+// The S3 endpoint. Deliberately separate from ADMIN_URL: the admin API must
+// never be reachable by a slicer session, or a tenant could raise their own
+// quota.
+//
+// There are two of these because the store has two classes of client sitting in
+// different places on the network, and handing either one the other's address
+// fails in a way that is tedious to diagnose:
+//
+//   PUBLIC  browsers, which are off-site. Must be a routable name with a valid
+//           certificate. Cannot be an RFC-1918 address, which is what the
+//           single-endpoint version was, so web uploads could never have worked.
+//   LAN     slicer sessions and the engine, which sit on the same network as the
+//           store and should not hairpin out to the internet and back to move a
+//           few hundred megabytes.
+//
+// If only the legacy OPHQ_GARAGE_S3_ENDPOINT is set, both fall back to it, so an
+// existing deployment keeps working until its .env is updated.
+const S3_LEGACY = (process.env.OPHQ_GARAGE_S3_ENDPOINT || '').replace(/\/+$/, '');
+const S3_PUBLIC = (process.env.OPHQ_GARAGE_S3_ENDPOINT_PUBLIC || S3_LEGACY).replace(/\/+$/, '');
+const S3_LAN = (process.env.OPHQ_GARAGE_S3_ENDPOINT_LAN || S3_LEGACY).replace(/\/+$/, '');
+// Set when the store is served under a sub-path the proxy strips before the
+// store sees it. Signed paths must match the store's view, not the URL.
+const S3_PATH_PREFIX = process.env.OPHQ_GARAGE_S3_PATH_PREFIX || '';
 const S3_REGION = process.env.OPHQ_GARAGE_S3_REGION || 'garage';
+// How long a presigned URL stays valid. Short by design: it is minted on demand,
+// so a longer window buys nothing and widens the replay gap.
+const PRESIGN_TTL = Number(process.env.OPHQ_GARAGE_PRESIGN_TTL || 0) || 900;
 
 const DEFAULT_QUOTA_BYTES = Number(process.env.OPHQ_TENANT_QUOTA_BYTES || 0) || 5 * 1024 * 1024 * 1024;
 
-export function garageConfigured() { return !!(ADMIN_URL && ADMIN_TOKEN && S3_ENDPOINT); }
+export function garageConfigured() { return !!(ADMIN_URL && ADMIN_TOKEN && S3_PUBLIC); }
 export function defaultQuotaBytes() { return DEFAULT_QUOTA_BYTES; }
-export function s3Endpoint() { return S3_ENDPOINT; }
+export function s3EndpointPublic() { return S3_PUBLIC; }
+export function s3EndpointLan() { return S3_LAN || S3_PUBLIC; }
+export function s3PathPrefix() { return S3_PATH_PREFIX; }
 export function s3Region() { return S3_REGION; }
+export function presignTtl() { return PRESIGN_TTL; }
 
 async function admin(endpoint, { method = 'POST', body = null, query = '' } = {}) {
   if (!garageConfigured()) throw new Error('object storage not configured');
@@ -87,7 +112,7 @@ export async function ensureTenantStorage(userId, email, quotaBytes = DEFAULT_QU
     bucket: alias,
     accessKeyId: key.accessKeyId,
     secretAccessKey: key.secretAccessKey,
-    endpoint: S3_ENDPOINT,
+    endpoint: S3_LAN || S3_PUBLIC,
     region: S3_REGION,
     quotaBytes
   };
