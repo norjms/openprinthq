@@ -1,0 +1,52 @@
+/* OpenPrintHQ theme for GyroidVault
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * GyroidVault themes are a set of CSS custom properties selected by a
+ * [data-theme] attribute on <html>, so matching our look needs no fork: this
+ * adds one more theme block alongside its built-in glass/industrial/light and
+ * the bundled entrypoint selects it.
+ *
+ * Values are copied from the OpenPrintHQ dark palette in web/src/app.css. They
+ * are duplicated rather than imported because the two applications are served
+ * as separate origins and share no build. If the app palette changes, this file
+ * has to change with it.
+ */
+html[data-theme="openprinthq"] {
+  --bg-primary: #0d1117;
+  --bg-secondary: #0a0e14;
+  --bg-tertiary: #151b24;
+  --bg-card: #1b2330;
+  --bg-card-hover: #222c3c;
+  --bg-input: #151b24;
+  --bg-navbar: rgba(13, 17, 23, 0.85);
+
+  --border: #26303f;
+  --border-hover: #7c6cff;
+
+  --text-primary: #e6ebf2;
+  --text-secondary: #b4bdcc;
+  --text-muted: #7f8ca1;
+
+  --success: #35c46b;
+  --warning: #f5a623;
+  --error: #ff5c6c;
+
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 10px 30px -12px rgba(0, 0, 0, 0.6);
+}
+
+/* GyroidVault's accents are a fixed named set, so the OpenPrintHQ primary is
+   applied over whichever accent is selected rather than adding a new one. */
+html[data-theme="openprinthq"] {
+  --accent: #7c6cff;
+  --accent-hover: #9a8cff;
+  --accent-purple: #7c6cff;
+  --accent-pink: #ffb020;
+}
+
+/* The app is embedded in an OpenPrintHQ tab, so its own page chrome would be a
+   second, redundant frame around content that already sits in one. */
+html[data-theme="openprinthq"] body {
+  background: var(--bg-primary);
+}

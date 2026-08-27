@@ -9,7 +9,8 @@
 
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { pool, adminPool, getInstanceForUser, getTenantStorage } from './db.js';
+import { pool, adminPool, getInstanceForUser, getTenantStorage, getVaultCreds, setVaultCreds } from './db.js';
+import { randomBytes } from 'node:crypto';
 
 const exec = promisify(execFile);
 
@@ -38,6 +39,15 @@ const BUCKET_MOUNT_ROOT = process.env.OPHQ_ENGINE_BUCKET_MOUNT_ROOT || '';
 // engine's library, so the two must agree.
 const BUCKET_MOUNT_TARGET = process.env.OPHQ_ENGINE_BUCKET_MOUNT_TARGET || '/app/external/bucket';
 const BUCKET_FOLDER_NAME = process.env.OPHQ_ENGINE_BUCKET_FOLDER_NAME || 'OpenPrintHQ Files';
+
+// The per-tenant model library (our build of GyroidVault). Unset disables it and
+// the Files tab falls back to the engine library, which is what a deployment
+// without the image should do rather than showing a broken tab.
+const VAULT_IMAGE = process.env.OPHQ_VAULT_IMAGE || '';
+// Where the tenant bucket appears inside the library container.
+const VAULT_LIBRARY_PATH = '/library';
+export function vaultEnabled() { return !!VAULT_IMAGE; }
+export function vaultBase(subdomain) { return `http://ophq-vault-${subdomain}:3000`; }
 
 function slugify(email) {
   return (email.split('@')[0] || 'user')
@@ -304,6 +314,148 @@ export async function ensureEngineBucketMount(userId, subdomain) {
   return { changed: true, backup };
 }
 
+/**
+ * Start a tenant's library container.
+ *
+ * The bucket is mounted READ-ONLY on purpose. The library only ever reads: it
+ * scans and indexes, and its own state lives in a separate volume. Uploads go
+ * through the presigned path instead, so the shared reader key backing this
+ * mount can never become a cross-tenant write path.
+ */
+async function startVaultContainer({ subdomain, bucketDir }) {
+  if (!VAULT_IMAGE || !bucketDir) return { started: false, reason: 'disabled-or-no-bucket' };
+  const name = `ophq-vault-${subdomain}`;
+  try { await exec('test', ['-d', bucketDir]); }
+  catch { return { started: false, reason: 'mount-root-missing' }; }
+  try {
+    await exec('docker', ['rm', '-f', name]).catch(() => {});
+    await exec('docker', [
+      'run', '-d', '--name', name, '--restart', 'unless-stopped',
+      '--network', DOCKER_NETWORK,
+      '-e', 'NODE_ENV=production', '-e', 'PORT=3000',
+      '-e', `LIBRARY_PATH=${VAULT_LIBRARY_PATH}`,
+      '-v', `ophq_${subdomain}_vault:/app/data`,
+      '--mount', `type=bind,source=${bucketDir},target=${VAULT_LIBRARY_PATH},readonly,bind-propagation=rslave`,
+      '--label', `openprinthq.tenant=${subdomain}`,
+      '--label', 'openprinthq.role=vault',
+      VAULT_IMAGE
+    ]);
+    return { started: true };
+  } catch (e) { return { started: false, reason: e.message }; }
+}
+
+/**
+ * Provision the library's single admin account and point it at our print host.
+ *
+ * It ships no SSO and its first registrant becomes admin, so the control-plane
+ * claims that account at first start. If a tenant reached an unclaimed instance
+ * first they would own it, so this runs immediately after the container starts
+ * and before anything is routed to it.
+ *
+ * Retries: it is being called against a container that has only just booted.
+ */
+export async function bootstrapVault(userId, subdomain, email, attempts = 20) {
+  const base = vaultBase(subdomain);
+  let creds = await getVaultCreds(userId);
+  if (!creds) {
+    creds = { username: 'openprinthq', password: randomBytes(24).toString('base64url') };
+    await setVaultCreds(userId, creds.username, creds.password);
+  }
+  for (let i = 0; i < attempts; i++) {
+    try {
+      // Idempotent: a second call answers "already exists" and we carry on to
+      // log in, because provisioning is retried and containers get recreated.
+      await fetch(base + '/api/auth/register', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ username: creds.username, email: email || `${subdomain}@openprinthq.local`, password: creds.password })
+      }).catch(() => {});
+      const session = await vaultLogin(subdomain, creds);
+      if (!session) { await new Promise((r) => setTimeout(r, 1500)); continue; }
+      await seedVaultPrinter(base, session, userId);
+      return true;
+    } catch { await new Promise((r) => setTimeout(r, 1500)); }
+  }
+  return false;
+}
+
+/** Log in and return the cookie plus CSRF token, or null if it is not ready. */
+export async function vaultLogin(subdomain, creds) {
+  const base = vaultBase(subdomain);
+  const c = creds || await getVaultCredsFor(subdomain);
+  if (!c) return null;
+  const r = await fetch(base + '/api/auth/login', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ username: c.username, password: c.password })
+  });
+  if (!r.ok) return null;
+  const j = await r.json().catch(() => ({}));
+  const cookies = (r.headers.getSetCookie?.() || []).map((x) => x.split(';')[0]).join('; ');
+  if (!cookies) return null;
+  return { cookies, csrf: j.csrfToken, setCookie: r.headers.getSetCookie?.() || [] };
+}
+
+async function getVaultCredsFor(subdomain) {
+  const { rows } = await pool.query(
+    'SELECT v.* FROM tenant_vault v JOIN instances i ON i.user_id = v.user_id WHERE i.subdomain = $1', [subdomain]);
+  return rows[0] || null;
+}
+
+/**
+ * Point the library's "printer" at our print host.
+ *
+ * It speaks Moonraker, so rather than teaching it our API we expose a
+ * Moonraker-shaped upload endpoint and configure it as an ordinary printer.
+ * The api_key is a print-host token, the same credential a slicer session uses.
+ */
+async function seedVaultPrinter(base, session, userId) {
+  const { createPrintHostToken, purgePrintHostTokens } = await import('./db.js');
+  const token = randomBytes(24).toString('base64url');
+  await purgePrintHostTokens(userId).catch(() => {});
+  await createPrintHostToken(userId, token, 'vault', null);
+  const printers = [{
+    id: 'openprinthq',
+    name: 'OpenPrintHQ Queue',
+    url: (process.env.OPHQ_PUBLIC_URL || '') + '/printhost',
+    api_key: token
+  }];
+  await fetch(base + '/api/settings/system', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', cookie: session.cookies, 'x-csrf-token': session.csrf },
+    // Scan hourly rather than daily: files arrive from outside this container,
+    // so its own watcher never sees the write that created them.
+    body: JSON.stringify({ printers: JSON.stringify(printers), auto_scan_interval: '1' })
+  }).catch(() => {});
+}
+
+/** Trigger a library scan. Called after an upload, since the store is written
+ *  from outside this container and nothing tells it a file appeared. */
+export async function vaultScan(subdomain) {
+  const session = await vaultLogin(subdomain);
+  if (!session) return false;
+  const r = await fetch(vaultBase(subdomain) + '/api/library/scan', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', cookie: session.cookies, 'x-csrf-token': session.csrf },
+    body: '{}'
+  });
+  return r.ok;
+}
+
+/** Ensure the tenant has a library container, idempotently. */
+export async function ensureVault(userId, subdomain, email) {
+  if (!VAULT_IMAGE) return { changed: false, reason: 'disabled' };
+  const bucketDir = await bucketDirFor(userId);
+  if (!bucketDir) return { changed: false, reason: 'no-bucket' };
+  const name = `ophq-vault-${subdomain}`;
+  try {
+    const { stdout } = await exec('docker', ['inspect', '-f', '{{.State.Running}}', name]);
+    if (stdout.trim() === 'true') { await bootstrapVault(userId, subdomain, email, 3); return { changed: false, reason: 'already-running' }; }
+  } catch { /* not present */ }
+  const r = await startVaultContainer({ subdomain, bucketDir });
+  if (!r.started) return { changed: false, reason: r.reason };
+  await bootstrapVault(userId, subdomain, email);
+  return { changed: true };
+}
+
 export async function provisionForUser(user) {
   const existing = await getInstanceForUser(user.id);
   if (existing) return existing;
@@ -326,6 +478,9 @@ export async function provisionForUser(user) {
     configureEngine(subdomain); // fire-and-forget slicer setup
     if (bucketDir) registerBucketFolder(subdomain);
   }
+  // Fire-and-forget: a slow library must not hold up provisioning, and it is
+  // reconciled on the storage path anyway.
+  ensureVault(user.id, subdomain, user.email).catch(() => {});
 
   const status = engine.started ? 'running' : 'provisioned';
   const { rows: upd } = await pool.query(
