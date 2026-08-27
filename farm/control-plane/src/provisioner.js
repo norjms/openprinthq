@@ -40,9 +40,16 @@ const BUCKET_MOUNT_ROOT = process.env.OPHQ_ENGINE_BUCKET_MOUNT_ROOT || '';
 const BUCKET_MOUNT_TARGET = process.env.OPHQ_ENGINE_BUCKET_MOUNT_TARGET || '/app/external/bucket';
 const BUCKET_FOLDER_NAME = process.env.OPHQ_ENGINE_BUCKET_FOLDER_NAME || 'OpenPrintHQ Files';
 
-// The per-tenant model library (our build of GyroidVault). Unset disables it and
-// the Files tab falls back to the engine library, which is what a deployment
-// without the image should do rather than showing a broken tab.
+// The per-tenant model library (GyroidVault, AGPL-3.0, used UNMODIFIED). Unset
+// disables it and the Files tab falls back to the engine library, which is what
+// a deployment without it should do rather than showing a broken tab.
+//
+// The upstream public image is run as-is and themed at start by copying one
+// stylesheet in. An earlier version built a derived image, which worked but
+// published to a package GitHub only lets you make public through the web UI,
+// so every host would have needed registry credentials to pull it. Theming in
+// place removes the artifact, the credential and the visibility problem, and
+// upstream upgrades become a tag change.
 const VAULT_IMAGE = process.env.OPHQ_VAULT_IMAGE || '';
 // Where the tenant bucket appears inside the library container.
 const VAULT_LIBRARY_PATH = '/library';
@@ -340,8 +347,29 @@ async function startVaultContainer({ subdomain, bucketDir }) {
       '--label', 'openprinthq.role=vault',
       VAULT_IMAGE
     ]);
+    await applyVaultTheme(name);
     return { started: true };
   } catch (e) { return { started: false, reason: e.message }; }
+}
+
+/**
+ * Theme the library in place to match the surrounding application.
+ *
+ * GyroidVault selects a theme with a [data-theme] attribute backed by CSS
+ * custom properties, so this is one extra stylesheet plus a changed default,
+ * with no source modification. Best effort throughout: an upstream markup
+ * change should cost the theme, never the tenant's library.
+ */
+async function applyVaultTheme(name) {
+  const css = new URL('./data/vault-theme.css', import.meta.url).pathname;
+  try {
+    await exec('docker', ['cp', css, `${name}:/app/public/css/ophq-theme.css`]);
+    // Delimiter is '#', because the line being replaced contains '||'.
+    await exec('docker', ['exec', name, 'sh', '-c',
+      "sed -i \"s#getItem('gv_theme') || 'glass'#getItem('gv_theme') || 'openprinthq'#g\" /app/public/index.html && " +
+      "sed -i 's#<link rel=\"stylesheet\" href=\"/css/style.css\">#<link rel=\"stylesheet\" href=\"/css/style.css\">\\n  <link rel=\"stylesheet\" href=\"/css/ophq-theme.css\">#' /app/public/index.html"]);
+    return true;
+  } catch { return false; }
 }
 
 /**
