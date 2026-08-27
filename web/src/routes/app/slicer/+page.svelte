@@ -12,14 +12,31 @@
   // Slicer engines. OrcaSlicer is the built-in default; the rest are planned
   // (see the open-source credits on the legal page). Selecting a "soon" engine
   // is disabled until its backend lands.
-  const ENGINES = [
-    { key: 'orca', name: 'OrcaSlicer', abbr: 'O', color: '#00a352', ready: true },
+  // `ready` is not hardcoded: it comes from the deployment. An engine is usable
+  // when the control-plane has a workspace image configured for it, so adding a
+  // slicer is a config change and this list never goes stale. Hardcoding it is
+  // why Bambu and Prusa stayed unselectable after their images shipped.
+  const ENGINES = $state([
+    { key: 'orca', name: 'OrcaSlicer', abbr: 'O', color: '#00a352', ready: false },
     { key: 'bambu', name: 'BambuStudio', abbr: 'B', color: '#16b978', ready: false },
     { key: 'prusa', name: 'PrusaSlicer', abbr: 'P', color: '#fa6831', ready: false },
     { key: 'cura', name: 'Cura', abbr: 'C', color: '#14aaf5', ready: false },
     { key: 'creality', name: 'CrealityPrint', abbr: 'CP', color: '#059b8f', ready: false },
     { key: 'elegoo', name: 'ElegooSlicer', abbr: 'E', color: '#2b2b2b', ready: false }
-  ];
+  ]);
+
+  async function loadEngines() {
+    try {
+      const r = await api.slicerWorkspaceEngines();
+      const avail = new Set(r?.engines || []);
+      for (const e of ENGINES) e.ready = avail.has(e.key);
+      // Do not strand the user on an engine this deployment cannot run.
+      if (!ENGINES.find((x) => x.key === engine)?.ready) {
+        const first = ENGINES.find((x) => x.ready);
+        if (first) engine = first.key;
+      }
+    } catch { /* leave everything unselectable rather than promising a slicer */ }
+  }
   let engine = $state('orca');
   function selectEngine(k) {
     const e = ENGINES.find((x) => x.key === k);
@@ -55,6 +72,9 @@
   let wsBusy = $state(false);
   let wsError = $state(null);
   let wsFull = $state(false);
+  // True once a session we were showing has ended, so the empty state can say
+  // "closed" rather than looking like it never started.
+  let justClosed = $state(false);
   let poll = null;
   // Set by "Open in slicer" on the Files page. The session fetches this file at
   // startup; a running session cannot be given one, since the container
@@ -66,19 +86,27 @@
     try {
       const r = await api.slicerWorkspace(engine);
       wsConfigured = !!r.configured;
+      const wasRunning = !!wsUrl;
       wsUrl = r.running ? r.url : null;
       wsStatus = r.status || null;
       // A container reports "starting" before it will accept a connection, so
       // keep polling until it is actually up rather than framing a dead URL.
       if (r.running && String(r.status || '').toLowerCase() !== 'running') schedulePoll();
+      // Keep watching a live session. When the slicer is closed the session
+      // ends, and the embedded URL stops being valid: left alone the frame
+      // falls back to the workspace host's own dashboard, which is confusing and
+      // is not ours. Drop the frame and show our own guidance instead.
+      else if (r.running) schedulePoll(10000);
+      else if (wasRunning) { wsFull = false; justClosed = true; }
     } catch { wsConfigured = false; }
   }
-  function schedulePoll() {
+  function schedulePoll(ms = 4000) {
     clearTimeout(poll);
-    poll = setTimeout(wsLoad, 4000);
+    poll = setTimeout(wsLoad, ms);
   }
   async function wsStart() {
     wsBusy = true; wsError = null;
+    justClosed = false;
     try {
       const r = await api.slicerWorkspaceStart(engine, pendingFileId);
       wsUrl = r.url; wsStatus = r.status;
@@ -100,6 +128,7 @@
     if (f) pendingFileId = f;
     pendingFileName = q.get('name');
     load();
+    loadEngines();
     wsLoad();
     window.addEventListener('keydown', onKey);
     return () => { clearTimeout(poll); window.removeEventListener('keydown', onKey); };
@@ -171,7 +200,23 @@
         <div class="wsempty"><p class="muted">Starting your slicer session. This takes a few seconds the first time.</p></div>
       {:else}
         <div class="wsempty">
-          <p class="muted">Run the full slicer in your browser, with your own persistent workspace.</p>
+          {#if justClosed}
+            <p class="lead">Slicer closed.</p>
+            <p class="muted">Your presets, printers and downloaded models are kept, so opening it
+              again picks up where you left off.</p>
+          {:else}
+            <p class="lead">Run the full slicer in your browser.</p>
+          {/if}
+          <ol class="steps">
+            <li>Choose a slicer above, then <b>Open slicer</b>.</li>
+            <li>First time only: pick your printer and filament in the slicer's setup wizard.
+              OpenPrintHQ is added as a print destination automatically.</li>
+            <li>Bring in a model: use <b>Open in slicer</b> on the Files page, or run
+              <code>ophq-get</code> in the slicer's terminal to pull from your library.</li>
+            <li>Slice, then <b>Send</b>. The plate lands in your print queue.</li>
+          </ol>
+          <p class="muted small">Only one slicer runs at a time. Switching stops the other one to
+            free its memory, and your work is kept either way.</p>
         </div>
       {/if}
     </div>
@@ -230,7 +275,14 @@
   .wsbar { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; padding: 0.7rem 1rem; border-bottom: 1px solid var(--ophq-border); }
   .workspace iframe { display: block; width: 100%; height: 72vh; min-height: 460px; border: 0; background: #0b0e13; }
   .wsempty { padding: 2.2rem 1rem; text-align: center; }
-  .wsempty p { margin: 0; }
+  .wsempty p { margin: 0 0 0.5rem; }
+  .wsempty { text-align: left; max-width: 46rem; margin-inline: auto; }
+  .wsempty .lead { font-weight: 600; font-size: 1.02rem; }
+  .steps { margin: 0.6rem 0 0.8rem; padding-left: 1.2rem; color: var(--ophq-muted); }
+  .steps li { margin: 0.3rem 0; line-height: 1.45; }
+  .steps b { color: var(--ophq-text); }
+  .steps code { font-family: ui-monospace, monospace; font-size: 0.88em;
+                padding: 0.05rem 0.3rem; border-radius: 4px; border: 1px solid var(--ophq-border); }
   .pill { font-size: 0.78rem; padding: 0.12rem 0.5rem; border-radius: 999px;
           border: 1px solid var(--ophq-border); color: var(--ophq-muted); }
   .workspace.full { position: fixed; inset: 0; z-index: 200; margin: 0; border-radius: 0; display: flex; flex-direction: column; }
