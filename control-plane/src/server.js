@@ -19,8 +19,11 @@ import { migrate, upsertUser, getUserByEmail, getInstanceForUser, getCompatibleP
   getUserLogSink, setUserLogSink, listUserLogSinks,
   getKasmRow, setKasmIdentity, setKasmSession, clearKasmSession,
   createPrintHostToken, resolvePrintHostToken, purgePrintHostTokens,
-  purgeExpiredPrintHostTokens, userByKasmId } from './db.js';
+  purgeExpiredPrintHostTokens, userByKasmId,
+  getTenantStorage, setTenantStorage, setTenantQuota, listTenantStorage } from './db.js';
 import { createAuthentikUser, linkAuthentikUser, authentikUserExists, authentikConfigured, OWNER_GROUP } from './authentik.js';
+import { garageConfigured, ensureTenantStorage, usage as storageUsage,
+  setQuota as setBucketQuota, defaultQuotaBytes, clusterHealth as storageHealth } from './garage.js';
 import { kasmConfigured, kasmEngines, kasmImageFor, ensureKasmUser, ensureSession as ensureKasmSession,
   findSession as findKasmSession, destroySession as destroyKasmSession,
   sessionStatus as kasmSessionStatus } from './kasm.js';
@@ -448,6 +451,108 @@ app.post('/printhost/api/files/local', async (req, reply) => {
     },
     openprinthq: { file_id: fileId, queued, queue_error: queueError }
   };
+});
+
+// ---- tenant object storage ----------------------------------------------
+// Provisioned on first use: a bucket and a key scoped to it, per tenant.
+//
+// Only provisioning and accounting happen here. The credentials are handed to
+// whatever needs them (a slicer session, the engine) and those talk to the
+// object store DIRECTLY over the network. Bulk data must never be proxied
+// through this service, which may be running off-site.
+async function ensureStorageFor(user, req) {
+  let row = await getTenantStorage(user.id);
+  if (row) return row;
+  const s = await ensureTenantStorage(user.id, user.email, defaultQuotaBytes());
+  await setTenantStorage(user.id, s);
+  req.log.info({ userId: user.id, bucket: s.bucket }, 'provisioned tenant storage');
+  return getTenantStorage(user.id);
+}
+
+app.get('/api/storage', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  if (!garageConfigured()) return { configured: false };
+  try {
+    const row = await ensureStorageFor(user, req);
+    const u = await storageUsage(row.bucket).catch(() => null);
+    return {
+      configured: true,
+      bucket: row.bucket,
+      quotaBytes: row.quota_bytes == null ? null : Number(row.quota_bytes),
+      usedBytes: u?.bytes ?? null,
+      objects: u?.objects ?? null,
+      overQuota: u?.overQuota ?? false
+    };
+  } catch (e) {
+    req.log.error({ err: e.message }, 'tenant storage lookup failed');
+    reply.code(502).send({ error: e.message });
+  }
+});
+
+// Credentials for a client that will talk to the object store directly.
+// Deliberately a separate call from the summary above so the secret is not
+// handed out on every page load.
+app.get('/api/storage/credentials', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  if (!garageConfigured()) { reply.code(503).send({ error: 'object storage not configured' }); return; }
+  try {
+    const row = await ensureStorageFor(user, req);
+    return {
+      endpoint: process.env.OPHQ_GARAGE_S3_ENDPOINT || '',
+      region: process.env.OPHQ_GARAGE_S3_REGION || 'garage',
+      bucket: row.bucket,
+      accessKeyId: row.access_key_id,
+      secretAccessKey: row.secret_key
+    };
+  } catch (e) {
+    reply.code(502).send({ error: e.message });
+  }
+});
+
+// ---- admin: quotas -------------------------------------------------------
+app.get('/api/admin/storage', async (req, reply) => {
+  const owner = await requireOwner(req, reply); if (!owner) return;
+  const rows = await listTenantStorage();
+  const out = [];
+  for (const r of rows) {
+    const u = await storageUsage(r.bucket).catch(() => null);
+    out.push({
+      userId: r.user_id, email: r.email, bucket: r.bucket,
+      quotaBytes: r.quota_bytes == null ? null : Number(r.quota_bytes),
+      usedBytes: u?.bytes ?? null, objects: u?.objects ?? null,
+      overQuota: u?.overQuota ?? false
+    });
+  }
+  return { defaultQuotaBytes: defaultQuotaBytes(), tenants: out };
+});
+
+app.put('/api/admin/storage/:userId/quota', async (req, reply) => {
+  const owner = await requireOwner(req, reply); if (!owner) return;
+  const userId = Number(req.params.userId);
+  const raw = req.body?.quotaBytes;
+  // null is meaningful: it removes the limit rather than setting it to zero.
+  const quota = raw === null ? null : Number(raw);
+  if (quota !== null && (!Number.isFinite(quota) || quota < 0)) {
+    return reply.code(400).send({ error: 'quotaBytes must be a non-negative number, or null for unlimited' });
+  }
+  const row = await getTenantStorage(userId);
+  if (!row) return reply.code(404).send({ error: 'no storage provisioned for that account' });
+  try {
+    await setBucketQuota(row.bucket_id, quota);
+    await setTenantQuota(userId, quota);
+    req.log.info({ userId, quota }, 'tenant storage quota changed');
+    const u = await storageUsage(row.bucket).catch(() => null);
+    return { userId, bucket: row.bucket, quotaBytes: quota, usedBytes: u?.bytes ?? null };
+  } catch (e) {
+    reply.code(502).send({ error: e.message });
+  }
+});
+
+app.get('/api/admin/storage/health', async (req, reply) => {
+  const owner = await requireOwner(req, reply); if (!owner) return;
+  if (!garageConfigured()) return { configured: false };
+  try { return { configured: true, ...(await storageHealth()) }; }
+  catch (e) { reply.code(502).send({ error: e.message }); }
 });
 
 // ---- health -------------------------------------------------------------
