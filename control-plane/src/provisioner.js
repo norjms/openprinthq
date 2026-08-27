@@ -9,7 +9,7 @@
 
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { pool, adminPool, getInstanceForUser } from './db.js';
+import { pool, adminPool, getInstanceForUser, getTenantStorage } from './db.js';
 
 const exec = promisify(execFile);
 
@@ -25,6 +25,19 @@ const PG_HOST = process.env.OPHQ_PG_HOST || '10.10.10.254';
 const PG_PORT = process.env.OPHQ_PG_PORT || '5432';
 const PG_USER = process.env.OPHQ_PG_USER || 'ophq_app';
 const PG_PASS = process.env.OPHQ_PG_PASS || '';
+
+// Host directory where the tenant object-store buckets are exposed, one
+// subdirectory per bucket, by a host-side rclone mount. Each engine gets a bind
+// mount of its OWN bucket only, read-only, so the plate a slicer wrote appears
+// in the library with no transfer at all.
+//
+// Unset disables the whole feature, which is how a deployment without the mount
+// (the test tier, or any self-hoster) keeps working unchanged.
+const BUCKET_MOUNT_ROOT = process.env.OPHQ_ENGINE_BUCKET_MOUNT_ROOT || '';
+// Where it lands inside the engine. Also the external_path registered with the
+// engine's library, so the two must agree.
+const BUCKET_MOUNT_TARGET = process.env.OPHQ_ENGINE_BUCKET_MOUNT_TARGET || '/app/external/bucket';
+const BUCKET_FOLDER_NAME = process.env.OPHQ_ENGINE_BUCKET_FOLDER_NAME || 'OpenPrintHQ Files';
 
 function slugify(email) {
   return (email.split('@')[0] || 'user')
@@ -68,7 +81,7 @@ function engineDatabaseUrl(dbName) {
   return `postgresql+asyncpg://${u}:${p}@${PG_HOST}:${PG_PORT}/${dbName}`;
 }
 
-async function startEngineContainer({ subdomain, port, dbName }) {
+async function startEngineContainer({ subdomain, port, dbName, bucketDir = null }) {
   if (!ENGINE_IMAGE) return { started: false, reason: 'no-engine-image' };
   const name = `ophq-${subdomain}`;
   const databaseUrl = engineDatabaseUrl(dbName);
@@ -89,6 +102,15 @@ async function startEngineContainer({ subdomain, port, dbName }) {
       '-e', `DATABASE_URL=${databaseUrl}`,
       '-v', `ophq_${subdomain}_data:/app/data`,
       '-v', `ophq_${subdomain}_logs:/app/logs`,
+      // rslave, because the source is a FUSE mount made on the host AFTER this
+      // directory exists. A plain bind captures the empty directory as it was at
+      // container start and never sees the filesystem that later appears there.
+      // readonly is not belt-and-braces: writes go to the store via presigned
+      // URLs, and a writable mount would let the engine mutate a tenant bucket
+      // through a key that is shared across tenants.
+      ...(bucketDir
+        ? ['--mount', `type=bind,source=${bucketDir},target=${BUCKET_MOUNT_TARGET},readonly,bind-propagation=rslave`]
+        : []),
       '--label', `openprinthq.tenant=${subdomain}`,
       ENGINE_IMAGE
     ]);
@@ -100,6 +122,55 @@ async function startEngineContainer({ subdomain, port, dbName }) {
 
 // After the engine boots, enable the built-in OrcaSlicer (shared sidecar).
 // Best-effort: never fail provisioning if the engine is slow or the call errors.
+/**
+ * The host directory holding this tenant's bucket, or null if the feature is
+ * off or the tenant has no bucket yet.
+ *
+ * Deliberately does not create the directory: it is produced by the rclone
+ * mount, and creating it ourselves would make a missing or dead mount look like
+ * an empty library instead of failing visibly.
+ */
+async function bucketDirFor(userId) {
+  if (!BUCKET_MOUNT_ROOT) return null;
+  try {
+    const row = await getTenantStorage(userId);
+    if (!row?.bucket) return null;
+    return `${BUCKET_MOUNT_ROOT.replace(/\/+$/, '')}/${row.bucket}`;
+  } catch { return null; }
+}
+
+/**
+ * Register the bind-mounted bucket with the engine's library as a read-only
+ * external folder, so a plate written straight to object storage shows up
+ * without anything moving it.
+ *
+ * Idempotent by name: provisioning is retried, and the engine has no upsert.
+ */
+async function registerBucketFolder(subdomain) {
+  const base = `http://ophq-${subdomain}:8000`;
+  try {
+    const list = await fetch(base + '/api/v1/library/folders', { headers: { accept: 'application/json' } });
+    if (list.ok) {
+      const d = await list.json().catch(() => []);
+      const arr = Array.isArray(d) ? d : (d.folders || d.items || []);
+      if (arr.some((f) => f?.name === BUCKET_FOLDER_NAME)) return true;
+    }
+    const r = await fetch(base + '/api/v1/library/folders/external', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify({
+        name: BUCKET_FOLDER_NAME,
+        external_path: BUCKET_MOUNT_TARGET,
+        // Never writable. The store is written via presigned URLs; the mount
+        // uses a key shared across tenants and must not be a write path.
+        readonly: true,
+        show_hidden: false
+      })
+    });
+    return r.ok;
+  } catch { return false; }
+}
+
 async function configureEngine(subdomain) {
   const base = `http://ophq-${subdomain}:8000`;
   for (let i = 0; i < 20; i++) {
@@ -139,8 +210,12 @@ export async function provisionForUser(user) {
   const port = BASE_PORT + inst.id;
 
   await createTenantDb(dbName);
-  const engine = await startEngineContainer({ subdomain, port, dbName });
-  if (engine.started) configureEngine(subdomain); // fire-and-forget slicer setup
+  const bucketDir = await bucketDirFor(user.id);
+  const engine = await startEngineContainer({ subdomain, port, dbName, bucketDir });
+  if (engine.started) {
+    configureEngine(subdomain); // fire-and-forget slicer setup
+    if (bucketDir) registerBucketFolder(subdomain);
+  }
 
   const status = engine.started ? 'running' : 'provisioned';
   const { rows: upd } = await pool.query(
