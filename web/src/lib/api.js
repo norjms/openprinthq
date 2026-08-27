@@ -342,7 +342,10 @@ export const api = {
   // In-browser slicer workspace (Kasm). The control-plane owns the session, so
   // the browser only ever receives a connect URL it can drop into an iframe.
   slicerWorkspace: (engine) => req('/slicer/session' + (engine ? '?engine=' + encodeURIComponent(engine) : '')),
-  slicerWorkspaceStart: (engine) => req('/slicer/session', { method: 'POST', body: JSON.stringify({ engine }) }),
+  // fileId is optional: when set, the session fetches that library file into its
+  // Uploads folder at startup, so the user opens straight into their model.
+  slicerWorkspaceStart: (engine, fileId) =>
+    req('/slicer/session', { method: 'POST', body: JSON.stringify(fileId != null ? { engine, fileId } : { engine }) }),
   slicerWorkspaceStop: () => req('/slicer/session', { method: 'DELETE' }),
   slicerWorkspaceEngines: () => req('/slicer/engines'),
   // Compatible process/filament preset names for a printer (control-plane join).
