@@ -192,6 +192,12 @@ export const api = {
   // ---- integrations (Home Assistant / Homepage / Prometheus) ----
   integrationToken: () => req('/integration-token'),
   regenIntegrationToken: () => req('/integration-token/regenerate', { method: 'POST' }),
+  // ---- access keys: durable print-host tokens for the browser extension ----
+  // Control-plane, not engine: these have to resolve to a tenant before any
+  // engine is known, which an engine-held key cannot do.
+  accessKeys: () => req('/access-keys'),
+  createAccessKey: (body) => req('/access-keys', { method: 'POST', body: JSON.stringify(body) }),
+  revokeAccessKey: (id) => req('/access-keys/' + encodeURIComponent(id), { method: 'DELETE' }),
   // ---- archives / timelapses ----
   archives: (limit = 60) => req('/engine/api/v1/archives/?limit=' + limit),
   archiveThumbUrl: (id) => base + '/engine/api/v1/archives/' + id + '/thumbnail',

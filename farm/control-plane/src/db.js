@@ -255,6 +255,16 @@ export async function migrate() {
     );
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_printhost_tokens_user ON printhost_tokens (user_id);`);
+  // Not every print-host token is a slicer session token any more. The browser
+  // extension mints a durable one, and the slicer bootstrap purges a user's
+  // tokens on every session start, so without a kind to purge BY, starting a
+  // slicer would silently sign the extension out.
+  await pool.query(`ALTER TABLE printhost_tokens ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'slicer';`);
+  // A stable handle for revoke and for listing, so neither the UI nor the URL
+  // of a revoke request ever carries the secret itself.
+  await pool.query(`ALTER TABLE printhost_tokens ADD COLUMN IF NOT EXISTS token_id TEXT;`);
+  await pool.query(`UPDATE printhost_tokens SET token_id = md5(token) WHERE token_id IS NULL;`);
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_printhost_tokens_tid ON printhost_tokens (token_id);`);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS kasm_sessions (
       user_id       INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -816,25 +826,56 @@ export async function clearKasmSession(userId) {
 // into the queue. Deliberately short-lived and scoped to one user: the slicer
 // runs in a desktop the user controls, so this token is the ONLY thing it gets,
 // never printer credentials.
-export async function createPrintHostToken(userId, token, label, expiresAt) {
-  await pool.query(
-    'INSERT INTO printhost_tokens (token, user_id, label, expires_at) VALUES ($1,$2,$3,$4)',
-    [token, userId, label || null, expiresAt || null]);
-  return token;
+export async function createPrintHostToken(userId, token, label, expiresAt, kind = 'slicer') {
+  // token_id is derived in SQL and read back rather than recomputed in JS, so
+  // the handle the caller hands out can never disagree with the stored one.
+  const { rows } = await pool.query(
+    `INSERT INTO printhost_tokens (token, token_id, user_id, label, expires_at, kind)
+     VALUES ($1, md5($1), $2, $3, $4, $5) RETURNING token_id`,
+    [token, userId, label || null, expiresAt || null, kind]);
+  return { token, tokenId: rows[0].token_id };
 }
 export async function resolvePrintHostToken(token) {
   const { rows } = await pool.query(
-    `SELECT t.user_id, t.expires_at, u.email FROM printhost_tokens t
+    `SELECT t.user_id, t.expires_at, t.kind, u.email FROM printhost_tokens t
      JOIN users u ON u.id = t.user_id
      WHERE t.token = $1`, [token]);
   const r = rows[0];
   if (!r) return null;
   if (r.expires_at && new Date(r.expires_at).getTime() < Date.now()) return null;
   pool.query('UPDATE printhost_tokens SET last_used_at = now() WHERE token = $1', [token]).catch(() => {});
-  return { userId: r.user_id, email: r.email };
+  return { userId: r.user_id, email: r.email, kind: r.kind || 'slicer' };
 }
-export async function purgePrintHostTokens(userId) {
-  await pool.query('DELETE FROM printhost_tokens WHERE user_id = $1', [userId]);
+/**
+ * Tokens a user can see and manage. The secret is never returned: a listing is
+ * for recognising and revoking a credential, not for reading it back. A token
+ * shown once at creation and never again is the only version of this that stays
+ * true after the listing endpoint is ever exposed by accident.
+ */
+export async function listPrintHostTokens(userId) {
+  const { rows } = await pool.query(
+    `SELECT token_id, label, kind, created_at, last_used_at, expires_at,
+            left(token, 6) AS token_prefix
+       FROM printhost_tokens WHERE user_id = $1 ORDER BY created_at DESC`, [userId]);
+  return rows;
+}
+export async function revokePrintHostToken(userId, tokenId) {
+  const { rowCount } = await pool.query(
+    'DELETE FROM printhost_tokens WHERE user_id = $1 AND token_id = $2', [userId, tokenId]);
+  return rowCount > 0;
+}
+export async function countPrintHostTokens(userId, kind) {
+  const { rows } = await pool.query(
+    'SELECT count(*)::int AS n FROM printhost_tokens WHERE user_id = $1 AND kind = $2', [userId, kind]);
+  return rows[0]?.n ?? 0;
+}
+/**
+ * Clear a user's tokens of one kind. Defaults to 'slicer' because the only
+ * caller is the slicer bootstrap, and purging every kind there would revoke the
+ * user's browser extension every time they opened a slicer session.
+ */
+export async function purgePrintHostTokens(userId, kind = 'slicer') {
+  await pool.query('DELETE FROM printhost_tokens WHERE user_id = $1 AND kind = $2', [userId, kind]);
 }
 export async function purgeExpiredPrintHostTokens() {
   await pool.query('DELETE FROM printhost_tokens WHERE expires_at IS NOT NULL AND expires_at < now()');

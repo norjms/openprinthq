@@ -4,6 +4,7 @@
   import NotificationSettings from '$lib/components/NotificationSettings.svelte';
   import ObicoSettings from '$lib/components/ObicoSettings.svelte';
   import ApiKeys from '$lib/components/ApiKeys.svelte';
+  import AccessKeys from '$lib/components/AccessKeys.svelte';
   import Connectors from '$lib/components/Connectors.svelte';
   import LookAndFeel from '$lib/components/LookAndFeel.svelte';
   import GlobalAdmin from '$lib/components/GlobalAdmin.svelte';
@@ -309,6 +310,8 @@ scrape_configs:
     <p class="muted tiny">Add to <code>prometheus.yml</code>; the metrics feed Grafana dashboards.</p>
   {/if}
 </div>
+
+<AccessKeys />
 
 <ApiKeys />
 
