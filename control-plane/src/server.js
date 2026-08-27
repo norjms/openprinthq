@@ -30,7 +30,7 @@ import { kasmConfigured, kasmEngines, kasmImageFor, ensureKasmUser, ensureSessio
   findSession as findKasmSession, destroySession as destroyKasmSession,
   sessionStatus as kasmSessionStatus } from './kasm.js';
 import { registerConnectorRoutes, connectorOnline, isConnectorOnline, proxyViaConnector, openTcpStream, connectorEvictionCount, connectorHasDuplicateAgents, connectorClientIdentity } from './connector.js';
-import { provisionForUser, ensureEngineBucketMount, ensureVault, vaultLogin, vaultScan, vaultBase, vaultEnabled } from './provisioner.js';
+import { provisionForUser, ensureEngineBucketMount, ensureVault, vaultLogin, vaultScan, vaultBase, vaultEnabled, joinVaultNetwork } from './provisioner.js';
 import { startBatch, activeBatchForUser, advanceBatch, cancelBatch, startOrchestrator } from './batch.js';
 import { activateRoute, deactivateRoute, reconcileRoutes } from './routing.js';
 import { generateKeyPair, encryptPrivate, invalidateSigningCache, ensureKeyPair, fingerprint } from './signing.js';
@@ -1854,6 +1854,10 @@ app.get('/__ophq/session', async (req, reply) => {
   const inst = await getInstanceForUser(user.id);
   if (!inst?.subdomain) return reply.code(409).send({ error: 'no instance for this account' });
   try {
+    // Re-attach before anything else. A promotion recreates this container and
+    // drops the network attachment, so the first request after a deploy would
+    // otherwise fail with the library looking unreachable.
+    await joinVaultNetwork(inst.subdomain).catch(() => {});
     await ensureVault(user.id, inst.subdomain, user.email).catch(() => {});
     const session = await vaultLogin(inst.subdomain);
     if (!session) return reply.code(502).send({ error: 'library not ready' });

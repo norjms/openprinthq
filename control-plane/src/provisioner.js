@@ -362,14 +362,7 @@ async function startVaultContainer({ subdomain, bucketDir }) {
       '--label', 'openprinthq.role=vault',
       VAULT_IMAGE
     ]);
-    // Join the control-plane to that network so the proxy can reach the library.
-    // The alias matters: on a user-defined network a container answers to its
-    // own name, not its compose service name, so the library's configured
-    // print-host URL would not resolve without it.
-    const self = process.env.HOSTNAME || '';
-    if (self) {
-      await exec('docker', ['network', 'connect', '--alias', 'control-plane', net, self]).catch(() => {});
-    }
+    await joinVaultNetwork(subdomain);
     await applyVaultTheme(name);
     invalidateVaultSession(subdomain);
     return { started: true };
@@ -526,6 +519,33 @@ export async function vaultScan(subdomain) {
   return r.ok;
 }
 
+/**
+ * Attach the control-plane to a tenant library's network.
+ *
+ * Idempotent, and called on EVERY reconcile rather than only at container
+ * creation. `docker network connect` is runtime state that compose knows
+ * nothing about, so recreating the control-plane, which every promotion does,
+ * silently drops the attachment and the proxy can no longer reach any library.
+ * The symptom is "library unreachable: fetch failed" with both containers
+ * healthy, which points at the library rather than at the network.
+ *
+ * The alias matters too: on a user-defined network a container answers to its
+ * own name, not its compose service name, so the library's configured
+ * print-host URL would not resolve without it.
+ */
+export async function joinVaultNetwork(subdomain) {
+  const self = process.env.HOSTNAME || '';
+  if (!self) return false;
+  const net = `ophq-vault-net-${subdomain}`;
+  try {
+    await exec('docker', ['network', 'connect', '--alias', 'control-plane', net, self]);
+    return true;
+  } catch (e) {
+    // Already attached is the normal case and not an error.
+    return /already exists|already connected/i.test(e.message || '');
+  }
+}
+
 /** Ensure the tenant has a library container, idempotently. */
 export async function ensureVault(userId, subdomain, email) {
   if (!VAULT_IMAGE) return { changed: false, reason: 'disabled' };
@@ -534,7 +554,13 @@ export async function ensureVault(userId, subdomain, email) {
   const name = `ophq-vault-${subdomain}`;
   try {
     const { stdout } = await exec('docker', ['inspect', '-f', '{{.State.Running}}', name]);
-    if (stdout.trim() === 'true') { await bootstrapVault(userId, subdomain, email, 3); return { changed: false, reason: 'already-running' }; }
+    if (stdout.trim() === 'true') {
+      // Re-attach first: the container can be running while the control-plane
+      // has lost its route to it, which is exactly the state a promotion leaves.
+      await joinVaultNetwork(subdomain);
+      await bootstrapVault(userId, subdomain, email, 3);
+      return { changed: false, reason: 'already-running' };
+    }
   } catch { /* not present */ }
   const r = await startVaultContainer({ subdomain, bucketDir });
   if (!r.started) return { changed: false, reason: r.reason };
