@@ -104,15 +104,16 @@
 
   // ---- upload ----
   let uploading = $state(false);
+  let upPct = $state(0);
   let upErr = $state(null);
   let fileInput;
   async function onUpload(e) {
     const f = e.target.files?.[0];
     if (!f) return;
     uploading = true; upErr = null;
-    try { await api.uploadFile(f); await load(); }
+    try { await api.uploadFile(f, (p) => { upPct = p; }); await load(); }
     catch (x) { upErr = x.message || 'upload failed'; }
-    finally { uploading = false; e.target.value = ''; }
+    finally { uploading = false; upPct = 0; e.target.value = ''; }
   }
 
   // ---- batch print dialog (temperature-staggered) ----
@@ -351,7 +352,7 @@
     <button class="btn btn-ghost btn-sm" onclick={load}>Refresh</button>
     <input type="file" bind:this={fileInput} onchange={onUpload} hidden accept=".3mf,.stl,.gcode,.gco,.obj" />
     <button class="btn btn-primary btn-sm" onclick={() => fileInput.click()} disabled={uploading}>
-      {uploading ? 'Uploading…' : '+ Upload'}
+      {uploading ? (upPct > 0 && upPct < 100 ? `Uploading ${upPct}%` : 'Uploading…') : '+ Upload'}
     </button>
   </div>
 </div>
