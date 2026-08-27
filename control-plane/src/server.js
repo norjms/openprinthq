@@ -19,6 +19,7 @@ import { migrate, upsertUser, getUserByEmail, getInstanceForUser, getCompatibleP
   getUserLogSink, setUserLogSink, listUserLogSinks,
   getKasmRow, setKasmIdentity, setKasmSession, clearKasmSession,
   createPrintHostToken, resolvePrintHostToken, purgePrintHostTokens,
+  listPrintHostTokens, revokePrintHostToken, countPrintHostTokens,
   purgeExpiredPrintHostTokens, userByKasmId,
   getTenantStorage, setTenantStorage, setTenantQuota, listTenantStorage } from './db.js';
 import { createAuthentikUser, linkAuthentikUser, authentikUserExists, authentikConfigured, OWNER_GROUP } from './authentik.js';
@@ -596,8 +597,11 @@ app.get('/api/storage', async (req, reply) => {
 // off-site and gets the public name; a slicer session or the engine is on the
 // same network as the store and gets the LAN address, so a plate does not
 // hairpin out to the internet and back.
-app.post('/api/storage/presign', async (req, reply) => {
-  const user = await requireUser(req, reply); if (!user) return;
+// Shared by the signed-in path below and by the token-authenticated one under
+// /api/pub/v1. One implementation deliberately: the two callers differ only in
+// how the user was established, and a second copy is how a validation rule ends
+// up applying to browsers but not to the browser extension.
+async function presignForUser(user, req, reply) {
   if (!garageConfigured()) { reply.code(503).send({ error: 'object storage not configured' }); return; }
 
   const method = String(req.body?.method || 'PUT').toUpperCase();
@@ -643,6 +647,11 @@ app.post('/api/storage/presign', async (req, reply) => {
     req.log.error({ err: e.message }, 'presign failed');
     reply.code(502).send({ error: e.message });
   }
+}
+
+app.post('/api/storage/presign', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  return await presignForUser(user, req, reply);
 });
 
 // Ask the engine to re-index the mounted bucket folder.
@@ -650,9 +659,8 @@ app.post('/api/storage/presign', async (req, reply) => {
 // The store is written directly by the browser, so nothing tells the engine a
 // new object exists: it indexes on scan, not on open. Without this an upload
 // lands correctly and stays invisible until something else triggers a scan.
-app.post('/api/storage/rescan', async (req, reply) => {
-  const user = await requireUser(req, reply); if (!user) return;
-  const inst = await getInstanceForUser(user.id);
+async function rescanForUser(userId, reply) {
+  const inst = await getInstanceForUser(userId);
   const base = engineBase(inst);
   if (!base) return reply.code(409).send({ error: 'no running instance for this account' });
   try {
@@ -673,6 +681,53 @@ app.post('/api/storage/rescan', async (req, reply) => {
   } catch (e) {
     return reply.code(502).send({ error: 'engine unreachable: ' + e.message });
   }
+}
+
+app.post('/api/storage/rescan', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  return await rescanForUser(user.id, reply);
+});
+
+// ---- token-authenticated ingest (browser extension) ----------------------
+// Same two operations as the signed-in routes above, reached with a print-host
+// token instead of an Authentik session, so something that is not a browser tab
+// can put a file in the user's library.
+//
+// Under /api/pub/ because that prefix is the one the edge exempts from
+// forward-auth. That is not a naming preference: anywhere else, Authentik
+// intercepts the request and the token is never seen.
+//
+// Bulk still does not pass through here. The caller gets a presigned URL and
+// PUTs the bytes to the object store directly, exactly as the web uploader
+// does, which is the whole reason this is two small JSON calls rather than a
+// file upload endpoint.
+
+// Which ingest path this deployment supports, so a client does not have to
+// guess. Without object storage the library is the engine's own, and the
+// OctoPrint-compatible upload endpoint is the way in.
+app.get('/api/pub/v1/ingest/capabilities', async (req, reply) => {
+  const who = await printHostUser(req, reply); if (!who) return;
+  const inst = await getInstanceForUser(who.userId).catch(() => null);
+  return {
+    storage: garageConfigured(),
+    printhost: true,
+    instance: inst?.subdomain || null,
+    // Advisory only. The store enforces the real limit; this lets a client fail
+    // a 900 MB file early rather than after uploading it.
+    maxObjectBytes: 2 * 1024 * 1024 * 1024
+  };
+});
+
+app.post('/api/pub/v1/storage/presign', async (req, reply) => {
+  const who = await printHostUser(req, reply); if (!who) return;
+  const user = await getUserByEmail(who.email);
+  if (!user) return reply.code(401).send({ error: 'invalid API key' });
+  return await presignForUser(user, req, reply);
+});
+
+app.post('/api/pub/v1/storage/rescan', async (req, reply) => {
+  const who = await printHostUser(req, reply); if (!who) return;
+  return await rescanForUser(who.userId, reply);
 });
 
 // ---- admin: quotas -------------------------------------------------------
@@ -1510,6 +1565,68 @@ app.post('/api/integration-token/regenerate', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
   const token = await setIntegrationToken(user.id, 'ophq_' + randomBytes(24).toString('hex'));
   return { token };
+});
+
+// ---- durable access keys (browser extension, scripts) --------------------
+// The same print-host token a slicer session gets, but minted by the user and
+// with no session to expire with. It is the credential the browser extension
+// holds, and it is deliberately the SAME kind of credential rather than a new
+// one: it reaches the same three things (presign, rescan, print-host upload),
+// so a second token type would only mean two things to revoke.
+//
+// Kept apart from slicer tokens by `kind`, because the slicer bootstrap purges
+// a user's tokens on every session start.
+//
+// The secret is stored as written, matching the existing print-host and
+// integration tokens. Hashing at rest is the right end state and is a change to
+// make for all three at once, not one that should land here and leave the table
+// half one scheme and half the other.
+const MAX_EXT_KEYS = 10;
+
+app.get('/api/access-keys', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  const rows = await listPrintHostTokens(user.id);
+  return rows.map((r) => ({
+    id: r.token_id,
+    label: r.label,
+    kind: r.kind,
+    prefix: r.token_prefix,
+    createdAt: r.created_at,
+    lastUsedAt: r.last_used_at,
+    expiresAt: r.expires_at
+  }));
+});
+
+app.post('/api/access-keys', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  const label = String(req.body?.label || '').trim().slice(0, 80) || 'Browser extension';
+  // A cap, because there is no reason for an account to hold dozens and an
+  // unbounded list is how a leaked session quietly mints a permanent foothold.
+  if (await countPrintHostTokens(user.id, 'extension') >= MAX_EXT_KEYS) {
+    return reply.code(409).send({ error: 'key limit reached, revoke one first' });
+  }
+  // Optional expiry in days. No default: a key the user has to re-issue on a
+  // schedule they did not ask for is a key they will paste into a text file.
+  const days = Number(req.body?.expiresInDays || 0);
+  const expiresAt = days > 0 ? new Date(Date.now() + days * 86400000) : null;
+  const secret = 'ophqx_' + randomBytes(24).toString('base64url');
+  const { token, tokenId } = await createPrintHostToken(user.id, secret, label, expiresAt, 'extension');
+  req.log.info({ userId: user.id, label }, 'access key minted');
+  // The only time the secret is ever returned.
+  return reply.code(201).send({
+    token,
+    id: tokenId,
+    label,
+    expiresAt: expiresAt ? expiresAt.toISOString() : null
+  });
+});
+
+app.delete('/api/access-keys/:id', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  const ok = await revokePrintHostToken(user.id, String(req.params.id));
+  if (!ok) return reply.code(404).send({ error: 'no such key' });
+  req.log.info({ userId: user.id }, 'access key revoked');
+  return { revoked: true };
 });
 
 // ---- appearance (Look & Feel) ------------------------------------------
