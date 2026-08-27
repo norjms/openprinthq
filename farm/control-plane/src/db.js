@@ -675,6 +675,13 @@ export async function getUserByEmail(email) {
   return rows[0] || null;
 }
 
+// Lookup by id, for paths that carry a signed identity rather than an email:
+// the library host authenticates with a ticket, not with an SSO header.
+export async function getUserById(id) {
+  const { rows } = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
+  return rows[0] || null;
+}
+
 export async function countUsers() {
   const { rows } = await pool.query('SELECT COUNT(*)::int AS n FROM users');
   return rows[0].n;

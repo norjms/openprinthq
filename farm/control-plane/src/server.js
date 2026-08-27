@@ -5,8 +5,8 @@ import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
 import websocket from '@fastify/websocket';
 import { readFileSync } from 'node:fs';
-import { randomBytes, createPublicKey } from 'node:crypto';
-import { migrate, upsertUser, getUserByEmail, getInstanceForUser, getCompatiblePresets,
+import { randomBytes, createPublicKey, createHmac, timingSafeEqual } from 'node:crypto';
+import { migrate, upsertUser, getUserByEmail, getUserById, getInstanceForUser, getCompatiblePresets,
   getCircuits, setCircuit, getAutomation, setAutomation,
   createConnector, listConnectors, deleteConnector, setConnectorClientKey,
   getModelName, learnModelName, listModelNames, upsertModelNameForce, setModelNameLock, deleteModelName,
@@ -1924,6 +1924,40 @@ app.all('/api/engine/*', async (req, reply) => {
 // route below, which is why the origin has to be one we serve.
 const VAULT_HOST = process.env.OPHQ_VAULT_HOST || '';
 
+// The library host is NOT behind Authentik, and that is deliberate.
+//
+// It is framed by the Files tab. Authentik's authorize endpoint sends
+// X-Frame-Options: DENY and then renders a flow-executor page, so the SSO round
+// trip a first visit needs can never complete inside an iframe: the frame is
+// blocked and the tab shows a failure page even for a signed-in user.
+//
+// So the app, which IS behind Authentik, mints a short-lived signed ticket for
+// the user it already authenticated, and the library host trusts that instead.
+// Same shape as the print-host tokens: the trust comes from a secret only this
+// service holds, not from a session the browser has to establish in a frame.
+const VAULT_TICKET_TTL = 60; // seconds; it is redeemed immediately on frame load
+const VAULT_COOKIE = 'ophq_vault';
+
+function vaultSign(payload) {
+  return createHmac('sha256', GATEWAY_SECRET || 'ophq-vault').update(payload).digest('base64url');
+}
+function mintVaultTicket(userId) {
+  const body = `${userId}.${Math.floor(Date.now() / 1000) + VAULT_TICKET_TTL}`;
+  return `${body}.${vaultSign(body)}`;
+}
+/** Returns the user id, or null. Constant-time compare, and expiry is checked
+ *  before the signature is trusted for anything. */
+function readVaultTicket(t) {
+  const parts = String(t || '').split('.');
+  if (parts.length !== 3) return null;
+  const [uid, exp, sig] = parts;
+  const expect = vaultSign(`${uid}.${exp}`);
+  if (sig.length !== expect.length) return null;
+  if (!timingSafeEqual(Buffer.from(sig), Buffer.from(expect))) return null;
+  if (Number(exp) < Math.floor(Date.now() / 1000)) return null;
+  return Number(uid) || null;
+}
+
 /** Rewrite a Set-Cookie for a cross-origin frame. Without this the browser
  *  accepts the cookie and then never sends it back, which reads as a login
  *  loop rather than a cookie policy problem. */
@@ -1950,12 +1984,15 @@ app.get('/api/vault/status', async (req, reply) => {
   const inst = await getInstanceForUser(user.id);
   if (!inst?.subdomain) return reply.code(409).send({ error: 'no instance for this account' });
   ensureVault(user.id, inst.subdomain, user.email).catch(() => {});
-  return { url: `https://${VAULT_HOST}/__ophq/session` };
+  return { url: `https://${VAULT_HOST}/__ophq/session?t=${mintVaultTicket(user.id)}` };
 });
 
 app.get('/__ophq/session', async (req, reply) => {
-  const user = await requireUser(req, reply); if (!user) return;
+  const userId = readVaultTicket(req.query?.t);
+  if (!userId) { reply.code(401).send({ error: 'invalid or expired ticket' }); return; }
   if (!vaultEnabled()) { reply.code(503).send({ error: 'tenant library not configured' }); return; }
+  const user = await getUserById(userId);
+  if (!user) { reply.code(403).send({ error: 'no-account' }); return; }
   const inst = await getInstanceForUser(user.id);
   if (!inst?.subdomain) return reply.code(409).send({ error: 'no instance for this account' });
   try {
@@ -1972,6 +2009,11 @@ app.get('/__ophq/session', async (req, reply) => {
     // origin. In that third-party context a Lax cookie is never sent back, so
     // the library would set a session and then not see it on the next request.
     for (const c of session.setCookie) reply.header('set-cookie', sameSiteNone(c));
+    // Our own identity for this host. The library's cookie authenticates it to
+    // the library; this one tells the proxy WHICH tenant a later request is for.
+    const id = `${user.id}.${Math.floor(Date.now() / 1000) + 12 * 3600}`;
+    reply.header('set-cookie',
+      `${VAULT_COOKIE}=${id}.${vaultSign(id)}; Path=/; HttpOnly; Secure; SameSite=None`);
     return reply.redirect('/');
   } catch (e) {
     return reply.code(502).send({ error: 'library unreachable: ' + e.message });
@@ -1981,8 +2023,16 @@ app.get('/__ophq/session', async (req, reply) => {
 // Everything else on the library host is the library.
 app.all('/*', { constraints: {} }, async (req, reply) => {
   if (!isVaultHost(req)) return reply.callNotFound();
-  const user = await requireUser(req, reply); if (!user) return;
   if (!vaultEnabled()) { reply.code(503).send({ error: 'tenant library not configured' }); return; }
+  const userId = readVaultTicket(req.cookies?.[VAULT_COOKIE]);
+  if (!userId) {
+    // No ticket cookie: the frame was opened directly, or it expired. Send them
+    // back through the app, which is where the identity actually lives.
+    reply.code(401).send({ error: 'library session required' });
+    return;
+  }
+  const user = await getUserById(userId);
+  if (!user) { reply.code(403).send({ error: 'no-account' }); return; }
   const inst = await getInstanceForUser(user.id);
   if (!inst?.subdomain) return reply.code(409).send({ error: 'no instance for this account' });
   const headers = {};
