@@ -567,6 +567,33 @@ app.post('/api/storage/presign', async (req, reply) => {
   }
 });
 
+// Ask the engine to re-index the mounted bucket folder.
+//
+// The store is written directly by the browser, so nothing tells the engine a
+// new object exists: it indexes on scan, not on open. Without this an upload
+// lands correctly and stays invisible until something else triggers a scan.
+app.post('/api/storage/rescan', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  const inst = await getInstanceForUser(user.id);
+  const base = engineBase(inst);
+  if (!base) return reply.code(409).send({ error: 'no running instance for this account' });
+  try {
+    const r = await fetch(base + '/api/v1/library/folders', { headers: { accept: 'application/json' } });
+    if (!r.ok) return reply.code(502).send({ error: 'engine rejected the listing' });
+    const d = await r.json().catch(() => []);
+    const arr = Array.isArray(d) ? d : (d.folders || d.items || []);
+    const folder = arr.find((f) => f?.is_external);
+    // Not an error: a deployment without the bucket mount has no such folder,
+    // and the caller should carry on rather than surface a failure.
+    if (!folder) return { scanned: false, reason: 'no external folder' };
+    const sr = await fetch(`${base}/api/v1/library/folders/${folder.id}/scan`, { method: 'POST' });
+    if (!sr.ok) return reply.code(502).send({ error: 'scan failed' });
+    return { scanned: true, folderId: folder.id, ...(await sr.json().catch(() => ({}))) };
+  } catch (e) {
+    return reply.code(502).send({ error: 'engine unreachable: ' + e.message });
+  }
+});
+
 // ---- admin: quotas -------------------------------------------------------
 app.get('/api/admin/storage', async (req, reply) => {
   const owner = await requireOwner(req, reply); if (!owner) return;

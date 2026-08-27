@@ -375,7 +375,36 @@ export const api = {
       method: 'POST', body: JSON.stringify({ file_ids: fileIds })
     }),
   // Multipart upload straight through the gateway to the user's engine library.
-  async uploadFile(file) {
+  /**
+   * Upload straight to the tenant's object store using a presigned URL, so the
+   * bytes go browser -> store and never through the control-plane. The engine
+   * sees the result through its mounted library folder, so nothing copies it
+   * afterwards either.
+   *
+   * Falls back to the multipart path when object storage is not configured,
+   * which is any deployment without the store, so self-hosting keeps working.
+   */
+  async uploadFile(file, onProgress) {
+    let signed = null;
+    try {
+      signed = await req('/storage/presign', {
+        method: 'POST',
+        body: JSON.stringify({ method: 'PUT', key: `uploads/${file.name}` })
+      });
+    } catch (e) {
+      // 503 means no object storage here. Anything else is a real failure and
+      // should not be papered over by silently falling back.
+      if (e.status !== 503) throw e;
+    }
+
+    if (signed?.url) {
+      await putWithProgress(signed.url, file, onProgress);
+      // The store was written directly, so the engine has not been told. Never
+      // fatal: the object is safely stored either way and the next scan finds it.
+      await req('/storage/rescan', { method: 'POST' }).catch(() => {});
+      return { key: signed.key, bucket: signed.bucket, direct: true };
+    }
+
     const fd = new FormData();
     fd.append('file', file);
     const res = await fetch(base + '/engine/api/v1/library/files', {
@@ -388,3 +417,30 @@ export const api = {
     return res.json().catch(() => ({}));
   }
 };
+
+/**
+ * PUT a file to a presigned URL.
+ *
+ * XHR rather than fetch because fetch still cannot report upload progress in
+ * any shipping browser, and these are model files large enough that a silent
+ * progress-free wait reads as a hang.
+ *
+ * No credentials and no extra headers: the signature covers the request, and
+ * sending a header the signature does not include is rejected by the store.
+ */
+function putWithProgress(url, file, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', url, true);
+    if (onProgress) {
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+      };
+    }
+    xhr.onload = () => (xhr.status >= 200 && xhr.status < 300)
+      ? resolve()
+      : reject(Object.assign(new Error(`upload rejected by the object store (${xhr.status})`), { status: xhr.status }));
+    xhr.onerror = () => reject(new Error('network error uploading to the object store'));
+    xhr.send(file);
+  });
+}
