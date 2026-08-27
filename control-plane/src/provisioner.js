@@ -151,14 +151,31 @@ async function bucketDirFor(userId) {
  *
  * Idempotent by name: provisioning is retried, and the engine has no upsert.
  */
-async function registerBucketFolder(subdomain) {
+async function registerBucketFolder(subdomain, attempts = 20) {
   const base = `http://ophq-${subdomain}:8000`;
+  // Retry, because both callers reach here against an engine that has just been
+  // started: first provision, and the reconcile immediately after it recreates a
+  // container. A single attempt races the engine's boot and loses silently, and
+  // the symptom is an empty library folder rather than an error anywhere. This
+  // mirrors configureEngine, which retries beside it for the same reason.
+  for (let i = 0; i < attempts; i++) {
+    if (await tryRegisterBucketFolder(base)) return true;
+    await new Promise((res) => setTimeout(res, 1500));
+  }
+  return false;
+}
+
+async function tryRegisterBucketFolder(base) {
   try {
     const list = await fetch(base + '/api/v1/library/folders', { headers: { accept: 'application/json' } });
     if (list.ok) {
       const d = await list.json().catch(() => []);
       const arr = Array.isArray(d) ? d : (d.folders || d.items || []);
       if (arr.some((f) => f?.name === BUCKET_FOLDER_NAME)) return true;
+    } else {
+      // Engine is up but not ready to answer; let the caller retry rather than
+      // POSTing into a half-started service.
+      return false;
     }
     const created = await fetch(base + '/api/v1/library/folders/external', {
       method: 'POST',
