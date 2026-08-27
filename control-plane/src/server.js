@@ -218,6 +218,13 @@ app.post('/api/slicer/session', async (req, reply) => {
         OPHQ_PRINTHOST_KEY: token,
         OPHQ_URL: PUBLIC_URL
       };
+      // Opening straight into a model: the session fetches this file into its
+      // Uploads folder at startup, so the user is not hunting through a file
+      // dialog that cannot see their own machine.
+      const openFile = req.body?.fileId ?? req.body?.file_id;
+      if (openFile != null && String(openFile).trim() !== '') {
+        environment.OPHQ_OPEN_FILE_ID = String(openFile);
+      }
     } catch (e) {
       // A missing print host makes the slicer read-only, which is worth logging
       // but not worth failing the launch over.
@@ -322,6 +329,54 @@ app.get('/printhost/api/version', async (req, reply) => {
 app.get('/printhost/api/settings', async (req, reply) => {
   const who = await printHostUser(req, reply); if (!who) return;
   return { feature: { sdSupport: false }, webcam: { flipH: false, flipV: false } };
+});
+
+// ---- library access for a slicer session ---------------------------------
+// The file dialog inside a containerised slicer sees the container filesystem,
+// not the user's machine, so a model has to get in somehow. These let a session
+// pull from the user's OpenPrintHQ library using the token it already holds,
+// which closes the other half of the loop: models in, plates out.
+
+app.get('/printhost/files', async (req, reply) => {
+  const who = await printHostUser(req, reply); if (!who) return;
+  const inst = await getInstanceForUser(who.userId);
+  const base = engineBase(inst);
+  if (!base) return reply.code(409).send({ error: 'no running instance for this account' });
+  try {
+    const r = await fetch(base + '/api/v1/library/files', { headers: { accept: 'application/json' } });
+    const text = await r.text();
+    if (!r.ok) return reply.code(502).send({ error: 'engine rejected the listing' });
+    const d = text ? JSON.parse(text) : [];
+    const arr = Array.isArray(d) ? d : (d.files || d.items || []);
+    // Only what a slicer needs to choose a file. The library carries more.
+    return arr.map((f) => ({
+      id: f.id ?? f.file_id,
+      name: f.name ?? f.filename,
+      size: f.size ?? f.file_size ?? null
+    })).filter((f) => f.id != null);
+  } catch (e) {
+    return reply.code(502).send({ error: 'engine unreachable: ' + e.message });
+  }
+});
+
+app.get('/printhost/files/:id/download', async (req, reply) => {
+  const who = await printHostUser(req, reply); if (!who) return;
+  const inst = await getInstanceForUser(who.userId);
+  const base = engineBase(inst);
+  if (!base) return reply.code(409).send({ error: 'no running instance for this account' });
+  const id = encodeURIComponent(String(req.params.id));
+  try {
+    const r = await fetch(base + '/api/v1/library/files/' + id + '/download');
+    if (!r.ok) return reply.code(r.status === 404 ? 404 : 502).send({ error: 'file not available' });
+    reply.code(200);
+    for (const h of ['content-type', 'content-disposition', 'content-length']) {
+      const v = r.headers.get(h);
+      if (v) reply.header(h, v);
+    }
+    return reply.send(Buffer.from(await r.arrayBuffer()));
+  } catch (e) {
+    return reply.code(502).send({ error: 'engine unreachable: ' + e.message });
+  }
 });
 
 app.post('/printhost/api/files/local', async (req, reply) => {
