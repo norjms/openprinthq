@@ -30,7 +30,7 @@ import { kasmConfigured, kasmEngines, kasmImageFor, ensureKasmUser, ensureSessio
   findSession as findKasmSession, destroySession as destroyKasmSession,
   sessionStatus as kasmSessionStatus } from './kasm.js';
 import { registerConnectorRoutes, connectorOnline, isConnectorOnline, proxyViaConnector, openTcpStream, connectorEvictionCount, connectorHasDuplicateAgents, connectorClientIdentity } from './connector.js';
-import { provisionForUser, ensureEngineBucketMount } from './provisioner.js';
+import { provisionForUser, ensureEngineBucketMount, ensureVault, vaultLogin, vaultScan, vaultBase, vaultEnabled } from './provisioner.js';
 import { startBatch, activeBatchForUser, advanceBatch, cancelBatch, startOrchestrator } from './batch.js';
 import { activateRoute, deactivateRoute, reconcileRoutes } from './routing.js';
 import { generateKeyPair, encryptPrivate, invalidateSigningCache, ensureKeyPair, fingerprint } from './signing.js';
@@ -455,6 +455,81 @@ app.post('/printhost/api/files/local', async (req, reply) => {
   };
 });
 
+// A Moonraker-compatible upload endpoint, sitting beside the OctoPrint one.
+//
+// Same reasoning as /printhost/api/files/local: speak a protocol the tool
+// already implements rather than asking the tool to learn ours. GyroidVault
+// (and anything else that can target Klipper) sends a plate here believing it
+// is talking to Moonraker, and it lands in the queue like any other job.
+//
+// Auth is the same per-user print-host token, presented as X-Api-Key, which is
+// exactly what Moonraker clients already send.
+app.post('/printhost/server/files/upload', async (req, reply) => {
+  const who = await printHostUser(req, reply); if (!who) return;
+  const inst = await getInstanceForUser(who.userId);
+  const base = engineBase(inst);
+  if (!base) return reply.code(409).send({ error: 'no running instance for this account' });
+  if (!Buffer.isBuffer(req.body)) {
+    return reply.code(400).send({ error: 'expected a multipart upload' });
+  }
+
+  let uploaded;
+  try {
+    const res = await fetch(base + '/api/v1/library/files', {
+      method: 'POST',
+      headers: { 'content-type': req.headers['content-type'] || '', accept: 'application/json' },
+      body: req.body
+    });
+    const text = await res.text();
+    if (!res.ok) {
+      req.log.error({ status: res.status, text: text.slice(0, 300) }, 'moonraker upload rejected by engine');
+      return reply.code(502).send({ error: 'engine rejected the upload' });
+    }
+    uploaded = text ? JSON.parse(text) : {};
+  } catch (e) {
+    return reply.code(502).send({ error: 'engine unreachable: ' + e.message });
+  }
+
+  const fileId = uploaded.id ?? uploaded.file_id ?? uploaded?.file?.id ?? null;
+  const name = uploaded.name ?? uploaded.filename ?? 'upload';
+
+  // Moonraker's "print=true" means start now. We queue instead, for the same
+  // reason the OctoPrint route does: the scheduler owns dispatch and the caller
+  // has no idea which printer is free or whether one is mid-job. Scanned from a
+  // latin1 view so a binary payload cannot corrupt the search, and the field may
+  // legitimately appear after the file part.
+  const wantsPrint = (() => {
+    const m = /name="print"\r?\n\r?\n([^\r\n]*)/i.exec(req.body.toString('latin1'));
+    return !!m && /^(true|1|yes)$/i.test(m[1].trim());
+  })();
+
+  let queued = false, queueError = null;
+  if (fileId && wantsPrint) {
+    try {
+      const qr = await fetch(base + '/api/v1/library/files/add-to-queue', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', accept: 'application/json' },
+        body: JSON.stringify({ file_ids: [fileId] })
+      });
+      const qj = await qr.json().catch(() => ({}));
+      if (qr.ok && !(qj?.errors?.length)) queued = true;
+      else queueError = qj?.errors?.[0]?.error || ('queue rejected (' + qr.status + ')');
+    } catch (e) { queueError = e.message; }
+  }
+  if (queueError) req.log.warn({ fileId, queueError }, 'moonraker print-host queue failed');
+
+  // Moonraker's documented response shape. Clients parse item.path and, when
+  // they asked to print, print_started. Reporting print_started for a QUEUED job
+  // would be a lie the client acts on, so it reflects the queue result.
+  reply.code(201);
+  return {
+    item: { path: name, root: 'gcodes' },
+    print_started: queued,
+    action: 'create_file',
+    openprinthq: { file_id: fileId, queued, queue_error: queueError }
+  };
+});
+
 // ---- tenant object storage ----------------------------------------------
 // Provisioned on first use: a bucket and a key scoped to it, per tenant.
 //
@@ -481,6 +556,9 @@ async function ensureStorageFor(user, req) {
     ensureEngineBucketMount(user.id, inst.subdomain)
       .then((r) => { if (r.changed) req.log.info({ userId: user.id, backup: r.backup }, 'engine recreated with bucket mount'); })
       .catch((e) => req.log.warn({ err: e.message }, 'bucket mount reconcile failed'));
+    ensureVault(user.id, inst.subdomain, user.email)
+      .then((r) => { if (r.changed) req.log.info({ userId: user.id }, 'tenant library provisioned'); })
+      .catch((e) => req.log.warn({ err: e.message }, 'library reconcile failed'));
   }
   return row;
 }
@@ -588,6 +666,9 @@ app.post('/api/storage/rescan', async (req, reply) => {
     if (!folder) return { scanned: false, reason: 'no external folder' };
     const sr = await fetch(`${base}/api/v1/library/folders/${folder.id}/scan`, { method: 'POST' });
     if (!sr.ok) return reply.code(502).send({ error: 'scan failed' });
+    // The tenant library is a separate index over the same bucket and is also
+    // blind to a write made from outside it.
+    if (vaultEnabled() && inst?.subdomain) vaultScan(inst.subdomain).catch(() => {});
     return { scanned: true, folderId: folder.id, ...(await sr.json().catch(() => ({}))) };
   } catch (e) {
     return reply.code(502).send({ error: 'engine unreachable: ' + e.message });
@@ -1708,6 +1789,68 @@ app.all('/api/engine/*', async (req, reply) => {
     return reply.send(Buffer.from(await res.arrayBuffer()));
   } catch (e) {
     return reply.code(502).send({ error: 'engine unreachable: ' + e.message });
+  }
+});
+
+// ---- tenant model library ------------------------------------------------
+// Served under our own origin rather than a subdomain, deliberately. The
+// library has its own cookie session with no SSO, and a cookie can only be
+// handed to the browser for the origin it will be sent back to. Same-origin
+// also means Authentik already gates it: everything here is behind requireUser.
+
+// Open a library session for the signed-in user and hand its cookie to the
+// browser, scoped to the library path. The tenant never sees the password.
+app.get('/api/vault/session', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  if (!vaultEnabled()) { reply.code(503).send({ error: 'tenant library not configured' }); return; }
+  const inst = await getInstanceForUser(user.id);
+  if (!inst?.subdomain) return reply.code(409).send({ error: 'no instance for this account' });
+  try {
+    await ensureVault(user.id, inst.subdomain, user.email).catch(() => {});
+    const session = await vaultLogin(inst.subdomain);
+    if (!session) return reply.code(502).send({ error: 'library not ready' });
+    // Re-emit upstream's cookies on our origin, narrowed to the library path so
+    // they are never sent with an ordinary app request.
+    for (const c of session.setCookie) {
+      reply.header('set-cookie', c.replace(/;\s*Path=[^;]*/i, '') + '; Path=/vault');
+    }
+    return { ready: true };
+  } catch (e) {
+    return reply.code(502).send({ error: 'library unreachable: ' + e.message });
+  }
+});
+
+// Proxy the library itself. Streams whatever it returns, including assets, so
+// the tenant's browser only ever talks to our origin.
+app.all('/vault', async (req, reply) => reply.redirect('/vault/'));
+app.all('/vault/*', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  if (!vaultEnabled()) { reply.code(503).send({ error: 'tenant library not configured' }); return; }
+  const inst = await getInstanceForUser(user.id);
+  if (!inst?.subdomain) return reply.code(409).send({ error: 'no instance for this account' });
+  const path = req.url.replace(/^\/vault/, '') || '/';
+  const headers = {};
+  for (const h of ['accept', 'accept-language', 'content-type', 'cookie', 'x-csrf-token', 'range']) {
+    if (req.headers[h]) headers[h] = req.headers[h];
+  }
+  let body;
+  if (!['GET', 'HEAD'].includes(req.method) && req.body !== undefined) {
+    body = Buffer.isBuffer(req.body) ? req.body
+      : (typeof req.body === 'string' ? req.body : JSON.stringify(req.body));
+  }
+  try {
+    const res = await fetch(vaultBase(inst.subdomain) + path, { method: req.method, headers, body, redirect: 'manual' });
+    reply.code(res.status);
+    for (const h of ['content-type', 'cache-control', 'content-disposition', 'location', 'accept-ranges', 'content-range']) {
+      const v = res.headers.get(h);
+      if (v) reply.header(h, v);
+    }
+    for (const c of (res.headers.getSetCookie?.() || [])) {
+      reply.header('set-cookie', c.replace(/;\s*Path=[^;]*/i, '') + '; Path=/vault');
+    }
+    return reply.send(Buffer.from(await res.arrayBuffer()));
+  } catch (e) {
+    return reply.code(502).send({ error: 'library unreachable: ' + e.message });
   }
 });
 

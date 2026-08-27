@@ -239,6 +239,12 @@ export async function migrate() {
     );
   `);
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS tenant_vault (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      username TEXT NOT NULL,
+      password TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
     CREATE TABLE IF NOT EXISTS printhost_tokens (
       token       TEXT PRIMARY KEY,
       user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -869,4 +875,19 @@ export async function listTenantStorage() {
     `SELECT t.user_id, t.bucket, t.bucket_id, t.quota_bytes, u.email
      FROM tenant_storage t JOIN users u ON u.id = t.user_id ORDER BY u.email`);
   return rows;
+}
+
+// Credentials for a tenant's own library container. It has its own local user
+// store with no SSO, so the control-plane provisions a single admin and holds
+// the password to open sessions on the tenant's behalf. The tenant never sees
+// or types it, and it is scoped to a container only they can reach.
+export async function getVaultCreds(userId) {
+  const { rows } = await pool.query('SELECT * FROM tenant_vault WHERE user_id = $1', [userId]);
+  return rows[0] || null;
+}
+export async function setVaultCreds(userId, username, password) {
+  await pool.query(
+    `INSERT INTO tenant_vault (user_id, username, password) VALUES ($1,$2,$3)
+     ON CONFLICT (user_id) DO UPDATE SET username = EXCLUDED.username, password = EXCLUDED.password`,
+    [userId, username, password]);
 }
