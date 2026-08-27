@@ -49,6 +49,16 @@ const S3_REGION = process.env.OPHQ_GARAGE_S3_REGION || 'garage';
 // so a longer window buys nothing and widens the replay gap.
 const PRESIGN_TTL = Number(process.env.OPHQ_GARAGE_PRESIGN_TTL || 0) || 900;
 
+// A single long-lived key with READ access to every tenant bucket, used only by
+// the host-side rclone mount that exposes buckets to the engines as read-only
+// library folders. It is created once by an operator and referenced by id here,
+// because CreateKey is not idempotent by name and calling it per provision would
+// quietly accumulate a key per tenant.
+//
+// It never leaves the host. Tenants are isolated by bind-mounting only their own
+// bucket directory into their own engine, not by the key.
+const READER_KEY_ID = process.env.OPHQ_GARAGE_READER_KEY_ID || '';
+
 const DEFAULT_QUOTA_BYTES = Number(process.env.OPHQ_TENANT_QUOTA_BYTES || 0) || 5 * 1024 * 1024 * 1024;
 
 export function garageConfigured() { return !!(ADMIN_URL && ADMIN_TOKEN && S3_PUBLIC); }
@@ -59,6 +69,7 @@ export function s3EndpointEngine() { return S3_ENGINE || S3_LAN || S3_PUBLIC; }
 export function s3PathPrefix() { return S3_PATH_PREFIX; }
 export function s3Region() { return S3_REGION; }
 export function presignTtl() { return PRESIGN_TTL; }
+export function readerKeyId() { return READER_KEY_ID; }
 
 async function admin(endpoint, { method = 'POST', body = null, query = '' } = {}) {
   if (!garageConfigured()) throw new Error('object storage not configured');
@@ -114,6 +125,21 @@ export async function ensureTenantStorage(userId, email, quotaBytes = DEFAULT_QU
       permissions: { read: true, write: true, owner: false }
     }
   });
+  // Let the library reader see this bucket, read-only. Best effort: a tenant
+  // whose bucket is not readable loses the library-folder view, which is a
+  // degraded feature, not a broken account, and it is retried on next provision.
+  if (READER_KEY_ID) {
+    try {
+      await admin('AllowBucketKey', {
+        body: {
+          bucketId: bucket.id,
+          accessKeyId: READER_KEY_ID,
+          permissions: { read: true, write: false, owner: false }
+        }
+      });
+    } catch { /* degraded, not fatal */ }
+  }
+
   await setQuota(bucket.id, quotaBytes);
 
   return {
