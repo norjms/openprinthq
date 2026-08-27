@@ -62,3 +62,22 @@ test('missing inputs are rejected rather than signed as empty', () => {
   assert.throws(() => presign({ endpoint: 'https://x', key: 'k', accessKeyId: 'a', secretAccessKey: 's' }), /bucket/);
   assert.throws(() => presign({ endpoint: 'https://x', bucket: 'b', key: 'k' }), /credentials/);
 });
+
+// The three endpoints must produce three different signatures even for the same
+// object, because the host is part of what is signed. If this ever collapses to
+// one, a caller is being handed an address it cannot reach.
+test('different endpoints yield different signatures for the same object', () => {
+  const common = {
+    method: 'PUT', bucket: 'b', key: 'plates/p.3mf',
+    accessKeyId: 'AKID', secretAccessKey: 'SECRET',
+    now: new Date('2026-08-27T00:00:00Z')
+  };
+  const sig = (endpoint) =>
+    new URL(presign({ ...common, endpoint }).url).searchParams.get('X-Amz-Signature');
+  const pub = sig('https://s3.example.com');
+  const lan = sig('http://10.0.0.62:3900');
+  const eng = sig('http://172.17.0.1:3900');
+  assert.notEqual(pub, lan);
+  assert.notEqual(lan, eng);
+  assert.notEqual(pub, eng);
+});
