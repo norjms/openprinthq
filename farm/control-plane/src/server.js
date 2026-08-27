@@ -30,7 +30,7 @@ import { kasmConfigured, kasmEngines, kasmImageFor, ensureKasmUser, ensureSessio
   findSession as findKasmSession, destroySession as destroyKasmSession,
   sessionStatus as kasmSessionStatus } from './kasm.js';
 import { registerConnectorRoutes, connectorOnline, isConnectorOnline, proxyViaConnector, openTcpStream, connectorEvictionCount, connectorHasDuplicateAgents, connectorClientIdentity } from './connector.js';
-import { provisionForUser } from './provisioner.js';
+import { provisionForUser, ensureEngineBucketMount } from './provisioner.js';
 import { startBatch, activeBatchForUser, advanceBatch, cancelBatch, startOrchestrator } from './batch.js';
 import { activateRoute, deactivateRoute, reconcileRoutes } from './routing.js';
 import { generateKeyPair, encryptPrivate, invalidateSigningCache, ensureKeyPair, fingerprint } from './signing.js';
@@ -466,11 +466,23 @@ app.post('/printhost/api/files/local', async (req, reply) => {
 // this service can sign on a tenant's behalf, and no client ever sees it.
 async function ensureStorageFor(user, req) {
   let row = await getTenantStorage(user.id);
-  if (row) return row;
-  const s = await ensureTenantStorage(user.id, user.email, defaultQuotaBytes());
-  await setTenantStorage(user.id, s);
-  req.log.info({ userId: user.id, bucket: s.bucket }, 'provisioned tenant storage');
-  return getTenantStorage(user.id);
+  if (!row) {
+    const s = await ensureTenantStorage(user.id, user.email, defaultQuotaBytes());
+    await setTenantStorage(user.id, s);
+    req.log.info({ userId: user.id, bucket: s.bucket }, 'provisioned tenant storage');
+    row = await getTenantStorage(user.id);
+  }
+  // An engine created before this tenant had storage carries no bucket mount,
+  // and nothing else would ever add one. Idempotent and fire-and-forget: it
+  // inspects first and returns untouched in the normal case, so the common path
+  // costs one docker inspect and the request never waits on a recreate.
+  const inst = await getInstanceForUser(user.id).catch(() => null);
+  if (inst?.subdomain) {
+    ensureEngineBucketMount(user.id, inst.subdomain)
+      .then((r) => { if (r.changed) req.log.info({ userId: user.id, backup: r.backup }, 'engine recreated with bucket mount'); })
+      .catch((e) => req.log.warn({ err: e.message }, 'bucket mount reconcile failed'));
+  }
+  return row;
 }
 
 app.get('/api/storage', async (req, reply) => {

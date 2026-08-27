@@ -207,6 +207,86 @@ async function configureEngine(subdomain) {
   return false;
 }
 
+/**
+ * Make an EXISTING engine carry its tenant's bucket mount.
+ *
+ * The mount is applied when a container is created, but storage is provisioned
+ * on first use, which is usually later. Without this, a tenant who existed
+ * before storage did would get a bucket that never appears in their library and
+ * nothing would report a problem.
+ *
+ * Idempotent: it inspects first and returns untouched when the mount is already
+ * there, so it is safe to call on every storage lookup.
+ */
+export async function ensureEngineBucketMount(userId, subdomain) {
+  const bucketDir = await bucketDirFor(userId);
+  if (!bucketDir) return { changed: false, reason: 'no-bucket-or-disabled' };
+  const name = `ophq-${subdomain}`;
+
+  let inspect;
+  try {
+    const { stdout } = await exec('docker', ['inspect', name]);
+    inspect = JSON.parse(stdout)[0];
+  } catch { return { changed: false, reason: 'no-container' }; }
+
+  const already = (inspect?.Mounts || []).some(
+    (m) => m.Type === 'bind' && m.Destination === BUCKET_MOUNT_TARGET);
+  if (already) {
+    // Register anyway: the mount can outlive a library whose folder row was
+    // never created, and registration is itself idempotent.
+    await registerBucketFolder(subdomain);
+    return { changed: false, reason: 'already-mounted' };
+  }
+
+  // The source has to exist before the container starts. A missing directory
+  // binds as an empty one rather than failing, which would look like an empty
+  // library instead of a broken mount.
+  try { await exec('test', ['-d', bucketDir]); }
+  catch { return { changed: false, reason: 'mount-root-missing' }; }
+
+  const image = inspect.Config.Image;
+  const network = Object.keys(inspect.NetworkSettings?.Networks || {})[0] || DOCKER_NETWORK;
+  const volumes = (inspect.Mounts || [])
+    .filter((m) => m.Type === 'volume')
+    .flatMap((m) => ['-v', `${m.Name}:${m.Destination}`]);
+  const labels = Object.entries(inspect.Config?.Labels || {})
+    .filter(([k]) => k.startsWith('openprinthq.'))
+    .flatMap(([k, v]) => ['--label', `${k}=${v}`]);
+
+  // Env goes through a file, never argv: it carries the tenant database
+  // password and argv is world-readable in the process list.
+  const envFile = `/tmp/ophq-reconcile-${subdomain}-${Date.now()}.env`;
+  const env = (inspect.Config?.Env || []).filter((e) => !e.startsWith('BAMBUDDY_EXTERNAL_ROOTS='));
+  const { writeFile, unlink } = await import('node:fs/promises');
+  await writeFile(envFile, env.join('\n') + '\n', { mode: 0o600 });
+
+  // Keep the old container under a dated name rather than deleting it, so a
+  // failed start is a rename away from being undone.
+  const backup = `${name}-pre-mount-${Date.now()}`;
+  try {
+    await exec('docker', ['stop', name]);
+    await exec('docker', ['rename', name, backup]);
+    await exec('docker', [
+      'run', '-d', '--name', name, '--restart', 'unless-stopped',
+      '--network', network,
+      '--env-file', envFile,
+      '-e', `BAMBUDDY_EXTERNAL_ROOTS=${BUCKET_MOUNT_TARGET}`,
+      ...volumes, ...labels,
+      '--mount', `type=bind,source=${bucketDir},target=${BUCKET_MOUNT_TARGET},readonly,bind-propagation=rslave`,
+      image
+    ]);
+  } catch (e) {
+    await exec('docker', ['rm', '-f', name]).catch(() => {});
+    await exec('docker', ['rename', backup, name]).catch(() => {});
+    await exec('docker', ['start', name]).catch(() => {});
+    await unlink(envFile).catch(() => {});
+    return { changed: false, reason: 'recreate-failed: ' + e.message };
+  }
+  await unlink(envFile).catch(() => {});
+  await registerBucketFolder(subdomain);
+  return { changed: true, backup };
+}
+
 export async function provisionForUser(user) {
   const existing = await getInstanceForUser(user.id);
   if (existing) return existing;
