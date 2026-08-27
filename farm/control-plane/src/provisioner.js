@@ -336,9 +336,24 @@ async function startVaultContainer({ subdomain, bucketDir }) {
   catch { return { started: false, reason: 'mount-root-missing' }; }
   try {
     await exec('docker', ['rm', '-f', name]).catch(() => {});
+
+    // A DEDICATED, INTERNAL network per tenant library, not the shared one.
+    //
+    // GyroidVault leaves a number of read routes ungated, including
+    // /api/files/:id/download, which serves a file to an unauthenticated
+    // caller. Our edge keeps that off the internet and the proxy only ever
+    // resolves a tenant to their own container, so no tenant can reach
+    // another's through the app. But on a shared network ANY container could
+    // read ANY tenant's library directly, so the isolation is done at the
+    // network rather than relying on the application's own checks.
+    //
+    // --internal also denies the library outbound access, which it does not
+    // need: everything it reads is a local mount.
+    const net = `ophq-vault-net-${subdomain}`;
+    await exec('docker', ['network', 'create', '--internal', net]).catch(() => {});
     await exec('docker', [
       'run', '-d', '--name', name, '--restart', 'unless-stopped',
-      '--network', DOCKER_NETWORK,
+      '--network', net,
       '-e', 'NODE_ENV=production', '-e', 'PORT=3000',
       '-e', `LIBRARY_PATH=${VAULT_LIBRARY_PATH}`,
       '-v', `ophq_${subdomain}_vault:/app/data`,
@@ -347,6 +362,14 @@ async function startVaultContainer({ subdomain, bucketDir }) {
       '--label', 'openprinthq.role=vault',
       VAULT_IMAGE
     ]);
+    // Join the control-plane to that network so the proxy can reach the library.
+    // The alias matters: on a user-defined network a container answers to its
+    // own name, not its compose service name, so the library's configured
+    // print-host URL would not resolve without it.
+    const self = process.env.HOSTNAME || '';
+    if (self) {
+      await exec('docker', ['network', 'connect', '--alias', 'control-plane', net, self]).catch(() => {});
+    }
     await applyVaultTheme(name);
     invalidateVaultSession(subdomain);
     return { started: true };
