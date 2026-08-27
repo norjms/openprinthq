@@ -1807,6 +1807,16 @@ app.all('/api/engine/*', async (req, reply) => {
 // route below, which is why the origin has to be one we serve.
 const VAULT_HOST = process.env.OPHQ_VAULT_HOST || '';
 
+/** Rewrite a Set-Cookie for a cross-origin frame. Without this the browser
+ *  accepts the cookie and then never sends it back, which reads as a login
+ *  loop rather than a cookie policy problem. */
+function sameSiteNone(c) {
+  let out = String(c).replace(/;\s*SameSite=(Lax|Strict)/ig, '');
+  if (!/;\s*SameSite=/i.test(out)) out += '; SameSite=None';
+  if (!/;\s*Secure/i.test(out)) out += '; Secure';
+  return out;
+}
+
 function isVaultHost(req) {
   const h = String(req.headers.host || '').split(':')[0].toLowerCase();
   return !!VAULT_HOST && h === VAULT_HOST.toLowerCase();
@@ -1827,6 +1837,18 @@ app.get('/api/vault/status', async (req, reply) => {
 });
 
 app.get('/__ophq/session', async (req, reply) => {
+  // Which identity headers actually survive the edge on THIS host. The library
+  // is framed cross-origin, so both the forward-auth hop and the browser's
+  // third-party cookie rules are in play, and a 401 here is ambiguous without
+  // knowing which of the two dropped the identity.
+  req.log.info({
+    host: req.headers.host,
+    hasAuthentikEmail: !!req.headers['x-authentik-email'],
+    hasGateway: !!req.headers['x-ophq-gateway'],
+    gatewayMatches: req.headers['x-ophq-gateway'] === (process.env.OPHQ_GATEWAY_SECRET || ''),
+    authentikHeaders: Object.keys(req.headers).filter((h) => h.startsWith('x-authentik')),
+    cookieNames: Object.keys(req.cookies || {})
+  }, 'vault session attempt');
   const user = await requireUser(req, reply); if (!user) return;
   if (!vaultEnabled()) { reply.code(503).send({ error: 'tenant library not configured' }); return; }
   const inst = await getInstanceForUser(user.id);
@@ -1837,7 +1859,10 @@ app.get('/__ophq/session', async (req, reply) => {
     if (!session) return reply.code(502).send({ error: 'library not ready' });
     // Re-emitted for this host. Path is left at the root because the library
     // asks for its assets and API from the root of the origin it is served on.
-    for (const c of session.setCookie) reply.header('set-cookie', c);
+    // SameSite=None; Secure, because the library is framed from the app's
+    // origin. In that third-party context a Lax cookie is never sent back, so
+    // the library would set a session and then not see it on the next request.
+    for (const c of session.setCookie) reply.header('set-cookie', sameSiteNone(c));
     return reply.redirect('/');
   } catch (e) {
     return reply.code(502).send({ error: 'library unreachable: ' + e.message });
@@ -1867,7 +1892,7 @@ app.all('/*', { constraints: {} }, async (req, reply) => {
       const v = res.headers.get(h);
       if (v) reply.header(h, v);
     }
-    for (const c of (res.headers.getSetCookie?.() || [])) reply.header('set-cookie', c);
+    for (const c of (res.headers.getSetCookie?.() || [])) reply.header('set-cookie', sameSiteNone(c));
     return reply.send(Buffer.from(await res.arrayBuffer()));
   } catch (e) {
     return reply.code(502).send({ error: 'library unreachable: ' + e.message });
