@@ -440,10 +440,16 @@ async function seedVaultPrinter(base, session, userId) {
   const token = randomBytes(24).toString('base64url');
   await purgePrintHostTokens(userId).catch(() => {});
   await createPrintHostToken(userId, token, 'vault', null);
+  // The INTERNAL address, not the public one. The library container sits on the
+  // same docker network as the control-plane, so sending a plate to the public
+  // hostname would hairpin out to the internet and back, and on a deployment
+  // behind a CDN it does not even arrive: the edge answers the container with a
+  // challenge page and the upload fails with an HTML body that looks nothing
+  // like a Moonraker error.
   const printers = [{
     id: 'openprinthq',
     name: 'OpenPrintHQ Queue',
-    url: (process.env.OPHQ_PUBLIC_URL || '') + '/printhost',
+    url: (process.env.OPHQ_INTERNAL_URL || 'http://control-plane:8080') + '/printhost',
     api_key: token
   }];
   await fetch(base + '/api/settings/system', {
