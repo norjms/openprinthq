@@ -17,11 +17,21 @@
 
   let state_ = $state('checking'); // checking | library | fallback
   let error = $state(null);
+  // The library is served on its own host, because it references assets and
+  // its own API absolutely and those paths only resolve at an origin root.
+  // The entry point opens the session and bounces to the app, so the iframe
+  // never lands on a login screen.
+  let vaultUrl = $state('');
 
   onMount(async () => {
     try {
-      const res = await fetch('/api/vault/session', { method: 'GET', credentials: 'include' });
-      if (res.ok) { state_ = 'library'; return; }
+      const res = await fetch('/api/vault/status', { method: 'GET', credentials: 'include' });
+      if (res.ok) {
+        const d = await res.json();
+        vaultUrl = d.url;
+        state_ = 'library';
+        return;
+      }
       // 503 means no library on this deployment. Anything else is a real
       // failure, but the engine list still works, so show it and say why.
       if (res.status !== 503) {
@@ -42,7 +52,7 @@
 {:else if state_ === 'library'}
   <PageTitle page="Files" />
   {#if error}<p class="warn">{error}</p>{/if}
-  <iframe class="vault" src="/vault/" title="Model library"></iframe>
+  <iframe class="vault" src={vaultUrl} title="Model library"></iframe>
 {:else}
   {#if error}<p class="warn">Library unavailable, showing the engine file list. {error}</p>{/if}
   <EngineFiles />
