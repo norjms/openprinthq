@@ -108,8 +108,13 @@ async function startEngineContainer({ subdomain, port, dbName, bucketDir = null 
       // readonly is not belt-and-braces: writes go to the store via presigned
       // URLs, and a writable mount would let the engine mutate a tenant bucket
       // through a key that is shared across tenants.
+      // The engine refuses to register an external folder unless the path is on
+      // its allowlist, and answers with a 400 that reads like a deployment
+      // misconfiguration rather than a missing argument. Set it alongside the
+      // mount so the two can never disagree.
       ...(bucketDir
-        ? ['--mount', `type=bind,source=${bucketDir},target=${BUCKET_MOUNT_TARGET},readonly,bind-propagation=rslave`]
+        ? ['-e', `BAMBUDDY_EXTERNAL_ROOTS=${BUCKET_MOUNT_TARGET}`,
+           '--mount', `type=bind,source=${bucketDir},target=${BUCKET_MOUNT_TARGET},readonly,bind-propagation=rslave`]
         : []),
       '--label', `openprinthq.tenant=${subdomain}`,
       ENGINE_IMAGE
@@ -155,7 +160,7 @@ async function registerBucketFolder(subdomain) {
       const arr = Array.isArray(d) ? d : (d.folders || d.items || []);
       if (arr.some((f) => f?.name === BUCKET_FOLDER_NAME)) return true;
     }
-    const r = await fetch(base + '/api/v1/library/folders/external', {
+    const created = await fetch(base + '/api/v1/library/folders/external', {
       method: 'POST',
       headers: { 'content-type': 'application/json', accept: 'application/json' },
       body: JSON.stringify({
@@ -167,7 +172,15 @@ async function registerBucketFolder(subdomain) {
         show_hidden: false
       })
     });
-    return r.ok;
+    if (!created.ok) return false;
+    // Register alone leaves the folder empty: the engine indexes on scan, not on
+    // open. Key prefixes become child folders, so a plate under plates/ lands in
+    // a plates subfolder rather than at the root.
+    const folder = await created.json().catch(() => null);
+    if (folder?.id != null) {
+      await fetch(`${base}/api/v1/library/folders/${folder.id}/scan`, { method: 'POST' }).catch(() => {});
+    }
+    return true;
   } catch { return false; }
 }
 
