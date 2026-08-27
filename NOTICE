@@ -28,6 +28,16 @@ keeping with AGPL-3.0 section 5 (notices) and section 7 (attribution).
    subdirectory's THIRD_PARTY notices. OpenPrintHQ is not affiliated with or
    endorsed by SimplyPrint.
 
+3. GyroidVault  --  https://github.com/TeeCodeDev/GyroidVault  (AGPL-3.0)
+   The per-tenant model library behind the Files tab is GyroidVault, run
+   UNMODIFIED as a separate network service. OpenPrintHQ uses the upstream
+   container image as published and adds one stylesheet at container start so
+   the embedded library matches the surrounding application. No GyroidVault
+   source is modified, forked or redistributed, and its complete corresponding
+   source is available from the project above. OpenPrintHQ is not affiliated
+   with or endorsed by GyroidVault.
+
+
 3. OrcaSlicer  —  https://github.com/SoftFever/OrcaSlicer  (AGPL-3.0 / GPL-3.0)
    Used as the built-in slicing engine.
 
