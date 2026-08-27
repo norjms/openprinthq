@@ -24,7 +24,7 @@ import { migrate, upsertUser, getUserByEmail, getInstanceForUser, getCompatibleP
 import { createAuthentikUser, linkAuthentikUser, authentikUserExists, authentikConfigured, OWNER_GROUP } from './authentik.js';
 import { garageConfigured, ensureTenantStorage, usage as storageUsage,
   setQuota as setBucketQuota, defaultQuotaBytes, clusterHealth as storageHealth,
-  s3EndpointPublic, s3EndpointLan, s3PathPrefix, s3Region, presignTtl } from './garage.js';
+  s3EndpointPublic, s3EndpointLan, s3EndpointEngine, s3PathPrefix, s3Region, presignTtl } from './garage.js';
 import { presign } from './s3sign.js';
 import { kasmConfigured, kasmEngines, kasmImageFor, ensureKasmUser, ensureSession as ensureKasmSession,
   findSession as findKasmSession, destroySession as destroyKasmSession,
@@ -524,11 +524,22 @@ app.post('/api/storage/presign', async (req, reply) => {
 
   try {
     const row = await ensureStorageFor(user, req);
-    const lan = String(req.body?.scope || '') === 'lan';
+    // Where the caller sits decides which address gets signed. Three places,
+    // not two: off-site browsers, slicer sessions on their own VLAN, and the
+    // engine container beside this service. See garage.js for why.
+    const scope = String(req.body?.scope || 'public');
+    if (!['public', 'lan', 'engine'].includes(scope)) {
+      return reply.code(400).send({ error: 'unknown scope' });
+    }
+    const endpoint = scope === 'lan' ? s3EndpointLan()
+      : scope === 'engine' ? s3EndpointEngine()
+      : s3EndpointPublic();
     const signed = presign({
       method,
-      endpoint: lan ? s3EndpointLan() : s3EndpointPublic(),
-      pathPrefix: lan ? '' : s3PathPrefix(),
+      endpoint,
+      // The prefix only exists for the public edge; internal callers reach the
+      // store directly and would sign a path it never sees.
+      pathPrefix: scope === 'public' ? s3PathPrefix() : '',
       bucket: row.bucket,
       key,
       accessKeyId: row.access_key_id,
@@ -536,7 +547,7 @@ app.post('/api/storage/presign', async (req, reply) => {
       region: s3Region(),
       expiresIn: presignTtl()
     });
-    req.log.info({ userId: user.id, bucket: row.bucket, method, lan }, 'presigned object url');
+    req.log.info({ userId: user.id, bucket: row.bucket, method, scope }, 'presigned object url');
     return { url: signed.url, method: signed.method, expiresAt: signed.expiresAt, bucket: row.bucket, key };
   } catch (e) {
     req.log.error({ err: e.message }, 'presign failed');
