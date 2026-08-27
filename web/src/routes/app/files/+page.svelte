@@ -69,6 +69,13 @@
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => (toast = null), 6000);
   }
+  // A running session cannot be handed a file: the container environment is
+  // fixed at creation, so this has to be set before the session starts.
+  function openInSlicer(f) {
+    const q = new URLSearchParams({ file: String(f.id), name: f.name });
+    window.location.href = '/app/slicer?' + q.toString();
+  }
+
   async function addToQueue(f) {
     queuingId = f.id;
     try {
@@ -382,6 +389,11 @@
           {#if f.size}<span class="muted mono sz">{human(f.size)}</span>{/if}
           {#if f.sliceable}
             <button class="btn btn-ghost btn-sm slicebtn" onclick={() => openSlice(f)}>◈ Slice</button>
+            <!-- The slicer runs in a container, so its file dialog cannot see the
+                 user's machine. Hand the session the file id and it fetches the
+                 model itself before the app opens. -->
+            <button class="btn btn-ghost btn-sm slicebtn" onclick={() => openInSlicer(f)}
+                    title="Open this model in the in-browser slicer">◱ Open in slicer</button>
           {:else if f.queueable}
             <div class="qacts">
               <button class="btn btn-ghost btn-sm slicebtn" onclick={() => addToQueue(f)} disabled={queuingId === f.id}>

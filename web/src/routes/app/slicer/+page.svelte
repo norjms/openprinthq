@@ -56,6 +56,11 @@
   let wsError = $state(null);
   let wsFull = $state(false);
   let poll = null;
+  // Set by "Open in slicer" on the Files page. The session fetches this file at
+  // startup; a running session cannot be given one, since the container
+  // environment is fixed at creation.
+  let pendingFileId = $state(null);
+  let pendingFileName = $state(null);
 
   async function wsLoad() {
     try {
@@ -75,7 +80,7 @@
   async function wsStart() {
     wsBusy = true; wsError = null;
     try {
-      const r = await api.slicerWorkspaceStart(engine);
+      const r = await api.slicerWorkspaceStart(engine, pendingFileId);
       wsUrl = r.url; wsStatus = r.status;
       if (String(r.status || '').toLowerCase() !== 'running') schedulePoll();
     } catch (e) { wsError = e.message || 'could not start the slicer'; }
@@ -90,6 +95,10 @@
   function onKey(e) { if (e.key === 'Escape') wsFull = false; }
 
   onMount(() => {
+    const q = new URLSearchParams(window.location.search);
+    const f = q.get('file');
+    if (f) pendingFileId = f;
+    pendingFileName = q.get('name');
     load();
     wsLoad();
     window.addEventListener('keydown', onKey);
@@ -135,6 +144,9 @@
           <span class="muted small">
             {#if !wsUrl}Not running{:else if wsStatus === 'running'}{ENGINES.find((x) => x.key === engine)?.name} running{:else}Starting up{/if}
           </span>
+          {#if pendingFileId && !wsUrl}
+            <span class="pill">will open {pendingFileName || ('file ' + pendingFileId)}</span>
+          {/if}
         </div>
         <div class="flex center gap">
           {#if wsUrl}
@@ -219,6 +231,8 @@
   .workspace iframe { display: block; width: 100%; height: 72vh; min-height: 460px; border: 0; background: #0b0e13; }
   .wsempty { padding: 2.2rem 1rem; text-align: center; }
   .wsempty p { margin: 0; }
+  .pill { font-size: 0.78rem; padding: 0.12rem 0.5rem; border-radius: 999px;
+          border: 1px solid var(--ophq-border); color: var(--ophq-muted); }
   .workspace.full { position: fixed; inset: 0; z-index: 200; margin: 0; border-radius: 0; display: flex; flex-direction: column; }
   .workspace.full iframe { flex: 1; height: auto; min-height: 0; }
   .status { margin-bottom: 1.2rem; }
