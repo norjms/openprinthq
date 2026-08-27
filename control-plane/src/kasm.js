@@ -229,6 +229,15 @@ export async function ensureSession(kasmUserId, imageId, stored = null, environm
     user_id: kasmUserId,
     image_id: imageId,
     enable_sharing: false,
+    // Kasm defaults this to DISABLED, even when the workspace has a persistent
+    // profile path and the group allows profiles. Without it every session is
+    // brand new: the slicer runs its first-run wizard every time and any printer
+    // preset, including the print-host config, is lost on exit.
+    //
+    // It is also what makes switching slicers cheap. Stopping a session frees
+    // its 4GB while the profile survives, so switching back resumes rather than
+    // starting from scratch.
+    persistent_profile_mode: 'Enabled',
     ...(environment && Object.keys(environment).length ? { environment } : {})
   });
   return {
