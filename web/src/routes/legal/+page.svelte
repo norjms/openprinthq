@@ -72,19 +72,42 @@
     </p>
   </section>
 
+  <section id="infrastructure" class="card card-pad">
+    <h2>Streaming &amp; storage</h2>
+    <p>Running a slicer in your browser, and keeping your files, relies on projects we do not
+      ship. An operator installs them separately, and each is used under its own license:</p>
+    <ul class="credits">
+      <li><a href="https://kasmweb.com" rel="noopener">Kasm Workspaces</a> (© Kasm Technologies) —
+        <strong>proprietary</strong>, used under its Community Edition license. Streams the slicer
+        session to your browser. Not redistributed with OpenPrintHQ.</li>
+      <li><a href="https://github.com/kasmtech/KasmVNC" rel="noopener">KasmVNC</a>
+        (© Kasm Technologies and contributors) — <strong>GPL-2.0</strong>. The streaming layer
+        inside a workspace.</li>
+      <li><a href="https://garagehq.deuxfleurs.fr" rel="noopener">Garage</a>
+        (© the Deuxfleurs association) — <strong>AGPL-3.0</strong>. S3-compatible object storage
+        holding per-account files. Used unmodified as a separate service; its complete
+        corresponding source is available from the project.</li>
+      <li><a href="https://rclone.org" rel="noopener">rclone</a> (© Nick Craig-Wood and
+        contributors) — <strong>MIT</strong>. Presents that storage as a folder inside a session.</li>
+    </ul>
+    <p>OpenPrintHQ also speaks an <a href="https://octoprint.org" rel="noopener">OctoPrint</a>-compatible
+      upload API so slicers that already support that protocol can send finished plates. It contains
+      no OctoPrint code; this is interoperability, not affiliation, and no endorsement is implied.</p>
+  </section>
+
   <section id="slicers" class="card card-pad">
     <h2>Open-source slicers</h2>
-    <p>OpenPrintHQ's slicing builds on the work of the open-source slicer community. OrcaSlicer is
-      integrated today; the engines below are planned. Their names and logos are used only to
-      identify each project, and each remains the property and copyright of its authors under its
-      own license:</p>
+    <p>OpenPrintHQ's slicing builds on the work of the open-source slicer community. OrcaSlicer,
+      BambuStudio and PrusaSlicer are available today as in-browser workspaces; the rest are
+      planned. Their names and logos are used only to identify each project, and each remains the
+      property and copyright of its authors under its own license:</p>
     <ul class="credits">
       <li><a href="https://github.com/SoftFever/OrcaSlicer" rel="noopener">OrcaSlicer</a>
         (© SoftFever and contributors) — <strong>AGPL-3.0</strong>. Built in and used for slicing today.</li>
       <li><a href="https://github.com/bambulab/BambuStudio" rel="noopener">BambuStudio</a>
-        (© Bambu Lab and contributors) — <strong>AGPL-3.0</strong>.</li>
+        (© Bambu Lab and contributors) — <strong>AGPL-3.0</strong>. Available as a workspace.</li>
       <li><a href="https://github.com/prusa3d/PrusaSlicer" rel="noopener">PrusaSlicer</a>
-        (© Prusa Research and contributors) — <strong>AGPL-3.0</strong>.</li>
+        (© Prusa Research and contributors) — <strong>AGPL-3.0</strong>. Available as a workspace.</li>
       <li><a href="https://github.com/Ultimaker/Cura" rel="noopener">Ultimaker Cura</a>
         (© Ultimaker and contributors) — <strong>LGPLv3</strong> (with some GPLv3 components).</li>
       <li><a href="https://github.com/CrealityOfficial/CrealityPrint" rel="noopener">CrealityPrint</a>
