@@ -348,6 +348,7 @@ async function startVaultContainer({ subdomain, bucketDir }) {
       VAULT_IMAGE
     ]);
     await applyVaultTheme(name);
+    invalidateVaultSession(subdomain);
     return { started: true };
   } catch (e) { return { started: false, reason: e.message }; }
 }
@@ -389,25 +390,46 @@ export async function bootstrapVault(userId, subdomain, email, attempts = 20) {
     creds = { username: 'openprinthq', password: randomBytes(24).toString('base64url') };
     await setVaultCreds(userId, creds.username, creds.password);
   }
+
+  // Wait for readiness with an UNAUTHENTICATED probe, and only then try to log
+  // in. Retrying the login itself is what trips the library's brute-force
+  // protection: it rate-limits by IP, every tenant's container sees the same
+  // control-plane IP, and a locked-out control-plane cannot call the unblock
+  // endpoint because that endpoint needs a login. So readiness is polled on a
+  // route that costs nothing to get wrong.
+  let ready = false;
   for (let i = 0; i < attempts; i++) {
     try {
-      // Idempotent: a second call answers "already exists" and we carry on to
-      // log in, because provisioning is retried and containers get recreated.
-      await fetch(base + '/api/auth/register', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ username: creds.username, email: email || `${subdomain}@openprinthq.local`, password: creds.password })
-      }).catch(() => {});
-      const session = await vaultLogin(subdomain, creds);
-      if (!session) { await new Promise((r) => setTimeout(r, 1500)); continue; }
-      await seedVaultPrinter(base, session, userId);
-      return true;
-    } catch { await new Promise((r) => setTimeout(r, 1500)); }
+      const r = await fetch(base + '/api/system/public-config');
+      if (r.ok) { ready = true; break; }
+    } catch { /* still booting */ }
+    await new Promise((r) => setTimeout(r, 1500));
   }
-  return false;
+  if (!ready) return false;
+
+  // Registration is idempotent in effect: once the account exists this answers
+  // an error and we carry on to log in.
+  await fetch(base + '/api/auth/register', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ username: creds.username, email: email || `${subdomain}@openprinthq.local`, password: creds.password })
+  }).catch(() => {});
+
+  const session = await vaultLogin(subdomain, creds);
+  if (!session) return false;
+  await seedVaultPrinter(base, session, userId);
+  return true;
 }
+
+// Sessions are cached because the proxy and the scan hook both need one and the
+// library rate-limits logins by IP. Re-authenticating per request would lock the
+// control-plane out of every tenant's library at once.
+const vaultSessions = new Map(); // subdomain -> { session, expires }
+const VAULT_SESSION_TTL = 30 * 60 * 1000;
 
 /** Log in and return the cookie plus CSRF token, or null if it is not ready. */
 export async function vaultLogin(subdomain, creds) {
+  const cached = vaultSessions.get(subdomain);
+  if (cached && cached.expires > Date.now()) return cached.session;
   const base = vaultBase(subdomain);
   const c = creds || await getVaultCredsFor(subdomain);
   if (!c) return null;
@@ -415,12 +437,19 @@ export async function vaultLogin(subdomain, creds) {
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ username: c.username, password: c.password })
   });
+  // 429 means we are rate-limited, not that the credentials are wrong. Retrying
+  // extends the lockout, so give up and let the next request try later.
   if (!r.ok) return null;
   const j = await r.json().catch(() => ({}));
   const cookies = (r.headers.getSetCookie?.() || []).map((x) => x.split(';')[0]).join('; ');
   if (!cookies) return null;
-  return { cookies, csrf: j.csrfToken, setCookie: r.headers.getSetCookie?.() || [] };
+  const session = { cookies, csrf: j.csrfToken, setCookie: r.headers.getSetCookie?.() || [] };
+  vaultSessions.set(subdomain, { session, expires: Date.now() + VAULT_SESSION_TTL });
+  return session;
 }
+
+/** Drop a cached session, e.g. after the container is recreated. */
+export function invalidateVaultSession(subdomain) { vaultSessions.delete(subdomain); }
 
 async function getVaultCredsFor(subdomain) {
   const { rows } = await pool.query(
