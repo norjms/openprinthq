@@ -59,6 +59,46 @@ Print engine (engine)
     three.js, DOMPurify, and others — each under its own license (mostly MIT).
 
 
+IN-BROWSER SLICER WORKSPACES
+---------------------------
+Kasm Workspaces — https://kasmweb.com
+  Copyright (C) Kasm Technologies. Proprietary; used under the terms of its
+  Community Edition license. OpenPrintHQ streams containerised slicer sessions
+  through Kasm and provisions them via its Developer API. Kasm is not
+  redistributed with OpenPrintHQ and must be installed separately by the
+  operator.
+KasmVNC — https://github.com/kasmtech/KasmVNC
+  Copyright (C) Kasm Technologies and contributors. Licensed GPL-2.0.
+  Provides the streaming layer inside Kasm workspace images.
+Bambu Studio — https://github.com/bambulab/BambuStudio
+  Copyright (C) Bambu Lab. Licensed AGPL-3.0. Offered as a slicer workspace.
+PrusaSlicer — https://github.com/prusa3d/PrusaSlicer
+  Copyright (C) Prusa Research. Licensed AGPL-3.0. Offered as a slicer workspace.
+rclone — https://rclone.org
+  Copyright (C) Nick Craig-Wood and contributors. Licensed MIT. Used by Kasm's
+  storage mapping to present object storage inside a session. Not bundled.
+
+
+OBJECT STORAGE
+--------------
+Garage — https://garagehq.deuxfleurs.fr
+  Copyright (C) the Deuxfleurs association. Licensed AGPL-3.0. Used unmodified,
+  as a separate network service, to hold per-tenant files. Garage is not
+  redistributed with OpenPrintHQ and must be installed separately by the
+  operator; its complete corresponding source is available from the project.
+
+
+PROTOCOL COMPATIBILITY
+----------------------
+OctoPrint — https://octoprint.org
+  Copyright (C) Gina Häußge and the OctoPrint contributors. OpenPrintHQ contains
+  NO OctoPrint code. It implements an OctoPrint-COMPATIBLE upload API so that
+  slicers which already speak that protocol can send finished plates, and it
+  reports an OctoPrint-style version string because clients test for it. This is
+  interoperability, not affiliation, and no endorsement by the OctoPrint project
+  is implied.
+
+
 COMPLETE DEPENDENCY LIST
 ------------------------
 Both the application and the engine bundle additional third-party dependencies
