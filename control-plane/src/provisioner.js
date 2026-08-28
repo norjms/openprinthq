@@ -9,7 +9,8 @@
 
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { pool, adminPool, getInstanceForUser, getTenantStorage, getVaultCreds, setVaultCreds } from './db.js';
+import { pool, adminPool, getInstanceForUser, getTenantStorage } from './db.js';
+import { vaultAuthSecret, vaultServiceHeaders } from './vault-auth.js';
 import { randomBytes } from 'node:crypto';
 
 const exec = promisify(execFile);
@@ -40,7 +41,9 @@ const BUCKET_MOUNT_ROOT = process.env.OPHQ_ENGINE_BUCKET_MOUNT_ROOT || '';
 const BUCKET_MOUNT_TARGET = process.env.OPHQ_ENGINE_BUCKET_MOUNT_TARGET || '/app/external/bucket';
 const BUCKET_FOLDER_NAME = process.env.OPHQ_ENGINE_BUCKET_FOLDER_NAME || 'OpenPrintHQ Files';
 
-// The per-tenant model library (GyroidVault, AGPL-3.0, used UNMODIFIED). Unset
+// The per-tenant model library: our fork of GyroidVault (AGPL-3.0), which
+// takes its identity from the headers we assert rather than holding accounts of
+// its own. Unset
 // disables it and the Files tab falls back to the engine library, which is what
 // a deployment without it should do rather than showing a broken tab.
 //
@@ -356,6 +359,9 @@ async function startVaultContainer({ subdomain, bucketDir }) {
       '--network', net,
       '-e', 'NODE_ENV=production', '-e', 'PORT=3000',
       '-e', `LIBRARY_PATH=${VAULT_LIBRARY_PATH}`,
+      '-e', `OPHQ_AUTH_SECRET=${vaultAuthSecret()}`,
+      '-e', `OPHQ_LOGOUT_URL=${process.env.OPHQ_VAULT_LOGOUT_URL || ''}`,
+      '-e', 'OPHQ_IDP_NAME=OpenPrintHQ',
       '-v', `ophq_${subdomain}_vault:/app/data`,
       '--mount', `type=bind,source=${bucketDir},target=${VAULT_LIBRARY_PATH},readonly,bind-propagation=rslave`,
       '--label', `openprinthq.tenant=${subdomain}`,
@@ -363,114 +369,34 @@ async function startVaultContainer({ subdomain, bucketDir }) {
       VAULT_IMAGE
     ]);
     await joinVaultNetwork(subdomain);
-    await applyVaultTheme(name);
-    invalidateVaultSession(subdomain);
     return { started: true };
   } catch (e) { return { started: false, reason: e.message }; }
 }
 
 /**
- * Theme the library in place to match the surrounding application.
+ * Get a freshly started library ready to be used.
  *
- * GyroidVault selects a theme with a [data-theme] attribute backed by CSS
- * custom properties, so this is one extra stylesheet plus a changed default,
- * with no source modification. Best effort throughout: an upstream markup
- * change should cost the theme, never the tenant's library.
- */
-async function applyVaultTheme(name) {
-  const css = new URL('./data/vault-theme.css', import.meta.url).pathname;
-  try {
-    await exec('docker', ['cp', css, `${name}:/app/public/css/ophq-theme.css`]);
-    // Delimiter is '#', because the line being replaced contains '||'.
-    await exec('docker', ['exec', name, 'sh', '-c',
-      "sed -i \"s#getItem('gv_theme') || 'glass'#getItem('gv_theme') || 'openprinthq'#g\" /app/public/index.html && " +
-      "sed -i 's#<link rel=\"stylesheet\" href=\"/css/style.css\">#<link rel=\"stylesheet\" href=\"/css/style.css\">\\n  <link rel=\"stylesheet\" href=\"/css/ophq-theme.css\">#' /app/public/index.html"]);
-    return true;
-  } catch { return false; }
-}
-
-/**
- * Provision the library's single admin account and point it at our print host.
+ * There is no account to claim any more: the library trusts the identity we
+ * assert on every request, so all that is left is waiting for it to answer and
+ * pointing it at our print host.
  *
- * It ships no SSO and its first registrant becomes admin, so the control-plane
- * claims that account at first start. If a tenant reached an unclaimed instance
- * first they would own it, so this runs immediately after the container starts
- * and before anything is routed to it.
- *
- * Retries: it is being called against a container that has only just booted.
+ * Readiness is polled on /api/health, the one route that needs no identity,
+ * so a container that is still opening its database cannot be mistaken for one
+ * that is refusing us.
  */
 export async function bootstrapVault(userId, subdomain, email, attempts = 20) {
   const base = vaultBase(subdomain);
-  let creds = await getVaultCreds(userId);
-  if (!creds) {
-    creds = { username: 'openprinthq', password: randomBytes(24).toString('base64url') };
-    await setVaultCreds(userId, creds.username, creds.password);
-  }
-
-  // Wait for readiness with an UNAUTHENTICATED probe, and only then try to log
-  // in. Retrying the login itself is what trips the library's brute-force
-  // protection: it rate-limits by IP, every tenant's container sees the same
-  // control-plane IP, and a locked-out control-plane cannot call the unblock
-  // endpoint because that endpoint needs a login. So readiness is polled on a
-  // route that costs nothing to get wrong.
   let ready = false;
   for (let i = 0; i < attempts; i++) {
     try {
-      const r = await fetch(base + '/api/system/public-config');
+      const r = await fetch(base + '/api/health');
       if (r.ok) { ready = true; break; }
     } catch { /* still booting */ }
     await new Promise((r) => setTimeout(r, 1500));
   }
   if (!ready) return false;
-
-  // Registration is idempotent in effect: once the account exists this answers
-  // an error and we carry on to log in.
-  await fetch(base + '/api/auth/register', {
-    method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ username: creds.username, email: email || `${subdomain}@openprinthq.local`, password: creds.password })
-  }).catch(() => {});
-
-  const session = await vaultLogin(subdomain, creds);
-  if (!session) return false;
-  await seedVaultPrinter(base, session, userId);
+  await seedVaultPrinter(base, userId);
   return true;
-}
-
-// Sessions are cached because the proxy and the scan hook both need one and the
-// library rate-limits logins by IP. Re-authenticating per request would lock the
-// control-plane out of every tenant's library at once.
-const vaultSessions = new Map(); // subdomain -> { session, expires }
-const VAULT_SESSION_TTL = 30 * 60 * 1000;
-
-/** Log in and return the cookie plus CSRF token, or null if it is not ready. */
-export async function vaultLogin(subdomain, creds) {
-  const cached = vaultSessions.get(subdomain);
-  if (cached && cached.expires > Date.now()) return cached.session;
-  const base = vaultBase(subdomain);
-  const c = creds || await getVaultCredsFor(subdomain);
-  if (!c) return null;
-  const r = await fetch(base + '/api/auth/login', {
-    method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ username: c.username, password: c.password })
-  });
-  // 429 means we are rate-limited, not that the credentials are wrong. Retrying
-  // extends the lockout, so give up and let the next request try later.
-  if (!r.ok) return null;
-  const j = await r.json().catch(() => ({}));
-  const cookies = (r.headers.getSetCookie?.() || []).map((x) => x.split(';')[0]).join('; ');
-  if (!cookies) return null;
-  const session = { cookies, csrf: j.csrfToken, setCookie: r.headers.getSetCookie?.() || [] };
-  vaultSessions.set(subdomain, { session, expires: Date.now() + VAULT_SESSION_TTL });
-  return session;
-}
-
-/** Drop a cached session, e.g. after the container is recreated. */
-export function invalidateVaultSession(subdomain) { vaultSessions.delete(subdomain); }
-
-async function getVaultCredsFor(subdomain) {
-  const { rows } = await pool.query(
-    'SELECT v.* FROM tenant_vault v JOIN instances i ON i.user_id = v.user_id WHERE i.subdomain = $1', [subdomain]);
-  return rows[0] || null;
 }
 
 /**
@@ -480,7 +406,7 @@ async function getVaultCredsFor(subdomain) {
  * Moonraker-shaped upload endpoint and configure it as an ordinary printer.
  * The api_key is a print-host token, the same credential a slicer session uses.
  */
-async function seedVaultPrinter(base, session, userId) {
+async function seedVaultPrinter(base, userId) {
   const { createPrintHostToken, purgePrintHostTokens } = await import('./db.js');
   const token = randomBytes(24).toString('base64url');
   await purgePrintHostTokens(userId).catch(() => {});
@@ -499,7 +425,7 @@ async function seedVaultPrinter(base, session, userId) {
   }];
   await fetch(base + '/api/settings/system', {
     method: 'POST',
-    headers: { 'content-type': 'application/json', cookie: session.cookies, 'x-csrf-token': session.csrf },
+    headers: { 'content-type': 'application/json', ...vaultServiceHeaders() },
     // Scan hourly rather than daily: files arrive from outside this container,
     // so its own watcher never sees the write that created them.
     body: JSON.stringify({ printers: JSON.stringify(printers), auto_scan_interval: '1' })
@@ -509,14 +435,12 @@ async function seedVaultPrinter(base, session, userId) {
 /** Trigger a library scan. Called after an upload, since the store is written
  *  from outside this container and nothing tells it a file appeared. */
 export async function vaultScan(subdomain) {
-  const session = await vaultLogin(subdomain);
-  if (!session) return false;
   const r = await fetch(vaultBase(subdomain) + '/api/library/scan', {
     method: 'POST',
-    headers: { 'content-type': 'application/json', cookie: session.cookies, 'x-csrf-token': session.csrf },
+    headers: { 'content-type': 'application/json', ...vaultServiceHeaders() },
     body: '{}'
-  });
-  return r.ok;
+  }).catch(() => null);
+  return !!r && r.ok;
 }
 
 /**
@@ -546,6 +470,27 @@ export async function joinVaultNetwork(subdomain) {
   }
 }
 
+/**
+ * Is this container signing-compatible with us?
+ *
+ * A library started with a different OPHQ_AUTH_SECRET refuses every request we
+ * make, which presents as a library that is broken rather than one that is
+ * merely stale, and the fix is a recreate. Answering false here is what makes
+ * ensureVault do that. A container with no secret at all is left alone: that
+ * is a deployment running without a gateway secret, not a mismatch.
+ */
+async function vaultSecretMatches(name) {
+  const want = vaultAuthSecret();
+  if (!want) return true;
+  try {
+    const { stdout } = await exec('docker', [
+      'inspect', '-f', '{{range .Config.Env}}{{println .}}{{end}}', name
+    ]);
+    const line = stdout.split('\n').find((l) => l.startsWith('OPHQ_AUTH_SECRET='));
+    return !!line && line.slice('OPHQ_AUTH_SECRET='.length) === want;
+  } catch { return true; }
+}
+
 /** Ensure the tenant has a library container, idempotently. */
 export async function ensureVault(userId, subdomain, email) {
   if (!VAULT_IMAGE) return { changed: false, reason: 'disabled' };
@@ -554,7 +499,7 @@ export async function ensureVault(userId, subdomain, email) {
   const name = `ophq-vault-${subdomain}`;
   try {
     const { stdout } = await exec('docker', ['inspect', '-f', '{{.State.Running}}', name]);
-    if (stdout.trim() === 'true') {
+    if (stdout.trim() === 'true' && await vaultSecretMatches(name)) {
       // Re-attach first: the container can be running while the control-plane
       // has lost its route to it, which is exactly the state a promotion leaves.
       await joinVaultNetwork(subdomain);
