@@ -1,12 +1,13 @@
 <script>
   // The Files tab is the tenant's model library.
   //
-  // It is served by our build of GyroidVault, one container per tenant, reading
-  // that tenant's object-storage bucket. Embedded from our own origin rather
-  // than a subdomain: the library keeps its own cookie session and has no SSO,
-  // and a cookie can only be handed to the browser for the origin it will be
-  // sent back to. /api/vault/session opens that session server-side, so the
-  // tenant never sees or types a second credential.
+  // It is served by our fork of GyroidVault, one container per tenant, reading
+  // that tenant's object-storage bucket. The fork has no accounts of its own:
+  // it is told who the person is on every request, in headers signed by the
+  // control-plane, which is what makes this one application rather than two.
+  // /api/vault/status hands back an entry point carrying a short-lived ticket,
+  // because the library host cannot complete an Authentik round trip inside a
+  // frame.
   //
   // Falls back to the engine-backed file list when no library is configured,
   // which is any deployment without the image. A missing library should degrade
