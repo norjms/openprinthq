@@ -31,7 +31,8 @@ import { kasmConfigured, kasmEngines, kasmImageFor, ensureKasmUser, ensureSessio
   findSession as findKasmSession, destroySession as destroyKasmSession,
   sessionStatus as kasmSessionStatus } from './kasm.js';
 import { registerConnectorRoutes, connectorOnline, isConnectorOnline, proxyViaConnector, openTcpStream, connectorEvictionCount, connectorHasDuplicateAgents, connectorClientIdentity } from './connector.js';
-import { provisionForUser, ensureEngineBucketMount, ensureVault, vaultLogin, vaultScan, vaultBase, vaultEnabled, joinVaultNetwork } from './provisioner.js';
+import { provisionForUser, ensureEngineBucketMount, ensureVault, vaultScan, vaultBase, vaultEnabled, joinVaultNetwork } from './provisioner.js';
+import { vaultUserHeaders } from './vault-auth.js';
 import { startBatch, activeBatchForUser, advanceBatch, cancelBatch, startOrchestrator } from './batch.js';
 import { activateRoute, deactivateRoute, reconcileRoutes } from './routing.js';
 import { generateKeyPair, encryptPrivate, invalidateSigningCache, ensureKeyPair, fingerprint } from './signing.js';
@@ -1919,9 +1920,8 @@ app.all('/api/engine/*', async (req, reply) => {
 // JavaScript, which breaks on the next upstream release. A separate host makes
 // every one of those paths correct with no rewriting at all.
 //
-// Authentik gates the host at the edge, so everything here is still behind
-// requireUser. The library's own cookie is set for THIS host by the session
-// route below, which is why the origin has to be one we serve.
+// Authentik gates the app host at the edge, and the ticket below carries that
+// decision to this one.
 const VAULT_HOST = process.env.OPHQ_VAULT_HOST || '';
 
 // The library host is NOT behind Authentik, and that is deliberate.
@@ -1935,6 +1935,11 @@ const VAULT_HOST = process.env.OPHQ_VAULT_HOST || '';
 // the user it already authenticated, and the library host trusts that instead.
 // Same shape as the print-host tokens: the trust comes from a secret only this
 // service holds, not from a session the browser has to establish in a frame.
+//
+// The cookie that ticket becomes says WHICH TENANT a later request belongs to,
+// and nothing else. The library itself is told who the person is on every
+// proxied request, in signed headers, so there is no library session to
+// establish, keep alive or hand to a browser.
 const VAULT_TICKET_TTL = 60; // seconds; it is redeemed immediately on frame load
 const VAULT_COOKIE = 'ophq_vault';
 
@@ -1956,16 +1961,6 @@ function readVaultTicket(t) {
   if (!timingSafeEqual(Buffer.from(sig), Buffer.from(expect))) return null;
   if (Number(exp) < Math.floor(Date.now() / 1000)) return null;
   return Number(uid) || null;
-}
-
-/** Rewrite a Set-Cookie for a cross-origin frame. Without this the browser
- *  accepts the cookie and then never sends it back, which reads as a login
- *  loop rather than a cookie policy problem. */
-function sameSiteNone(c) {
-  let out = String(c).replace(/;\s*SameSite=(Lax|Strict)/ig, '');
-  if (!/;\s*SameSite=/i.test(out)) out += '; SameSite=None';
-  if (!/;\s*Secure/i.test(out)) out += '; Secure';
-  return out;
 }
 
 function isVaultHost(req) {
@@ -2001,16 +1996,10 @@ app.get('/__ophq/session', async (req, reply) => {
     // otherwise fail with the library looking unreachable.
     await joinVaultNetwork(inst.subdomain).catch(() => {});
     await ensureVault(user.id, inst.subdomain, user.email).catch(() => {});
-    const session = await vaultLogin(inst.subdomain);
-    if (!session) return reply.code(502).send({ error: 'library not ready' });
-    // Re-emitted for this host. Path is left at the root because the library
-    // asks for its assets and API from the root of the origin it is served on.
-    // SameSite=None; Secure, because the library is framed from the app's
-    // origin. In that third-party context a Lax cookie is never sent back, so
-    // the library would set a session and then not see it on the next request.
-    for (const c of session.setCookie) reply.header('set-cookie', sameSiteNone(c));
-    // Our own identity for this host. The library's cookie authenticates it to
-    // the library; this one tells the proxy WHICH tenant a later request is for.
+    // Our own identity for this host, and the only cookie in play: it tells the
+    // proxy which tenant a later request is for. SameSite=None; Secure because
+    // the library is framed from the app's origin, and in that third-party
+    // context a Lax cookie is never sent back.
     const id = `${user.id}.${Math.floor(Date.now() / 1000) + 12 * 3600}`;
     reply.header('set-cookie',
       `${VAULT_COOKIE}=${id}.${vaultSign(id)}; Path=/; HttpOnly; Secure; SameSite=None`);
@@ -2035,8 +2024,11 @@ app.all('/*', { constraints: {} }, async (req, reply) => {
   if (!user) { reply.code(403).send({ error: 'no-account' }); return; }
   const inst = await getInstanceForUser(user.id);
   if (!inst?.subdomain) return reply.code(409).send({ error: 'no instance for this account' });
-  const headers = {};
-  for (const h of ['accept', 'accept-language', 'content-type', 'cookie', 'x-csrf-token', 'range']) {
+  // The person's identity is asserted here, per request, and signed. Nothing
+  // the browser sent authenticates anything to the library: our own cookie
+  // only said which tenant this is, and it is deliberately not forwarded.
+  const headers = { ...vaultUserHeaders(user) };
+  for (const h of ['accept', 'accept-language', 'content-type', 'range']) {
     if (req.headers[h]) headers[h] = req.headers[h];
   }
   let body;
@@ -2051,7 +2043,6 @@ app.all('/*', { constraints: {} }, async (req, reply) => {
       const v = res.headers.get(h);
       if (v) reply.header(h, v);
     }
-    for (const c of (res.headers.getSetCookie?.() || [])) reply.header('set-cookie', sameSiteNone(c));
     return reply.send(Buffer.from(await res.arrayBuffer()));
   } catch (e) {
     return reply.code(502).send({ error: 'library unreachable: ' + e.message });

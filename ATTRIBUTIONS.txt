@@ -89,13 +89,17 @@ Garage — https://garagehq.deuxfleurs.fr
 
 
 GyroidVault -- https://github.com/TeeCodeDev/GyroidVault
-  Copyright (C) TeeCodeDev. Licensed AGPL-3.0. Used UNMODIFIED, as a separate
-  network service, to provide the per-tenant model library behind the Files tab.
-  OpenPrintHQ runs the upstream container image as published and applies one
-  additional stylesheet at container start so the embedded library matches the
-  surrounding application; no GyroidVault source is altered, forked or
-  redistributed. Its complete corresponding source is available from the project
-  above. OpenPrintHQ is not affiliated with or endorsed by GyroidVault.
+  Copyright (C) TeeCodeDev. Licensed AGPL-3.0. The per-tenant model library
+  behind the Files tab is a MODIFIED version of GyroidVault, run as a separate
+  network service. The modifications remove its built-in account system so that
+  authentication is handled once, by OpenPrintHQ, and add the surrounding
+  application's theme.
+
+  As AGPL-3.0 requires of a modified work offered over a network, the complete
+  corresponding source of that modified version is published at
+  https://github.com/norjms/openprinthq-vault, and upstream's own source remains
+  available from the project above. OpenPrintHQ is not affiliated with or
+  endorsed by GyroidVault.
 
 
 PROTOCOL COMPATIBILITY
