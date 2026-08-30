@@ -13,6 +13,8 @@
   import PageTitle from '$lib/components/PageTitle.svelte';
   import EngineFiles from '$lib/components/EngineFiles.svelte';
   import LibraryBrowse from '$lib/components/LibraryBrowse.svelte';
+  import LibraryCollections from '$lib/components/LibraryCollections.svelte';
+  import LibrarySettings from '$lib/components/LibrarySettings.svelte';
   import { library, libraryAsset } from '$lib/library.js';
 
   let state_ = $state('checking'); // checking | library | fallback
@@ -20,7 +22,7 @@
   // Two ways into the same objects: the library's index, and the bucket as the
   // person laid it out. Neither is a subset of the other, because a folder can
   // hold files the index has not scanned yet.
-  let view = $state('models'); // models | folders
+  let view = $state('models'); // models | folders | collections | settings
 
   let models = $state([]);
   let categories = $state([]);
@@ -83,10 +85,16 @@
   <div class="tabs">
     <button class:on={view === 'models'} onclick={() => (view = 'models')}>Models</button>
     <button class:on={view === 'folders'} onclick={() => (view = 'folders')}>Folders</button>
+    <button class:on={view === 'collections'} onclick={() => (view = 'collections')}>Collections</button>
+    <button class:on={view === 'settings'} onclick={() => (view = 'settings')}>Settings</button>
   </div>
 
 {#if view === 'folders'}
   <LibraryBrowse />
+{:else if view === 'collections'}
+  <LibraryCollections />
+{:else if view === 'settings'}
+  <LibrarySettings />
 {:else}
   <div class="bar">
     <input

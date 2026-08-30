@@ -12,6 +12,14 @@
   import GcodeViewer from '$lib/components/GcodeViewer.svelte';
   import { library, libraryAsset, previewFile, PREVIEWABLE } from '$lib/library.js';
 
+  let materials = $state([]);
+  let collections = $state([]);
+  let addingPrint = $state(false);
+  let printMaterial = $state('');
+  let printOk = $state(true);
+  let printNotes = $state('');
+  let addTo = $state('');
+
   let model = $state(null);
   let error = $state(null);
   let loading = $state(true);
@@ -28,6 +36,11 @@
       model = await library.model(id);
       selected = previewFile(model);
       error = null;
+      // Side lists for the print form and the collection picker. A failure in
+      // either must not stop the model rendering, which is the point of the
+      // page.
+      library.materials().then((m) => { materials = m || []; }).catch(() => {});
+      library.projects.list().then((c) => { collections = c || []; }).catch(() => {});
     } catch (e) {
       error = e.message;
       model = null;
@@ -61,6 +74,47 @@
   }
 
   const queueable = (f) => ['gcode', 'bgcode', '3mf'].includes(f.file_type);
+
+  async function addPrint() {
+    try {
+      await library.prints.add(model.id, {
+        material_id: printMaterial ? Number(printMaterial) : null,
+        successful: printOk,
+        notes: printNotes
+      });
+      addingPrint = false; printNotes = ''; printMaterial = '';
+      await load();
+    } catch (e) {
+      notice = `Could not record the print: ${e.message}`;
+    }
+  }
+
+  async function removePrint(pid) {
+    try {
+      await library.prints.remove(pid);
+      await load();
+    } catch (e) {
+      notice = `Could not remove that entry: ${e.message}`;
+    }
+  }
+
+  async function addToCollection() {
+    if (!addTo) return;
+    try {
+      await library.projects.addModel(Number(addTo), model.id);
+      const c = collections.find((x) => String(x.id) === String(addTo));
+      notice = `Added to ${c ? c.name : 'the collection'}.`;
+      addTo = '';
+    } catch (e) {
+      notice = `Could not add to that collection: ${e.message}`;
+    }
+  }
+
+  function fmtDate(v) {
+    if (!v) return '';
+    const d = new Date(v);
+    return isNaN(d) ? String(v) : d.toLocaleString();
+  }
 
   onMount(load);
 </script>
@@ -144,20 +198,52 @@
     {/if}
   </section>
 
-  {#if (model.prints || []).length > 0}
+  {#if collections.length > 0}
     <section>
-      <h3>Print log</h3>
+      <h3>Collections</h3>
+      <div class="inline">
+        <select bind:value={addTo}>
+          <option value="">Choose a collection</option>
+          {#each collections as c (c.id)}<option value={c.id}>{c.name}</option>{/each}
+        </select>
+        <button class="act" onclick={addToCollection} disabled={!addTo}>Add this model</button>
+      </div>
+    </section>
+  {/if}
+
+  <section>
+    <h3>Print log</h3>
+    {#if addingPrint}
+      <div class="inline">
+        <select bind:value={printMaterial}>
+          <option value="">No material</option>
+          {#each materials as m (m.id)}<option value={m.id}>{m.name}</option>{/each}
+        </select>
+        <label class="chk"><input type="checkbox" bind:checked={printOk} /> Successful</label>
+        <input class="notes" placeholder="Notes (optional)" bind:value={printNotes} />
+        <button class="act" onclick={addPrint}>Save</button>
+        <button class="act" onclick={() => (addingPrint = false)}>Cancel</button>
+      </div>
+    {:else}
+      <button class="act" onclick={() => (addingPrint = true)}>Record a print</button>
+    {/if}
+
+    {#if (model.prints || []).length === 0}
+      <p class="muted">Nothing recorded yet.</p>
+    {:else}
       <ul class="prints">
         {#each model.prints as p (p.id)}
           <li>
-            <span>{p.printed_at ?? p.created_at ?? ''}</span>
-            <span class="muted">{p.status ?? ''}</span>
-            {#if p.notes}<span class="muted">{p.notes}</span>{/if}
+            <span class="pstate" class:bad={!p.successful}>{p.successful ? 'ok' : 'failed'}</span>
+            <span>{fmtDate(p.printed_at)}</span>
+            {#if p.material_name}<span class="muted">{p.material_name}</span>{/if}
+            <span class="pnotes muted">{p.notes ?? ''}</span>
+            <button class="act" onclick={() => removePrint(p.id)}>Remove</button>
           </li>
         {/each}
       </ul>
-    </section>
-  {/if}
+    {/if}
+  </section>
 {/if}
 
 <style>
@@ -203,6 +289,19 @@
     background: var(--ophq-surface); color: var(--ophq-text); cursor: pointer; text-decoration: none;
   }
   .act:disabled { opacity: 0.5; cursor: default; }
+  .inline { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-bottom: 0.6rem; }
+  .inline select, .notes {
+    padding: 0.35rem 0.6rem; border: 1px solid var(--ophq-border); border-radius: 8px;
+    background: var(--ophq-surface); color: var(--ophq-text); font: inherit; font-size: 0.85rem;
+  }
+  .notes { flex: 1 1 12rem; }
+  .chk { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: var(--ophq-text-2); }
+  .pstate {
+    text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.05em;
+    color: var(--ophq-success); min-width: 3.2rem;
+  }
+  .pstate.bad { color: var(--ophq-danger); }
+  .pnotes { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .notice { color: var(--ophq-text-2); }
   .muted { color: var(--ophq-muted); }
   .warn { color: var(--ophq-warn); }
