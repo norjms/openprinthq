@@ -350,8 +350,13 @@ export const api = {
   slicerWorkspace: (engine) => req('/slicer/session' + (engine ? '?engine=' + encodeURIComponent(engine) : '')),
   // fileId is optional: when set, the session fetches that library file into its
   // Uploads folder at startup, so the user opens straight into their model.
-  slicerWorkspaceStart: (engine, fileId) =>
-    req('/slicer/session', { method: 'POST', body: JSON.stringify(fileId != null ? { engine, fileId } : { engine }) }),
+  // Either an engine file id or an object key. The library has its own ids, so
+  // a file opened from the Files tab is named by the key both indexes share.
+  slicerWorkspaceStart: (engine, fileId, key) =>
+    req('/slicer/session', {
+      method: 'POST',
+      body: JSON.stringify({ engine, ...(fileId != null ? { fileId } : {}), ...(key ? { key } : {}) })
+    }),
   slicerWorkspaceStop: () => req('/slicer/session', { method: 'DELETE' }),
   slicerWorkspaceEngines: () => req('/slicer/engines'),
   // Compatible process/filament preset names for a printer (control-plane join).
