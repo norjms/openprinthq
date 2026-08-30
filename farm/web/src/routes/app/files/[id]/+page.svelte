@@ -10,7 +10,9 @@
   import PageTitle from '$lib/components/PageTitle.svelte';
   import ModelViewer from '$lib/components/ModelViewer.svelte';
   import GcodeViewer from '$lib/components/GcodeViewer.svelte';
-  import { library, libraryAsset, previewFile, PREVIEWABLE } from '$lib/library.js';
+  import { library, libraryAsset, previewFile, PREVIEWABLE,
+           objectKeyFor, deleteLibraryObject } from '$lib/library.js';
+  import { goto } from '$app/navigation';
 
   let materials = $state([]);
   let collections = $state([]);
@@ -26,6 +28,7 @@
   let selected = $state(null);   // the file being previewed
   let sending = $state(null);    // file id currently being queued
   let notice = $state(null);
+  let busy = $state(null);
 
   const id = $derived($page.params.id);
   const isGcode = $derived(selected && (selected.file_type === 'gcode' || selected.file_type === 'bgcode'));
@@ -74,6 +77,53 @@
   }
 
   const queueable = (f) => ['gcode', 'bgcode', '3mf'].includes(f.file_type);
+  const sliceable = (f) => ['stl', '3mf', 'step', 'obj', '3ds', 'amf'].includes(f.file_type);
+
+  // A running session cannot be handed a file: the container environment is
+  // fixed at creation, so the slicer page has to start the session itself.
+  function openInSlicer(f) {
+    const key = objectKeyFor(f);
+    if (!key) { notice = 'That file has no object key, so it cannot be opened in the slicer.'; return; }
+    goto('/app/slicer?' + new URLSearchParams({ key, name: f.filename }).toString());
+  }
+
+  async function removeFile(f) {
+    if (!confirm(`Delete ${f.filename} from your storage? This cannot be undone.`)) return;
+    busy = f.id;
+    try {
+      await deleteLibraryObject(objectKeyFor(f));
+      notice = `Deleted ${f.filename}.`;
+      await load();
+    } catch (e) {
+      notice = `Could not delete ${f.filename}: ${e.message}`;
+    } finally {
+      busy = null;
+    }
+  }
+
+  async function rename() {
+    const name = prompt('Model name', model.name);
+    if (!name || name === model.name) return;
+    try {
+      await library.updateModel(model.id, { name });
+      await load();
+    } catch (e) {
+      notice = `Could not rename: ${e.message}`;
+    }
+  }
+
+  async function removeModel() {
+    if (!confirm(`Remove "${model.name}" from the library index? The files stay in your storage.`)) return;
+    try {
+      // deleteDisk is deliberately false: the library's bucket mount is
+      // read-only, so asking it to unlink fails, and the object store is where
+      // a real delete has to happen. This removes the index entry only.
+      await library.deleteModel(model.id, false);
+      goto('/app/files');
+    } catch (e) {
+      notice = `Could not remove the model: ${e.message}`;
+    }
+  }
 
   async function addPrint() {
     try {
@@ -166,6 +216,10 @@
         <h3>Print tips</h3>
         <p class="desc">{model.print_tips}</p>
       {/if}
+      <div class="modelActions">
+        <button class="act" onclick={rename}>Rename</button>
+        <button class="act danger" onclick={removeModel}>Remove from library</button>
+      </div>
     </div>
   </div>
 
@@ -186,12 +240,18 @@
               <span class="fname" title={f.filename}>{f.filename}</span>
             {/if}
             <span class="fsize muted">{fmtSize(f.file_size)}</span>
+            {#if sliceable(f)}
+              <button class="act" onclick={() => openInSlicer(f)}>Open in slicer</button>
+            {/if}
             {#if queueable(f)}
               <button class="act" onclick={() => send(f)} disabled={sending === f.id}>
                 {sending === f.id ? 'Queueing...' : 'Send to queue'}
               </button>
             {/if}
             <a class="act" href={libraryAsset(f.url)} download={f.filename}>Download</a>
+            <button class="act danger" onclick={() => removeFile(f)} disabled={busy === f.id}>
+              {busy === f.id ? 'Deleting...' : 'Delete'}
+            </button>
           </li>
         {/each}
       </ul>
@@ -289,6 +349,8 @@
     background: var(--ophq-surface); color: var(--ophq-text); cursor: pointer; text-decoration: none;
   }
   .act:disabled { opacity: 0.5; cursor: default; }
+  .act.danger { color: var(--ophq-danger); border-color: color-mix(in srgb, var(--ophq-danger) 40%, var(--ophq-border)); }
+  .modelActions { display: flex; gap: 0.5rem; margin-top: 0.8rem; flex-wrap: wrap; }
   .inline { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-bottom: 0.6rem; }
   .inline select, .notes {
     padding: 0.35rem 0.6rem; border: 1px solid var(--ophq-border); border-radius: 8px;

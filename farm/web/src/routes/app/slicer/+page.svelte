@@ -80,6 +80,10 @@
   // startup; a running session cannot be given one, since the container
   // environment is fixed at creation.
   let pendingFileId = $state(null);
+  // Files opened from the model library arrive as an object key rather than an
+  // engine file id: the two indexes cover the same bucket with different ids,
+  // and the key is the thing they agree on.
+  let pendingKey = $state(null);
   let pendingFileName = $state(null);
 
   async function wsLoad() {
@@ -108,7 +112,7 @@
     wsBusy = true; wsError = null;
     justClosed = false;
     try {
-      const r = await api.slicerWorkspaceStart(engine, pendingFileId);
+      const r = await api.slicerWorkspaceStart(engine, pendingFileId, pendingKey);
       wsUrl = r.url; wsStatus = r.status;
       if (String(r.status || '').toLowerCase() !== 'running') schedulePoll();
     } catch (e) { wsError = e.message || 'could not start the slicer'; }
@@ -126,6 +130,7 @@
     const q = new URLSearchParams(window.location.search);
     const f = q.get('file');
     if (f) pendingFileId = f;
+    pendingKey = q.get('key');
     pendingFileName = q.get('name');
     load();
     loadEngines();
@@ -173,8 +178,8 @@
           <span class="muted small">
             {#if !wsUrl}Not running{:else if wsStatus === 'running'}{ENGINES.find((x) => x.key === engine)?.name} running{:else}Starting up{/if}
           </span>
-          {#if pendingFileId && !wsUrl}
-            <span class="pill">will open {pendingFileName || ('file ' + pendingFileId)}</span>
+          {#if (pendingFileId || pendingKey) && !wsUrl}
+            <span class="pill">will open {pendingFileName || ('file ' + (pendingFileId || pendingKey))}</span>
           {/if}
         </div>
         <div class="flex center gap">

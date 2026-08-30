@@ -166,6 +166,41 @@ export async function makeLibraryFolder(parentPath = '', folderName) {
   return { path: prefix };
 }
 
+/**
+ * The object-store key behind a library file.
+ *
+ * The library reports two shapes for the same object: `url` as
+ * `/library-files/<path>` and `library_path` as `/library/<path>`. Both are
+ * views of the bucket mounted at /library, so the key is whatever follows.
+ */
+export function objectKeyFor(file) {
+  const raw = file?.url || file?.library_path || '';
+  for (const prefix of ['/library-files/', '/library/']) {
+    if (raw.startsWith(prefix)) return raw.slice(prefix.length);
+  }
+  return '';
+}
+
+/**
+ * Delete a file from the tenant's storage.
+ *
+ * Through the OBJECT STORE, not the library. Its bucket mount is read-only by
+ * design, so the library's own delete cannot unlink anything and fails in a way
+ * that reads like a permissions bug. Deleting the object is what actually
+ * removes the file; the rescan is what removes it from both indexes.
+ */
+export async function deleteLibraryObject(key) {
+  if (!key) throw new Error('no object key for that file');
+  const signed = await api.presign({ method: 'DELETE', key });
+  if (!signed?.url) throw new Error('object storage is not configured for this deployment');
+  const res = await fetch(signed.url, { method: 'DELETE' });
+  // S3 answers 204 for a delete, and also for a key that was never there.
+  if (!res.ok && res.status !== 404) {
+    throw new Error(`the object store refused the delete (${res.status})`);
+  }
+  await api.rescan().catch(() => {});
+}
+
 export async function uploadToLibrary(file, folderPath = '', onProgress) {
   const key = (folderPath ? folderPath.replace(/^\/+|\/+$/g, '') + '/' : '') + file.name;
   const signed = await api.presign({ method: 'PUT', key });
