@@ -232,6 +232,15 @@ app.post('/api/slicer/session', async (req, reply) => {
       if (openFile != null && String(openFile).trim() !== '') {
         environment.OPHQ_OPEN_FILE_ID = String(openFile);
       }
+      // The model library indexes the same bucket as the engine but with its
+      // own ids, so a file opened from the Files tab cannot be named by engine
+      // file id. It is named by OBJECT KEY instead, which both indexes agree
+      // on, and the session fetches it with the print-host token it already
+      // holds rather than needing storage credentials of its own.
+      const openKey = req.body?.key;
+      if (typeof openKey === 'string' && openKey.trim() !== '') {
+        environment.OPHQ_OPEN_KEY = openKey.replace(/^\/+/, '');
+      }
     } catch (e) {
       // A missing print host makes the slicer read-only, which is worth logging
       // but not worth failing the launch over.

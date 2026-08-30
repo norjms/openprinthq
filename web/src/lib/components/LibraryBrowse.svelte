@@ -6,7 +6,9 @@
   // the person laid it out. Both read the same objects, so a file can be found
   // either way round.
   import { onMount } from 'svelte';
-  import { library, libraryAsset, makeLibraryFolder } from '$lib/library.js';
+  import { library, libraryAsset, makeLibraryFolder,
+           objectKeyFor, deleteLibraryObject } from '$lib/library.js';
+  import { goto } from '$app/navigation';
   import LibraryUpload from '$lib/components/LibraryUpload.svelte';
 
   let path = $state('');
@@ -16,6 +18,7 @@
   let loading = $state(false);
   let error = $state(null);
   let notice = $state(null);
+  let busy = $state(null);
 
   let dragging = $state(false);
   let uploader;   // LibraryUpload, so the drop zone can hand it files
@@ -65,6 +68,28 @@
     e.preventDefault();
     dragging = false;
     uploader?.send(e.dataTransfer?.files);
+  }
+
+  const sliceable = (f) => ['stl', '3mf', 'step', 'obj', '3ds', 'amf'].includes((f.ext || f.type || '').toLowerCase());
+
+  function openInSlicer(f) {
+    const key = objectKeyFor(f);
+    if (!key) { notice = 'That file has no object key, so it cannot be opened in the slicer.'; return; }
+    goto('/app/slicer?' + new URLSearchParams({ key, name: f.name }).toString());
+  }
+
+  async function removeFile(f) {
+    if (!confirm(`Delete ${f.name} from your storage? This cannot be undone.`)) return;
+    busy = f.url;
+    try {
+      await deleteLibraryObject(objectKeyFor(f));
+      notice = `Deleted ${f.name}.`;
+      await load();
+    } catch (e) {
+      notice = `Could not delete ${f.name}: ${e.message}`;
+    } finally {
+      busy = null;
+    }
   }
 
   function fmtSize(n) {
@@ -129,7 +154,13 @@
           <span class="fname">{f.name}</span>
         {/if}
         <span class="fsize muted">{fmtSize(f.size)}</span>
+        {#if sliceable(f)}
+          <button class="act" onclick={() => openInSlicer(f)}>Open in slicer</button>
+        {/if}
         <a class="act" href={libraryAsset(f.url)} download={f.name}>Download</a>
+        <button class="act danger" onclick={() => removeFile(f)} disabled={busy === f.url}>
+          {busy === f.url ? 'Deleting...' : 'Delete'}
+        </button>
       </div>
     {/each}
   {/if}
@@ -171,6 +202,7 @@
     padding: 0.25rem 0.6rem; border: 1px solid var(--ophq-border); border-radius: 6px;
     background: var(--ophq-surface); color: var(--ophq-text); cursor: pointer; text-decoration: none;
   }
+  .act.danger { color: var(--ophq-danger); border-color: color-mix(in srgb, var(--ophq-danger) 40%, var(--ophq-border)); }
   .notice { color: var(--ophq-text-2); }
   .muted { color: var(--ophq-muted); }
   .warn { color: var(--ophq-warn); }
