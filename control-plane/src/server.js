@@ -26,7 +26,7 @@ import { createAuthentikUser, linkAuthentikUser, authentikUserExists, authentikC
 import { garageConfigured, ensureTenantStorage, usage as storageUsage,
   setQuota as setBucketQuota, defaultQuotaBytes, clusterHealth as storageHealth,
   s3EndpointPublic, s3EndpointLan, s3EndpointEngine, s3PathPrefix, s3Region, presignTtl } from './garage.js';
-import { presign } from './s3sign.js';
+import { presign, signedRequest } from './s3sign.js';
 import { kasmConfigured, kasmEngines, kasmImageFor, ensureKasmUser, ensureSession as ensureKasmSession,
   findSession as findKasmSession, destroySession as destroyKasmSession,
   sessionStatus as kasmSessionStatus } from './kasm.js';
@@ -237,9 +237,19 @@ app.post('/api/slicer/session', async (req, reply) => {
       // file id. It is named by OBJECT KEY instead, which both indexes agree
       // on, and the session fetches it with the print-host token it already
       // holds rather than needing storage credentials of its own.
-      const openKey = req.body?.key;
-      if (typeof openKey === 'string' && openKey.trim() !== '') {
-        environment.OPHQ_OPEN_KEY = openKey.replace(/^\/+/, '');
+      // One key, or several. A session is created once with a fixed
+      // environment, so opening five models means naming all five up front
+      // rather than handing them over one at a time to a running desktop.
+      const keys = []
+        .concat(req.body?.key ?? [], req.body?.keys ?? [])
+        .filter((k) => typeof k === 'string' && k.trim() !== '')
+        .map((k) => k.replace(/^\/+/, ''));
+      if (keys.length === 1) {
+        environment.OPHQ_OPEN_KEY = keys[0];
+      } else if (keys.length > 1) {
+        // Newline separated, because an object key may legitimately contain a
+        // comma and splitting on one would fetch two files that do not exist.
+        environment.OPHQ_OPEN_KEYS = keys.join('\n');
       }
 
       // Storage credentials, so the session can mount the tenant's files at
@@ -721,6 +731,68 @@ async function rescanForUser(userId, reply) {
     return reply.code(502).send({ error: 'engine unreachable: ' + e.message });
   }
 }
+
+// Copy or move an object inside the tenant's bucket.
+//
+// Server-side, using the store's own CopyObject. The alternative, reading the
+// object out and writing it back, moves every byte through here for something
+// the store does internally: renaming a 400 MB plate would become 800 MB of
+// traffic. Doing it in the browser would be worse again.
+//
+// A move is a copy followed by a delete, in that order, because the reverse
+// loses the file if the second step fails. A failed copy leaves the original
+// untouched, which is the right way round to fail.
+app.post('/api/storage/copy', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  if (!garageConfigured()) { reply.code(503).send({ error: 'object storage not configured' }); return; }
+
+  const clean = (v) => String(v || '').replace(/^\/+/, '');
+  const from = clean(req.body?.from);
+  const to = clean(req.body?.to);
+  const move = req.body?.move === true;
+  for (const k of [from, to]) {
+    if (!k || k.length > 1024 || k.split('/').includes('..')) {
+      return reply.code(400).send({ error: 'invalid object key' });
+    }
+  }
+  if (from === to) return { copied: false, reason: 'same key' };
+
+  try {
+    const row = await ensureStorageFor(user, req);
+    const endpoint = s3EndpointEngine();
+    const creds = {
+      endpoint, bucket: row.bucket,
+      accessKeyId: row.access_key_id, secretAccessKey: row.secret_key, region: s3Region()
+    };
+    // The copy source is bucket-qualified and URL-encoded by the same rules as
+    // a key in the path, or a name with a space signs correctly and copies the
+    // wrong object.
+    const src = '/' + row.bucket + '/' + from.split('/').map(encodeURIComponent).join('/');
+    const put = signedRequest({ ...creds, method: 'PUT', key: to, headers: { 'x-amz-copy-source': src } });
+    const cp = await fetch(put.url, { method: put.method, headers: put.headers });
+    if (!cp.ok) {
+      const body = (await cp.text()).slice(0, 300);
+      req.log.error({ status: cp.status, body }, 'object copy failed');
+      return reply.code(502).send({ error: `the object store refused the copy (${cp.status})` });
+    }
+
+    let deleted = false;
+    if (move) {
+      const del = signedRequest({ ...creds, method: 'DELETE', key: from });
+      const dr = await fetch(del.url, { method: del.method, headers: del.headers });
+      // The copy already succeeded, so a failed delete leaves a duplicate
+      // rather than losing anything. Report it instead of failing the request.
+      deleted = dr.ok || dr.status === 404;
+      if (!deleted) req.log.warn({ status: dr.status, from }, 'move copied but did not delete');
+    }
+
+    await rescanForUser(user.id, reply).catch(() => {});
+    return { copied: true, moved: move && deleted, from, to };
+  } catch (e) {
+    req.log.error({ err: e.message }, 'object copy failed');
+    return reply.code(502).send({ error: 'object storage unreachable: ' + e.message });
+  }
+});
 
 app.post('/api/storage/rescan', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;

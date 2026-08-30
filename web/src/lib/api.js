@@ -352,10 +352,15 @@ export const api = {
   // Uploads folder at startup, so the user opens straight into their model.
   // Either an engine file id or an object key. The library has its own ids, so
   // a file opened from the Files tab is named by the key both indexes share.
-  slicerWorkspaceStart: (engine, fileId, key) =>
+  slicerWorkspaceStart: (engine, fileId, key, keys) =>
     req('/slicer/session', {
       method: 'POST',
-      body: JSON.stringify({ engine, ...(fileId != null ? { fileId } : {}), ...(key ? { key } : {}) })
+      body: JSON.stringify({
+        engine,
+        ...(fileId != null ? { fileId } : {}),
+        ...(key ? { key } : {}),
+        ...(keys && keys.length ? { keys } : {})
+      })
     }),
   slicerWorkspaceStop: () => req('/slicer/session', { method: 'DELETE' }),
   slicerWorkspaceEngines: () => req('/slicer/engines'),

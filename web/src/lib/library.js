@@ -201,6 +201,28 @@ export async function deleteLibraryObject(key) {
   await api.rescan().catch(() => {});
 }
 
+/**
+ * Copy or move an object inside the tenant's storage.
+ *
+ * Server-side, through the control-plane, which drives the store's own
+ * CopyObject. Doing it here would mean downloading the file and uploading it
+ * again, which for a large plate is the whole file twice through the browser
+ * for something the store does internally.
+ */
+export async function copyLibraryObject(from, to, { move = false } = {}) {
+  const res = await fetch('/api/storage/copy', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ from, to, move })
+  });
+  if (!res.ok) {
+    let d = null; try { d = await res.json(); } catch { /* not json */ }
+    throw new Error((d && d.error) || res.statusText || 'copy failed');
+  }
+  return res.json();
+}
+
 export async function uploadToLibrary(file, folderPath = '', onProgress) {
   const key = (folderPath ? folderPath.replace(/^\/+|\/+$/g, '') + '/' : '') + file.name;
   const signed = await api.presign({ method: 'PUT', key });
