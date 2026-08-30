@@ -101,8 +101,6 @@ export const library = {
   browse: (path = '') => req('/browse' + qs({ path })),
   tree: () => req('/browse/tree'),
   searchFiles: (q) => req('/browse/search' + qs({ q })),
-  mkdir: (parentPath, folderName) =>
-    req('/browse/mkdir', { method: 'POST', body: JSON.stringify({ parentPath, folderName }) }),
 
   projects: {
     list: () => req('/projects'),
@@ -148,6 +146,26 @@ export const library = {
  * which are two separate indexes over the same bucket and both blind to a
  * write made from outside.
  */
+export async function makeLibraryFolder(parentPath = '', folderName) {
+  const clean = String(folderName || '').trim().replace(/[\\/]/g, '');
+  if (!clean) throw new Error('a folder needs a name');
+  const prefix = (parentPath ? parentPath.replace(/^\/+|\/+$/g, '') + '/' : '') + clean;
+
+  // NOT the library's own mkdir. Its bucket mount is read-only by design, so
+  // that endpoint fails with "Failed to create directory", which reads like a
+  // permissions bug rather than the deliberate constraint it is.
+  //
+  // On an object store a folder is not a thing that gets created: it exists
+  // exactly as long as some key carries its prefix. A zero-byte marker is what
+  // makes an empty one visible through the mount, and it is also what the
+  // folder would have contained anyway once a file landed in it.
+  const signed = await api.presign({ method: 'PUT', key: `${prefix}/.keep` });
+  if (!signed?.url) throw new Error('object storage is not configured for this deployment');
+  await putWithProgress(signed.url, new Blob([]));
+  await api.rescan().catch(() => {});
+  return { path: prefix };
+}
+
 export async function uploadToLibrary(file, folderPath = '', onProgress) {
   const key = (folderPath ? folderPath.replace(/^\/+|\/+$/g, '') + '/' : '') + file.name;
   const signed = await api.presign({ method: 'PUT', key });
