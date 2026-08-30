@@ -16,7 +16,8 @@
   import LibraryCollections from '$lib/components/LibraryCollections.svelte';
   import LibrarySettings from '$lib/components/LibrarySettings.svelte';
   import LibraryUpload from '$lib/components/LibraryUpload.svelte';
-  import { library, libraryAsset } from '$lib/library.js';
+  import { library, libraryAsset, previewFile, objectKeyFor } from '$lib/library.js';
+  import { goto } from '$app/navigation';
 
   let state_ = $state('checking'); // checking | library | fallback
   let error = $state(null);
@@ -26,6 +27,42 @@
   let view = $state('models'); // models | folders | collections | settings
   let uploader;                // LibraryUpload, for the drop zone below
   let dragging = $state(false);
+  // Multi-select. A slicer session is created once with a fixed environment, so
+  // opening several models means naming them all before it starts rather than
+  // handing them to a running desktop one at a time.
+  let selected = $state(new Set());
+  let selecting = $state(false);
+  let sendError = $state(null);
+
+  function toggle(id) {
+    const next = new Set(selected);
+    next.has(id) ? next.delete(id) : next.add(id);
+    selected = next;
+  }
+  function clearSelection() { selected = new Set(); }
+
+  async function sendSelectedToSlicer() {
+    sendError = null;
+    const chosen = models.filter((m) => selected.has(m.id));
+    if (chosen.length === 0) return;
+    selecting = true;
+    try {
+      // The grid rows carry no file list, so each model has to be read for the
+      // file worth slicing. Done in parallel: serially this is one round trip
+      // per model and feels broken on a large selection.
+      const full = await Promise.all(chosen.map((m) => library.model(m.id).catch(() => null)));
+      const keys = full.map((m) => (m ? objectKeyFor(previewFile(m)) : '')).filter(Boolean);
+      if (keys.length === 0) { sendError = 'None of those models has a file that can be opened.'; return; }
+      const q = new URLSearchParams();
+      for (const k of keys) q.append('keys', k);
+      if (keys.length === 1) q.set('name', chosen[0].name);
+      goto('/app/slicer?' + q.toString());
+    } catch (e) {
+      sendError = e.message;
+    } finally {
+      selecting = false;
+    }
+  }
 
   // After an upload the library has to scan before a file becomes a model, and
   // that is asynchronous. Reload once now and once shortly after, so the grid
@@ -132,6 +169,17 @@
     <span class="count">{totalItems} model{totalItems === 1 ? '' : 's'}</span>
   </div>
 
+  {#if selected.size > 0}
+    <div class="selbar">
+      <span>{selected.size} selected</span>
+      <button class="act" onclick={sendSelectedToSlicer} disabled={selecting}>
+        {selecting ? 'Opening...' : 'Send to slicer'}
+      </button>
+      <button class="act" onclick={clearSelection}>Clear</button>
+      {#if sendError}<span class="warn">{sendError}</span>{/if}
+    </div>
+  {/if}
+
   {#if error}<p class="warn">{error}</p>{/if}
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -153,7 +201,11 @@
   {:else}
     <div class="grid" class:dim={loading}>
       {#each models as m (m.id)}
-        <a class="card" href={`/app/files/${m.id}`}>
+        <div class="card" class:picked={selected.has(m.id)}>
+        <label class="pick">
+          <input type="checkbox" checked={selected.has(m.id)} onchange={() => toggle(m.id)} />
+        </label>
+        <a href={`/app/files/${m.id}`}>
           <div class="thumb">
             {#if m.thumbnail}
               <img src={libraryAsset(m.thumbnail)} alt="" loading="lazy" />
@@ -170,6 +222,7 @@
             </span>
           </div>
         </a>
+        </div>
       {/each}
     </div>
 
@@ -225,6 +278,7 @@
   .dim { opacity: 0.55; }
 
   .card {
+    position: relative;
     display: block;
     border: 1px solid var(--ophq-border);
     border-radius: 12px;
@@ -235,6 +289,23 @@
     transition: border-color 0.15s ease;
   }
   .card:hover { border-color: var(--ophq-primary); }
+  .card.picked { border-color: var(--ophq-primary); box-shadow: 0 0 0 1px var(--ophq-primary) inset; }
+  .card > a { display: block; color: inherit; text-decoration: none; }
+  .pick {
+    position: absolute; top: 0.4rem; left: 0.4rem; z-index: 2;
+    background: var(--ophq-surface); border: 1px solid var(--ophq-border);
+    border-radius: 6px; padding: 0.15rem 0.25rem; line-height: 0;
+  }
+  .selbar {
+    display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap;
+    margin-bottom: 0.8rem; padding: 0.5rem 0.7rem;
+    border: 1px solid var(--ophq-primary); border-radius: 8px; background: var(--ophq-bg-2);
+  }
+  .act {
+    padding: 0.3rem 0.75rem; border: 1px solid var(--ophq-border); border-radius: 8px;
+    background: var(--ophq-surface); color: var(--ophq-text); cursor: pointer; font: inherit; font-size: 0.85rem;
+  }
+  .act:disabled { opacity: 0.5; cursor: default; }
 
   .thumb {
     aspect-ratio: 1 / 1;

@@ -118,3 +118,62 @@ export function presign({
     signedHost: host
   };
 }
+
+/**
+ * Sign a request with SigV4 in the AUTHORIZATION HEADER rather than the query
+ * string, and return everything fetch() needs.
+ *
+ * Presigned URLs cannot carry this: a server-side copy is driven by
+ * `x-amz-copy-source`, which has to be inside SignedHeaders, and the query form
+ * here only ever signs `host`. Copy is the reason this exists.
+ *
+ * Copying in the STORE matters. The alternative, reading the object out and
+ * writing it back, moves every byte through the control-plane for an operation
+ * the store performs internally, which turns renaming a 400 MB plate into 800 MB
+ * of traffic and a stalled request.
+ */
+export function signedRequest({
+  method = 'PUT',
+  endpoint,
+  bucket,
+  key,
+  headers = {},
+  accessKeyId,
+  secretAccessKey,
+  region = 'garage',
+  service = 's3',
+  pathPrefix = '',
+  now = new Date()
+}) {
+  const { amzDate, dateStamp } = amzDates(now);
+  const origin = new URL(endpoint);
+  const canonicalUri = '/' + bucket + '/' + encodeKeyPath(key);
+
+  const all = {
+    host: origin.host,
+    'x-amz-content-sha256': UNSIGNED,
+    'x-amz-date': amzDate,
+    ...Object.fromEntries(Object.entries(headers).map(([k, v]) => [k.toLowerCase(), String(v)]))
+  };
+  const names = Object.keys(all).sort();
+  const canonicalHeaders = names.map((n) => `${n}:${all[n].trim()}\n`).join('');
+  const signedHeaders = names.join(';');
+
+  const canonicalRequest = [
+    method, canonicalUri, '', canonicalHeaders, signedHeaders, UNSIGNED
+  ].join('\n');
+  const scope = `${dateStamp}/${region}/${service}/aws4_request`;
+  const toSign = [ALGO, amzDate, scope, sha256hex(canonicalRequest)].join('\n');
+  const signature = crypto
+    .createHmac('sha256', signingKey(secretAccessKey, dateStamp, region, service))
+    .update(toSign, 'utf8').digest('hex');
+
+  return {
+    url: origin.origin + pathPrefix + canonicalUri,
+    method,
+    headers: {
+      ...all,
+      Authorization: `${ALGO} Credential=${accessKeyId}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`
+    }
+  };
+}
