@@ -2009,6 +2009,88 @@ app.get('/__ophq/session', async (req, reply) => {
   }
 });
 
+// ---- same-origin library proxy -------------------------------------------
+// The Files tab is being rewritten as native pages on THIS origin, so the
+// library has to be reachable from here rather than only from its own host.
+// Same origin means no ticket, no cookie and no frame: the request arrives
+// already authenticated by the edge, exactly like every other /api route.
+//
+// Three prefixes, because the library serves three path spaces and a page
+// needs all of them:
+//
+//   /api/library/*        -> its API            (/api/*)
+//   /api/library-file/*   -> file content       (/library-files/*)
+//   /api/library-thumb/*  -> thumbnails         (/uploads/*)
+//
+// The library returns its own absolute URLs in payloads (/library-files/x,
+// /uploads/y). Those are rewritten client-side onto these prefixes rather than
+// here, because rewriting a JSON body means knowing every field that can hold
+// a URL, and getting that list wrong fails silently as a broken image.
+//
+// This does NOT replace the library host yet. Both exist until the last page
+// is native, at which point the host, the ticket and the cookie go together.
+async function proxyToVault(req, reply, targetPath) {
+  if (!vaultEnabled()) { reply.code(503).send({ error: 'tenant library not configured' }); return; }
+  const user = await requireUser(req, reply); if (!user) return;
+  const inst = await getInstanceForUser(user.id);
+  if (!inst?.subdomain) return reply.code(409).send({ error: 'no instance for this account' });
+
+  // A promotion recreates this container and silently drops the docker network
+  // attachment to every library, so the first request after a deploy would
+  // otherwise read as the library being down.
+  await joinVaultNetwork(inst.subdomain).catch(() => {});
+
+  const headers = { ...vaultUserHeaders(user) };
+  for (const h of ['accept', 'accept-language', 'content-type', 'range', 'if-none-match']) {
+    if (req.headers[h]) headers[h] = req.headers[h];
+  }
+  let body;
+  if (!['GET', 'HEAD'].includes(req.method) && req.body !== undefined) {
+    body = Buffer.isBuffer(req.body) ? req.body
+      : (typeof req.body === 'string' ? req.body : JSON.stringify(req.body));
+  }
+  try {
+    const res = await fetch(vaultBase(inst.subdomain) + targetPath, {
+      method: req.method, headers, body, redirect: 'manual'
+    });
+    reply.code(res.status);
+    for (const h of ['content-type', 'cache-control', 'content-disposition', 'accept-ranges', 'content-range', 'etag', 'last-modified']) {
+      const v = res.headers.get(h);
+      if (v) reply.header(h, v);
+    }
+    return reply.send(Buffer.from(await res.arrayBuffer()));
+  } catch (e) {
+    return reply.code(502).send({ error: 'library unreachable: ' + e.message });
+  }
+}
+
+/** Everything after the mount point, query string included, unmodified. */
+function vaultRest(req, mount) {
+  const i = req.url.indexOf(mount);
+  return req.url.slice(i + mount.length);
+}
+
+app.all('/api/library/*', async (req, reply) =>
+  proxyToVault(req, reply, '/api/' + vaultRest(req, '/api/library/')));
+
+app.all('/api/library-file/*', async (req, reply) =>
+  proxyToVault(req, reply, '/library-files/' + vaultRest(req, '/api/library-file/')));
+
+app.all('/api/library-thumb/*', async (req, reply) =>
+  proxyToVault(req, reply, '/uploads/' + vaultRest(req, '/api/library-thumb/')));
+
+// Is there a library for this tenant at all? The native pages ask this before
+// rendering, and fall back to the engine file list when the answer is no, so a
+// deployment without the image degrades rather than breaking the tab.
+app.get('/api/library-status', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  if (!vaultEnabled()) return { available: false };
+  const inst = await getInstanceForUser(user.id);
+  if (!inst?.subdomain) return { available: false };
+  ensureVault(user.id, inst.subdomain, user.email).catch(() => {});
+  return { available: true };
+});
+
 // Everything else on the library host is the library.
 app.all('/*', { constraints: {} }, async (req, reply) => {
   if (!isVaultHost(req)) return reply.callNotFound();
