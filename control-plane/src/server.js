@@ -1911,103 +1911,20 @@ app.all('/api/engine/*', async (req, reply) => {
 });
 
 // ---- tenant model library ------------------------------------------------
-// Served on its OWN ORIGIN, not a sub-path.
+// Reached ONLY through the same-origin proxy below.
 //
-// The library references every asset absolutely (/css/style.css, /js/app.js)
-// and calls its own API as fetch('/api/...'). Behind a /vault prefix those
-// resolve to the app's origin root, so the stylesheet 404s and its API calls
-// collide with ours. Rewriting them in the proxy would mean rewriting its
-// JavaScript, which breaks on the next upstream release. A separate host makes
-// every one of those paths correct with no rewriting at all.
+// Until the Files tab was rewritten as native pages, the library was framed
+// from its own host, and that host needed machinery of its own: a 60 second
+// HMAC ticket, a 12 hour cookie saying which tenant a request belonged to, and
+// a catch-all proxy keyed on the Host header. All of it existed because
+// Authentik cannot complete an OAuth round trip inside an iframe, so the app
+// had to carry its own authentication decision across an origin boundary.
 //
-// Authentik gates the app host at the edge, and the ticket below carries that
-// decision to this one.
-const VAULT_HOST = process.env.OPHQ_VAULT_HOST || '';
-
-// The library host is NOT behind Authentik, and that is deliberate.
-//
-// It is framed by the Files tab. Authentik's authorize endpoint sends
-// X-Frame-Options: DENY and then renders a flow-executor page, so the SSO round
-// trip a first visit needs can never complete inside an iframe: the frame is
-// blocked and the tab shows a failure page even for a signed-in user.
-//
-// So the app, which IS behind Authentik, mints a short-lived signed ticket for
-// the user it already authenticated, and the library host trusts that instead.
-// Same shape as the print-host tokens: the trust comes from a secret only this
-// service holds, not from a session the browser has to establish in a frame.
-//
-// The cookie that ticket becomes says WHICH TENANT a later request belongs to,
-// and nothing else. The library itself is told who the person is on every
-// proxied request, in signed headers, so there is no library session to
-// establish, keep alive or hand to a browser.
-const VAULT_TICKET_TTL = 60; // seconds; it is redeemed immediately on frame load
-const VAULT_COOKIE = 'ophq_vault';
-
-function vaultSign(payload) {
-  return createHmac('sha256', GATEWAY_SECRET || 'ophq-vault').update(payload).digest('base64url');
-}
-function mintVaultTicket(userId) {
-  const body = `${userId}.${Math.floor(Date.now() / 1000) + VAULT_TICKET_TTL}`;
-  return `${body}.${vaultSign(body)}`;
-}
-/** Returns the user id, or null. Constant-time compare, and expiry is checked
- *  before the signature is trusted for anything. */
-function readVaultTicket(t) {
-  const parts = String(t || '').split('.');
-  if (parts.length !== 3) return null;
-  const [uid, exp, sig] = parts;
-  const expect = vaultSign(`${uid}.${exp}`);
-  if (sig.length !== expect.length) return null;
-  if (!timingSafeEqual(Buffer.from(sig), Buffer.from(expect))) return null;
-  if (Number(exp) < Math.floor(Date.now() / 1000)) return null;
-  return Number(uid) || null;
-}
-
-function isVaultHost(req) {
-  const h = String(req.headers.host || '').split(':')[0].toLowerCase();
-  return !!VAULT_HOST && h === VAULT_HOST.toLowerCase();
-}
-
-// Entry point. Opens a library session for the signed-in user, sets the cookie
-// for THIS origin, and bounces to the app. The iframe points here, never at /.
-// Tell the app where the library lives, and whether it is available at all.
-// Separate from the session route because that one runs on the LIBRARY host and
-// this one runs on the app host.
-app.get('/api/vault/status', async (req, reply) => {
-  const user = await requireUser(req, reply); if (!user) return;
-  if (!vaultEnabled() || !VAULT_HOST) { reply.code(503).send({ error: 'tenant library not configured' }); return; }
-  const inst = await getInstanceForUser(user.id);
-  if (!inst?.subdomain) return reply.code(409).send({ error: 'no instance for this account' });
-  ensureVault(user.id, inst.subdomain, user.email).catch(() => {});
-  return { url: `https://${VAULT_HOST}/__ophq/session?t=${mintVaultTicket(user.id)}` };
-});
-
-app.get('/__ophq/session', async (req, reply) => {
-  const userId = readVaultTicket(req.query?.t);
-  if (!userId) { reply.code(401).send({ error: 'invalid or expired ticket' }); return; }
-  if (!vaultEnabled()) { reply.code(503).send({ error: 'tenant library not configured' }); return; }
-  const user = await getUserById(userId);
-  if (!user) { reply.code(403).send({ error: 'no-account' }); return; }
-  const inst = await getInstanceForUser(user.id);
-  if (!inst?.subdomain) return reply.code(409).send({ error: 'no instance for this account' });
-  try {
-    // Re-attach before anything else. A promotion recreates this container and
-    // drops the network attachment, so the first request after a deploy would
-    // otherwise fail with the library looking unreachable.
-    await joinVaultNetwork(inst.subdomain).catch(() => {});
-    await ensureVault(user.id, inst.subdomain, user.email).catch(() => {});
-    // Our own identity for this host, and the only cookie in play: it tells the
-    // proxy which tenant a later request is for. SameSite=None; Secure because
-    // the library is framed from the app's origin, and in that third-party
-    // context a Lax cookie is never sent back.
-    const id = `${user.id}.${Math.floor(Date.now() / 1000) + 12 * 3600}`;
-    reply.header('set-cookie',
-      `${VAULT_COOKIE}=${id}.${vaultSign(id)}; Path=/; HttpOnly; Secure; SameSite=None`);
-    return reply.redirect('/');
-  } catch (e) {
-    return reply.code(502).send({ error: 'library unreachable: ' + e.message });
-  }
-});
+// There is no second origin now and nothing is framed, so all of it is gone:
+// OPHQ_VAULT_HOST, /api/vault/status, /__ophq/session, the ophq_vault cookie,
+// mintVaultTicket, readVaultTicket and isVaultHost. A request to the library
+// is an ordinary /api request on this origin, authenticated by the edge like
+// every other one.
 
 // ---- same-origin library proxy -------------------------------------------
 // The Files tab is being rewritten as native pages on THIS origin, so the
@@ -2089,46 +2006,6 @@ app.get('/api/library-status', async (req, reply) => {
   if (!inst?.subdomain) return { available: false };
   ensureVault(user.id, inst.subdomain, user.email).catch(() => {});
   return { available: true };
-});
-
-// Everything else on the library host is the library.
-app.all('/*', { constraints: {} }, async (req, reply) => {
-  if (!isVaultHost(req)) return reply.callNotFound();
-  if (!vaultEnabled()) { reply.code(503).send({ error: 'tenant library not configured' }); return; }
-  const userId = readVaultTicket(req.cookies?.[VAULT_COOKIE]);
-  if (!userId) {
-    // No ticket cookie: the frame was opened directly, or it expired. Send them
-    // back through the app, which is where the identity actually lives.
-    reply.code(401).send({ error: 'library session required' });
-    return;
-  }
-  const user = await getUserById(userId);
-  if (!user) { reply.code(403).send({ error: 'no-account' }); return; }
-  const inst = await getInstanceForUser(user.id);
-  if (!inst?.subdomain) return reply.code(409).send({ error: 'no instance for this account' });
-  // The person's identity is asserted here, per request, and signed. Nothing
-  // the browser sent authenticates anything to the library: our own cookie
-  // only said which tenant this is, and it is deliberately not forwarded.
-  const headers = { ...vaultUserHeaders(user) };
-  for (const h of ['accept', 'accept-language', 'content-type', 'range']) {
-    if (req.headers[h]) headers[h] = req.headers[h];
-  }
-  let body;
-  if (!['GET', 'HEAD'].includes(req.method) && req.body !== undefined) {
-    body = Buffer.isBuffer(req.body) ? req.body
-      : (typeof req.body === 'string' ? req.body : JSON.stringify(req.body));
-  }
-  try {
-    const res = await fetch(vaultBase(inst.subdomain) + req.url, { method: req.method, headers, body, redirect: 'manual' });
-    reply.code(res.status);
-    for (const h of ['content-type', 'cache-control', 'content-disposition', 'location', 'accept-ranges', 'content-range', 'etag', 'last-modified']) {
-      const v = res.headers.get(h);
-      if (v) reply.header(h, v);
-    }
-    return reply.send(Buffer.from(await res.arrayBuffer()));
-  } catch (e) {
-    return reply.code(502).send({ error: 'library unreachable: ' + e.message });
-  }
 });
 
 // ---- boot ---------------------------------------------------------------
