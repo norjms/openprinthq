@@ -6,7 +6,8 @@
   // the person laid it out. Both read the same objects, so a file can be found
   // either way round.
   import { onMount } from 'svelte';
-  import { library, libraryAsset, uploadToLibrary, makeLibraryFolder } from '$lib/library.js';
+  import { library, libraryAsset, makeLibraryFolder } from '$lib/library.js';
+  import LibraryUpload from '$lib/components/LibraryUpload.svelte';
 
   let path = $state('');
   let folders = $state([]);
@@ -16,9 +17,8 @@
   let error = $state(null);
   let notice = $state(null);
 
-  let uploading = $state(null);   // { name, percent }
   let dragging = $state(false);
-  let fileInput;
+  let uploader;   // LibraryUpload, so the drop zone can hand it files
 
   const crumbs = $derived(
     path ? path.split('/').filter(Boolean).map((name, i, all) => ({
@@ -43,25 +43,10 @@
     }
   }
 
-  async function upload(list) {
-    const chosen = Array.from(list || []);
-    if (chosen.length === 0) return;
-    notice = null;
-    for (const f of chosen) {
-      uploading = { name: f.name, percent: 0 };
-      try {
-        await uploadToLibrary(f, path, (percent) => { uploading = { name: f.name, percent }; });
-      } catch (e) {
-        notice = `Could not upload ${f.name}: ${e.message}`;
-        uploading = null;
-        return;
-      }
-    }
-    uploading = null;
+  async function afterUpload(chosen) {
     notice = chosen.length === 1 ? `Uploaded ${chosen[0].name}.` : `Uploaded ${chosen.length} files.`;
-    // The scan is asynchronous on the library's side, so a reload straight
-    // after the PUT can still miss the new row. Reload anyway: it is right for
-    // the folder listing, which reads the bucket rather than the index.
+    // Right immediately: this listing reads the bucket, not the library's
+    // index, so it does not wait on the scan the way the model grid does.
     await load();
   }
 
@@ -79,7 +64,7 @@
   function onDrop(e) {
     e.preventDefault();
     dragging = false;
-    upload(e.dataTransfer?.files);
+    uploader?.send(e.dataTransfer?.files);
   }
 
   function fmtSize(n) {
@@ -101,19 +86,9 @@
   {/each}
   <span class="spacer"></span>
   <button class="act" onclick={newFolder}>New folder</button>
-  <button class="act" onclick={() => fileInput?.click()}>Upload</button>
-  <input
-    class="hiddenInput"
-    type="file"
-    multiple
-    bind:this={fileInput}
-    onchange={(e) => { upload(e.currentTarget.files); e.currentTarget.value = ''; }}
-  />
+  <LibraryUpload bind:this={uploader} folderPath={path} ondone={afterUpload} />
 </div>
 
-{#if uploading}
-  <p class="notice">Uploading {uploading.name}... {uploading.percent}%</p>
-{/if}
 {#if notice}<p class="notice">{notice}</p>{/if}
 {#if error}<p class="warn">{error}</p>{/if}
 
@@ -166,7 +141,6 @@
   .crumb:disabled { color: var(--ophq-text); cursor: default; }
   .sep { color: var(--ophq-muted); }
   .spacer { flex: 1 1 auto; }
-  .hiddenInput { display: none; }
 
   .drop {
     display: grid; gap: 0.35rem;
