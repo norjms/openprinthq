@@ -338,6 +338,17 @@ async function startVaultContainer({ subdomain, bucketDir }) {
   try { await exec('test', ['-d', bucketDir]); }
   catch { return { started: false, reason: 'mount-root-missing' }; }
   try {
+    // STOP, then remove. Never `rm -f` on a library.
+    //
+    // It keeps its database in memory under sql.js and writes it out on
+    // SIGTERM, so a killed container silently rolls back everything since the
+    // last flush. There is no error: the tenant simply finds recent edits gone.
+    // That was nearly harmless while a recreate only happened on an auth-secret
+    // mismatch, which is rare. Now that an image change triggers one, this path
+    // runs on every library release, which is exactly when it must not lose
+    // data. The -f stays on the rm for the already-stopped and never-existed
+    // cases; the stop above is what makes it safe.
+    await exec('docker', ['stop', '-t', '30', name]).catch(() => {});
     await exec('docker', ['rm', '-f', name]).catch(() => {});
 
     // A DEDICATED, INTERNAL network per tenant library, not the shared one.
