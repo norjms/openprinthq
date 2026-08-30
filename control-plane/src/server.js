@@ -241,6 +241,35 @@ app.post('/api/slicer/session', async (req, reply) => {
       if (typeof openKey === 'string' && openKey.trim() !== '') {
         environment.OPHQ_OPEN_KEY = openKey.replace(/^\/+/, '');
       }
+
+      // Storage credentials, so the session can mount the tenant's files at
+      // ~/OpenPrintHQ instead of only being able to fetch one model at a time.
+      //
+      // This is the one place a raw S3 key leaves this service, and it is a
+      // deliberate exception rather than a drift back from presigned URLs: a
+      // FUSE mount signs thousands of requests over hours and cannot ask us for
+      // each one. The key is the tenant's own, scoped to their bucket, and the
+      // container it lands in is a desktop that tenant already controls, so it
+      // grants nothing they did not already have.
+      //
+      // The LAN endpoint, not the public one. Sessions run on their own VLAN;
+      // signing the public address sends every read out to the edge and back,
+      // and behind a CDN it does not arrive at all.
+      try {
+        if (garageConfigured()) {
+          const st = await getTenantStorage(user.id);
+          if (st?.bucket && st?.access_key_id && st?.secret_key) {
+            environment.OPHQ_S3_ENDPOINT = s3EndpointLan();
+            environment.OPHQ_S3_BUCKET = st.bucket;
+            environment.OPHQ_S3_KEY = st.access_key_id;
+            environment.OPHQ_S3_SECRET = st.secret_key;
+            environment.OPHQ_S3_REGION = s3Region();
+          }
+        }
+      } catch (e) {
+        // A session without the library folder is still a working slicer.
+        req.log.warn({ err: e.message }, 'no storage credentials for the slicer session');
+      }
     } catch (e) {
       // A missing print host makes the slicer read-only, which is worth logging
       // but not worth failing the launch over.
