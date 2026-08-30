@@ -6,7 +6,11 @@
   // SPDX-License-Identifier: AGPL-3.0-or-later
   import { api } from '$lib/api';
 
-  let { fileId, name = '' } = $props();
+  // Source is either an engine file id, or a URL that returns raw g-code text.
+  // The library needs the second: its files are not engine library rows, and
+  // teaching this component a second API client would duplicate the parser,
+  // which is the only part that is hard to get right.
+  let { fileId = null, url = null, name = '' } = $props();
 
   // Guards — real prints can be tens of MB / millions of moves. Keep the UI
   // responsive and never hang the tab.
@@ -122,7 +126,14 @@
   async function load() {
     loading = true; error = null; truncated = false;
     try {
-      const text = await api.fileGcode(fileId);
+      let text;
+      if (url) {
+        const res = await fetch(url, { credentials: 'include' });
+        if (!res.ok) throw Object.assign(new Error('could not load g-code'), { status: res.status });
+        text = await res.text();
+      } else {
+        text = await api.fileGcode(fileId);
+      }
       if (typeof text !== 'string') throw new Error('no g-code returned');
       if (text.length > MAX_BYTES) {
         // Parse a leading slice so the preview still renders something.
@@ -186,7 +197,7 @@
 
   // Redraw when the selected layer or travel toggle changes.
   $effect(() => { cur; showTravel; queueDraw(); });
-  $effect(() => { load(); });
+  $effect(() => { fileId; url; load(); });
 
   const curZ = $derived(layers.length ? layers[Math.min(cur, layers.length - 1)].z : 0);
 </script>
