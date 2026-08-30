@@ -6,7 +6,7 @@
   // the person laid it out. Both read the same objects, so a file can be found
   // either way round.
   import { onMount } from 'svelte';
-  import { library, libraryAsset, uploadToLibrary } from '$lib/library.js';
+  import { library, libraryAsset, uploadToLibrary, makeLibraryFolder } from '$lib/library.js';
 
   let path = $state('');
   let folders = $state([]);
@@ -69,7 +69,7 @@
     const name = prompt('New folder name');
     if (!name) return;
     try {
-      await library.mkdir(path, name);
+      await makeLibraryFolder(path, name);
       await load();
     } catch (e) {
       notice = `Could not create the folder: ${e.message}`;
