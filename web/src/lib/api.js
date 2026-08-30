@@ -381,6 +381,12 @@ export const api = {
       method: 'POST', body: JSON.stringify({ file_ids: fileIds })
     }),
   // Multipart upload straight through the gateway to the user's engine library.
+  // Presign a single object operation, and ask both indexes to re-read the
+  // bucket afterwards. Named here so callers other than uploadFile (the model
+  // library) can use the same path rather than re-deriving it.
+  presign: (body) => req('/storage/presign', { method: 'POST', body: JSON.stringify(body) }),
+  rescan: () => req('/storage/rescan', { method: 'POST' }),
+
   /**
    * Upload straight to the tenant's object store using a presigned URL, so the
    * bytes go browser -> store and never through the control-plane. The engine
@@ -434,7 +440,7 @@ export const api = {
  * No credentials and no extra headers: the signature covers the request, and
  * sending a header the signature does not include is rejected by the store.
  */
-function putWithProgress(url, file, onProgress) {
+export function putWithProgress(url, file, onProgress) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('PUT', url, true);
