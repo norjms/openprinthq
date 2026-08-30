@@ -102,7 +102,36 @@ export const library = {
   tree: () => req('/browse/tree'),
   searchFiles: (q) => req('/browse/search' + qs({ q })),
   mkdir: (parentPath, folderName) =>
-    req('/browse/mkdir', { method: 'POST', body: JSON.stringify({ parentPath, folderName }) })
+    req('/browse/mkdir', { method: 'POST', body: JSON.stringify({ parentPath, folderName }) }),
+
+  projects: {
+    list: () => req('/projects'),
+    get: (id) => req(`/projects/${id}`),
+    create: (data) => req('/projects', { method: 'POST', body: JSON.stringify(data) }),
+    remove: (id) => req(`/projects/${id}`, { method: 'DELETE' }),
+    addModel: (projectId, modelId) =>
+      req(`/projects/${projectId}/models`, { method: 'POST', body: JSON.stringify({ model_id: modelId }) }),
+    removeModel: (projectId, modelId) =>
+      req(`/projects/${projectId}/models/${modelId}`, { method: 'DELETE' })
+  },
+
+  prints: {
+    add: (modelId, data) =>
+      req(`/models/${modelId}/prints`, { method: 'POST', body: JSON.stringify(data) }),
+    remove: (id) => req(`/prints/${id}`, { method: 'DELETE' })
+  },
+
+  materials: () => req('/materials'),
+
+  settings: {
+    duplicates: () => req('/system/duplicates'),
+    createCategory: (data) => req('/categories', { method: 'POST', body: JSON.stringify(data) }),
+    deleteCategory: (id) => req(`/categories/${id}`, { method: 'DELETE' }),
+    createTag: (data) => req('/tags', { method: 'POST', body: JSON.stringify(data) }),
+    deleteTag: (id) => req(`/tags/${id}`, { method: 'DELETE' }),
+    createMaterial: (data) => req('/materials', { method: 'POST', body: JSON.stringify(data) }),
+    deleteMaterial: (id) => req(`/materials/${id}`, { method: 'DELETE' })
+  }
 };
 
 /**
