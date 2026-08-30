@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@fontsource/inter": "^5.1.0",
-    "@fontsource/jetbrains-mono": "^5.1.1"
+    "@fontsource/jetbrains-mono": "^5.1.1",
+    "three": "^0.180.0"
   }
 }
