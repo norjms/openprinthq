@@ -12,10 +12,15 @@
   import { onMount } from 'svelte';
   import PageTitle from '$lib/components/PageTitle.svelte';
   import EngineFiles from '$lib/components/EngineFiles.svelte';
+  import LibraryBrowse from '$lib/components/LibraryBrowse.svelte';
   import { library, libraryAsset } from '$lib/library.js';
 
   let state_ = $state('checking'); // checking | library | fallback
   let error = $state(null);
+  // Two ways into the same objects: the library's index, and the bucket as the
+  // person laid it out. Neither is a subset of the other, because a folder can
+  // hold files the index has not scanned yet.
+  let view = $state('models'); // models | folders
 
   let models = $state([]);
   let categories = $state([]);
@@ -74,6 +79,14 @@
   <p class="muted">Opening your library...</p>
 {:else if state_ === 'fallback'}
   <EngineFiles />
+{:else}
+  <div class="tabs">
+    <button class:on={view === 'models'} onclick={() => (view = 'models')}>Models</button>
+    <button class:on={view === 'folders'} onclick={() => (view = 'folders')}>Folders</button>
+  </div>
+
+{#if view === 'folders'}
+  <LibraryBrowse />
 {:else}
   <div class="bar">
     <input
@@ -139,8 +152,18 @@
     {/if}
   {/if}
 {/if}
+{/if}
 
 <style>
+  .tabs { display: flex; gap: 0.4rem; margin-bottom: 0.9rem; }
+  .tabs button {
+    padding: 0.35rem 0.9rem;
+    border: 1px solid var(--ophq-border); border-radius: 999px;
+    background: var(--ophq-surface); color: var(--ophq-text-2);
+    cursor: pointer; font: inherit;
+  }
+  .tabs button.on { border-color: var(--ophq-primary); color: var(--ophq-text); }
+
   .bar {
     display: flex;
     gap: 0.6rem;
