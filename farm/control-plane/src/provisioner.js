@@ -471,24 +471,57 @@ export async function joinVaultNetwork(subdomain) {
 }
 
 /**
- * Is this container signing-compatible with us?
+ * Is this container still the one we would start today?
  *
- * A library started with a different OPHQ_AUTH_SECRET refuses every request we
- * make, which presents as a library that is broken rather than one that is
- * merely stale, and the fix is a recreate. Answering false here is what makes
- * ensureVault do that. A container with no secret at all is left alone: that
- * is a deployment running without a gateway secret, not a mismatch.
+ * Two ways it can be stale, and both present as something other than staleness:
+ *
+ *   Secret. A library started with a different OPHQ_AUTH_SECRET refuses every
+ *   request we make, so it looks broken rather than out of date. A container
+ *   with no secret at all is left alone: that is a deployment running without a
+ *   gateway secret, not a mismatch.
+ *
+ *   Image. This is compared by resolved image ID, not by the tag string,
+ *   because promotion RETAGS: :test and :prod are moving tags pointed at new
+ *   bytes, so a tag comparison would call a year-old container current. The
+ *   container's .Image is already an ID; the desired one is whatever
+ *   OPHQ_VAULT_IMAGE resolves to locally right now.
+ *
+ * If the desired image cannot be resolved at all, this answers "matches" and
+ * leaves the container alone. That is the case where the image was never
+ * pre-pulled onto this host, and recreating would tear down a working library
+ * to start a container whose image cannot be fetched: the control-plane holds
+ * no registry credentials. Stale beats absent.
+ *
+ * Returns a reason so a recreate says WHY in the logs, since "the library
+ * restarted" with no cause is the thing that wastes an afternoon later.
  */
-async function vaultSecretMatches(name) {
+async function vaultMatches(name) {
   const want = vaultAuthSecret();
-  if (!want) return true;
+  if (want) {
+    try {
+      const { stdout } = await exec('docker', [
+        'inspect', '-f', '{{range .Config.Env}}{{println .}}{{end}}', name
+      ]);
+      const line = stdout.split('\n').find((l) => l.startsWith('OPHQ_AUTH_SECRET='));
+      if (!line || line.slice('OPHQ_AUTH_SECRET='.length) !== want) {
+        return { ok: false, reason: 'secret-changed' };
+      }
+    } catch { return { ok: true, reason: 'uninspectable' }; }
+  }
+
+  let wantId = '';
   try {
-    const { stdout } = await exec('docker', [
-      'inspect', '-f', '{{range .Config.Env}}{{println .}}{{end}}', name
-    ]);
-    const line = stdout.split('\n').find((l) => l.startsWith('OPHQ_AUTH_SECRET='));
-    return !!line && line.slice('OPHQ_AUTH_SECRET='.length) === want;
-  } catch { return true; }
+    const { stdout } = await exec('docker', ['image', 'inspect', '-f', '{{.Id}}', VAULT_IMAGE]);
+    wantId = stdout.trim();
+  } catch { return { ok: true, reason: 'image-unresolvable' }; }
+  if (!wantId) return { ok: true, reason: 'image-unresolvable' };
+
+  try {
+    const { stdout } = await exec('docker', ['inspect', '-f', '{{.Image}}', name]);
+    if (stdout.trim() !== wantId) return { ok: false, reason: 'image-changed' };
+  } catch { return { ok: true, reason: 'uninspectable' }; }
+
+  return { ok: true, reason: 'current' };
 }
 
 /** Ensure the tenant has a library container, idempotently. */
@@ -497,20 +530,25 @@ export async function ensureVault(userId, subdomain, email) {
   const bucketDir = await bucketDirFor(userId);
   if (!bucketDir) return { changed: false, reason: 'no-bucket' };
   const name = `ophq-vault-${subdomain}`;
+  let stale = '';
   try {
     const { stdout } = await exec('docker', ['inspect', '-f', '{{.State.Running}}', name]);
-    if (stdout.trim() === 'true' && await vaultSecretMatches(name)) {
-      // Re-attach first: the container can be running while the control-plane
-      // has lost its route to it, which is exactly the state a promotion leaves.
-      await joinVaultNetwork(subdomain);
-      await bootstrapVault(userId, subdomain, email, 3);
-      return { changed: false, reason: 'already-running' };
+    if (stdout.trim() === 'true') {
+      const m = await vaultMatches(name);
+      if (m.ok) {
+        // Re-attach first: the container can be running while the control-plane
+        // has lost its route to it, which is exactly the state a promotion leaves.
+        await joinVaultNetwork(subdomain);
+        await bootstrapVault(userId, subdomain, email, 3);
+        return { changed: false, reason: 'already-running' };
+      }
+      stale = m.reason;
     }
   } catch { /* not present */ }
   const r = await startVaultContainer({ subdomain, bucketDir });
   if (!r.started) return { changed: false, reason: r.reason };
   await bootstrapVault(userId, subdomain, email);
-  return { changed: true };
+  return { changed: true, reason: stale || 'created' };
 }
 
 export async function provisionForUser(user) {
