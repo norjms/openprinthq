@@ -84,6 +84,7 @@
   // engine file id: the two indexes cover the same bucket with different ids,
   // and the key is the thing they agree on.
   let pendingKey = $state(null);
+  let pendingKeys = $state([]);
   let pendingFileName = $state(null);
 
   async function wsLoad() {
@@ -112,7 +113,7 @@
     wsBusy = true; wsError = null;
     justClosed = false;
     try {
-      const r = await api.slicerWorkspaceStart(engine, pendingFileId, pendingKey);
+      const r = await api.slicerWorkspaceStart(engine, pendingFileId, pendingKey, pendingKeys);
       wsUrl = r.url; wsStatus = r.status;
       if (String(r.status || '').toLowerCase() !== 'running') schedulePoll();
     } catch (e) { wsError = e.message || 'could not start the slicer'; }
@@ -131,6 +132,7 @@
     const f = q.get('file');
     if (f) pendingFileId = f;
     pendingKey = q.get('key');
+    pendingKeys = q.getAll('keys');
     pendingFileName = q.get('name');
     load();
     loadEngines();
@@ -178,8 +180,12 @@
           <span class="muted small">
             {#if !wsUrl}Not running{:else if wsStatus === 'running'}{ENGINES.find((x) => x.key === engine)?.name} running{:else}Starting up{/if}
           </span>
-          {#if (pendingFileId || pendingKey) && !wsUrl}
-            <span class="pill">will open {pendingFileName || ('file ' + (pendingFileId || pendingKey))}</span>
+          {#if (pendingFileId || pendingKey || pendingKeys.length) && !wsUrl}
+            <span class="pill">
+              will open {pendingKeys.length > 1
+                ? pendingKeys.length + ' models'
+                : (pendingFileName || ('file ' + (pendingFileId || pendingKey)))}
+            </span>
           {/if}
         </div>
         <div class="flex center gap">
