@@ -7,7 +7,7 @@
   // either way round.
   import { onMount } from 'svelte';
   import { library, libraryAsset, makeLibraryFolder,
-           objectKeyFor, deleteLibraryObject } from '$lib/library.js';
+           objectKeyFor, deleteLibraryObject, copyLibraryObject } from '$lib/library.js';
   import { goto } from '$app/navigation';
   import LibraryUpload from '$lib/components/LibraryUpload.svelte';
 
@@ -76,6 +76,24 @@
     const key = objectKeyFor(f);
     if (!key) { notice = 'That file has no object key, so it cannot be opened in the slicer.'; return; }
     goto('/app/slicer?' + new URLSearchParams({ key, name: f.name }).toString());
+  }
+
+  async function relocate(f, move) {
+    const key = objectKeyFor(f);
+    if (!key) { notice = 'That file has no object key.'; return; }
+    const suggestion = move ? key : key.replace(/(\.[^./]+)?$/, ' copy$1');
+    const to = prompt(move ? 'Move to (path inside your storage)' : 'Copy to', suggestion);
+    if (!to || to === key) return;
+    busy = f.url;
+    try {
+      await copyLibraryObject(key, to, { move });
+      notice = move ? `Moved to ${to}.` : `Copied to ${to}.`;
+      await load();
+    } catch (e) {
+      notice = `Could not ${move ? 'move' : 'copy'} ${f.name}: ${e.message}`;
+    } finally {
+      busy = null;
+    }
   }
 
   async function removeFile(f) {
@@ -158,6 +176,8 @@
           <button class="act" onclick={() => openInSlicer(f)}>Open in slicer</button>
         {/if}
         <a class="act" href={libraryAsset(f.url)} download={f.name}>Download</a>
+        <button class="act" onclick={() => relocate(f, true)} disabled={busy === f.url}>Move</button>
+        <button class="act" onclick={() => relocate(f, false)} disabled={busy === f.url}>Copy</button>
         <button class="act danger" onclick={() => removeFile(f)} disabled={busy === f.url}>
           {busy === f.url ? 'Deleting...' : 'Delete'}
         </button>
