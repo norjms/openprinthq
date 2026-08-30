@@ -74,5 +74,36 @@ export const library = {
   categories: () => req('/categories'),
   tags: () => req('/tags'),
 
+  files: {
+    /**
+     * Queue a library file for printing.
+     *
+     * This goes through the library's own printer integration, which speaks
+     * Moonraker to a shim on the control-plane that puts the job in the
+     * OpenPrintHQ queue. The indirection is a leftover from when the library
+     * was a separate application and could not call our API. Keeping the call
+     * behind this one function means replacing it later is a change here and
+     * nowhere else.
+     */
+    sendToPrinter: (fileId, printerId = 'openprinthq') =>
+      req(`/files/${fileId}/send-to-printer`, {
+        method: 'POST',
+        body: JSON.stringify({ printer_id: printerId })
+      }),
+    remove: (fileId, deleteDisk = false) =>
+      req(`/files/${fileId}?deleteDisk=${deleteDisk}`, { method: 'DELETE' })
+  },
+
   scan: () => req('/library/scan', { method: 'POST' })
 };
+
+/** Which file of a model to preview: a real mesh if there is one, else the
+ *  first g-code. Ordering matters more than it looks, since a model usually
+ *  holds both and the mesh is the one worth showing. */
+export function previewFile(model) {
+  const files = model?.files || [];
+  const by = (t) => files.find((f) => f.file_type === t);
+  return by('stl') || by('3mf') || by('gcode') || by('bgcode') || files[0] || null;
+}
+
+export const PREVIEWABLE = new Set(['stl', '3mf', 'gcode', 'bgcode']);
