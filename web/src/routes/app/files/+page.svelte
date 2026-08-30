@@ -15,6 +15,7 @@
   import LibraryBrowse from '$lib/components/LibraryBrowse.svelte';
   import LibraryCollections from '$lib/components/LibraryCollections.svelte';
   import LibrarySettings from '$lib/components/LibrarySettings.svelte';
+  import LibraryUpload from '$lib/components/LibraryUpload.svelte';
   import { library, libraryAsset } from '$lib/library.js';
 
   let state_ = $state('checking'); // checking | library | fallback
@@ -23,6 +24,16 @@
   // person laid it out. Neither is a subset of the other, because a folder can
   // hold files the index has not scanned yet.
   let view = $state('models'); // models | folders | collections | settings
+  let uploader;                // LibraryUpload, for the drop zone below
+  let dragging = $state(false);
+
+  // After an upload the library has to scan before a file becomes a model, and
+  // that is asynchronous. Reload once now and once shortly after, so the grid
+  // catches up without the person having to work out that they should refresh.
+  function afterUpload() {
+    load();
+    setTimeout(load, 4000);
+  }
 
   let models = $state([]);
   let categories = $state([]);
@@ -117,16 +128,27 @@
       <option value="files">Most files</option>
       <option value="prints">Most printed</option>
     </select>
+    <LibraryUpload bind:this={uploader} ondone={afterUpload} />
     <span class="count">{totalItems} model{totalItems === 1 ? '' : 's'}</span>
   </div>
 
   {#if error}<p class="warn">{error}</p>{/if}
 
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div
+  class="dropzone"
+  class:over={dragging}
+  ondragover={(e) => { e.preventDefault(); dragging = true; }}
+  ondragleave={() => (dragging = false)}
+  ondrop={(e) => { e.preventDefault(); dragging = false; uploader?.send(e.dataTransfer?.files); }}
+>
   {#if loading && models.length === 0}
     <p class="muted">Loading...</p>
   {:else if models.length === 0}
     <p class="muted">
-      {search || category ? 'Nothing matches that.' : 'This library is empty. Files added to your storage appear here after a scan.'}
+      {search || category
+        ? 'Nothing matches that.'
+        : 'This library is empty. Drop files here, or use Upload above. They appear as models once the library scans them.'}
     </p>
   {:else}
     <div class="grid" class:dim={loading}>
@@ -159,6 +181,7 @@
       </div>
     {/if}
   {/if}
+</div>
 {/if}
 {/if}
 
@@ -188,6 +211,9 @@
     color: var(--ophq-text);
   }
   .count { color: var(--ophq-muted); font-size: 0.85rem; margin-left: auto; }
+
+  .dropzone { border: 1px dashed transparent; border-radius: 12px; padding: 0.4rem; min-height: 6rem; }
+  .dropzone.over { border-color: var(--ophq-primary); background: var(--ophq-bg-2); }
 
   .grid {
     display: grid;
