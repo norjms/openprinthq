@@ -11,6 +11,8 @@
 //   /api/library-file/*   file content
 //   /api/library-thumb/*  thumbnails
 
+import { api, putWithProgress } from '$lib/api.js';
+
 const API = '/api/library';
 
 async function req(path, opts = {}) {
@@ -94,8 +96,38 @@ export const library = {
       req(`/files/${fileId}?deleteDisk=${deleteDisk}`, { method: 'DELETE' })
   },
 
-  scan: () => req('/library/scan', { method: 'POST' })
+  scan: () => req('/library/scan', { method: 'POST' }),
+
+  browse: (path = '') => req('/browse' + qs({ path })),
+  tree: () => req('/browse/tree'),
+  searchFiles: (q) => req('/browse/search' + qs({ q })),
+  mkdir: (parentPath, folderName) =>
+    req('/browse/mkdir', { method: 'POST', body: JSON.stringify({ parentPath, folderName }) })
 };
+
+/**
+ * Upload a file into the tenant's library.
+ *
+ * The bytes go browser -> object store on a presigned URL and never through
+ * the control-plane, which is the same path the rest of the app uses. They do
+ * NOT go through the library: its bucket mount is deliberately read-only, so
+ * its own upload endpoint would fail, and a file written into its private
+ * volume instead would be invisible to the engine and uncounted against quota.
+ *
+ * The store is written directly, so nothing knows the object exists until
+ * something scans. /api/storage/rescan re-indexes the engine AND the library,
+ * which are two separate indexes over the same bucket and both blind to a
+ * write made from outside.
+ */
+export async function uploadToLibrary(file, folderPath = '', onProgress) {
+  const key = (folderPath ? folderPath.replace(/^\/+|\/+$/g, '') + '/' : '') + file.name;
+  const signed = await api.presign({ method: 'PUT', key });
+  if (!signed?.url) throw new Error('object storage is not configured for this deployment');
+  await putWithProgress(signed.url, file, onProgress);
+  // Never fatal: the object is stored either way and the next scan finds it.
+  await api.rescan().catch(() => {});
+  return { key: signed.key };
+}
 
 /** Which file of a model to preview: a real mesh if there is one, else the
  *  first g-code. Ordering matters more than it looks, since a model usually
