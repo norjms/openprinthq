@@ -17,7 +17,8 @@
   import LibrarySettings from '$lib/components/LibrarySettings.svelte';
   import LibraryUpload from '$lib/components/LibraryUpload.svelte';
   import { library, libraryAsset, previewFile, objectKeyFor, fileStates,
-           addTagsTo, inBatches, copyLibraryObject, deleteLibraryObject } from '$lib/library.js';
+           addTagsTo, inBatches, copyLibraryObject, deleteLibraryObject,
+           libraryIntegrity, integrityForModel, describeFindings } from '$lib/library.js';
   import { goto } from '$app/navigation';
 
   let state_ = $state('checking'); // checking | library | fallback
@@ -37,6 +38,10 @@
   let bulkBusy = $state(false);
   let bulkNote = $state(null);
   let collections = $state([]);
+  // Mesh integrity, computed by the engine and joined on the object key. A
+  // separate request from the model list because it comes from a different
+  // service, and because the grid must render whether or not it answers.
+  let integrity = $state({ enabled: false, results: {} });
 
   function toggle(id) {
     const next = new Set(selected);
@@ -243,6 +248,7 @@
     // grid rendering.
     library.categories().then((c) => { categories = c || []; }).catch(() => {});
     library.projects.list().then((c) => { collections = c || []; }).catch(() => {});
+    libraryIntegrity().then((r) => { integrity = r; });
     await load();
   });
 </script>
@@ -357,6 +363,15 @@
           </div>
           <div class="meta">
             <span class="name" title={m.name}>{m.name}</span>
+            {#if integrityForModel(integrity.results, m)?.status === 'problems'}
+              {@const bad = integrityForModel(integrity.results, m)}
+              <span
+                class="mesh bad"
+                title={`Mesh problem: ${describeFindings(bad.first?.findings)}. A mesh like this often fails in a way that looks like a printer fault.`}
+              >
+                Mesh problem{bad.problems > 1 ? ` (${bad.problems} files)` : ''}
+              </span>
+            {/if}
             <span class="sub">
               {m.file_count} file{m.file_count === 1 ? '' : 's'}
               {#if m.print_count}&middot; {m.print_count} print{m.print_count === 1 ? '' : 's'}{/if}
@@ -389,6 +404,18 @@
     cursor: pointer; font: inherit;
   }
   .tabs button.on { border-color: var(--ophq-primary); color: var(--ophq-text); }
+
+  /* Only a problem is badged. A clean result is the expected case and a badge
+     on every card teaches people to stop reading badges. */
+  .mesh {
+    align-self: flex-start;
+    font-size: 0.72rem;
+    padding: 0.1rem 0.45rem;
+    border-radius: 999px;
+    border: 1px solid var(--ophq-border);
+    color: var(--ophq-text-2);
+  }
+  .mesh.bad { border-color: var(--ophq-danger, #c0392b); color: var(--ophq-danger, #c0392b); }
 
   .bar {
     display: flex;

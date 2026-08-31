@@ -11,7 +11,8 @@
   import ModelViewer from '$lib/components/ModelViewer.svelte';
   import GcodeViewer from '$lib/components/GcodeViewer.svelte';
   import { library, libraryAsset, previewFile, PREVIEWABLE,
-           objectKeyFor, deleteLibraryObject, fileStates, setFileState } from '$lib/library.js';
+           objectKeyFor, deleteLibraryObject, fileStates, setFileState,
+           libraryIntegrity, integrityForFile, describeFindings } from '$lib/library.js';
   import { goto } from '$app/navigation';
 
   let materials = $state([]);
@@ -29,6 +30,22 @@
   let sending = $state(null);    // file id currently being queued
   let notice = $state(null);
   let busy = $state(null);
+  // Mesh integrity comes from the engine, not the library. Loaded alongside the
+  // model rather than per file, since it is one request for the whole tenant.
+  let integrity = $state({ enabled: false, results: {} });
+
+  /** One line of plain English about a file's mesh, or null to say nothing. */
+  function meshLine(f) {
+    const r = integrityForFile(integrity.results, f);
+    if (!r) return null;
+    if (r.status === 'problems') {
+      return { bad: true, text: `Mesh problem: ${describeFindings(r.findings)}.` };
+    }
+    if (r.status === 'ok') return { bad: false, text: 'Mesh checked, no problems found.' };
+    // unsupported, unreadable, too_large. Not a fault, and saying so plainly
+    // matters: a STEP file reported as broken would be a lie about the file.
+    return { bad: false, text: `Mesh not checked: ${r.reason || r.status}.` };
+  }
 
   // Creator, licence and source site live in the library's custom_meta rather
   // than in columns of their own. The library is a fork we keep merging
@@ -211,7 +228,10 @@
     return isNaN(d) ? String(v) : d.toLocaleString();
   }
 
-  onMount(load);
+  onMount(() => {
+    load();
+    libraryIntegrity().then((r) => { integrity = r; });
+  });
 </script>
 
 <PageTitle page={model ? model.name : 'Model'} />
@@ -303,6 +323,10 @@
               <span class="fname" title={f.filename}>{f.filename}</span>
             {/if}
             <span class="fsize muted">{fmtSize(f.file_size)}</span>
+            {#if meshLine(f)}
+              {@const line = meshLine(f)}
+              <span class="mesh" class:bad={line.bad}>{line.text}</span>
+            {/if}
             {#if queueable(f)}
               <select
                 class="state"
@@ -412,6 +436,9 @@
     border: 1px solid var(--ophq-border); border-radius: 8px; background: var(--ophq-surface);
   }
   .files li.active { border-color: var(--ophq-primary); }
+
+  .mesh { font-size: 0.78rem; color: var(--ophq-text-2); }
+  .mesh.bad { color: var(--ophq-danger, #c0392b); }
   .state {
     font-size: 0.75rem; padding: 0.15rem 0.35rem; border-radius: 6px;
     border: 1px solid var(--ophq-border); background: var(--ophq-surface); color: var(--ophq-text-2);
