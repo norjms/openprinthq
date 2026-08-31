@@ -121,6 +121,22 @@ export const library = {
 
   materials: () => req('/materials'),
 
+  bulk: {
+    /**
+     * Set a category and/or tags across many models.
+     *
+     * The library REPLACES tags rather than adding to them, so a caller that
+     * wants "add these tags" has to send the union itself. That is what
+     * addTagsTo below does; calling this directly wipes whatever was there.
+     */
+    update: (ids, data) =>
+      req('/models/bulk-update', { method: 'POST', body: JSON.stringify({ ids, ...data }) }),
+    remove: (ids, deleteDisk = false) =>
+      req('/models/bulk-delete', { method: 'POST', body: JSON.stringify({ ids, deleteDisk }) }),
+    addToCollection: (projectId, modelIds) =>
+      req(`/projects/${projectId}/models/bulk`, { method: 'POST', body: JSON.stringify({ model_ids: modelIds }) })
+  },
+
   settings: {
     duplicates: () => req('/system/duplicates'),
     createCategory: (data) => req('/categories', { method: 'POST', body: JSON.stringify(data) }),
@@ -209,6 +225,40 @@ export async function deleteLibraryObject(key) {
  * again, which for a large plate is the whole file twice through the browser
  * for something the store does internally.
  */
+/**
+ * Run an async job over many items without opening one connection per item.
+ *
+ * A bulk action on fifty models is fifty round trips. Serially that is slow
+ * enough to look broken; all at once it is a burst the tenant's library answers
+ * badly. Six at a time is the compromise.
+ */
+export async function inBatches(items, worker, width = 6) {
+  const out = [];
+  for (let i = 0; i < items.length; i += width) {
+    out.push(...await Promise.all(items.slice(i, i + width).map(worker)));
+  }
+  return out;
+}
+
+/**
+ * Add tags to models without discarding the ones already there.
+ *
+ * The library's bulk update replaces the tag set, so the union has to be built
+ * per model first. That is a read per model, which is why it is batched.
+ */
+export async function addTagsTo(ids, tagNames) {
+  const wanted = tagNames.map((t) => t.trim()).filter(Boolean);
+  if (wanted.length === 0) return { updated: 0 };
+  await inBatches(ids, async (id) => {
+    const m = await library.model(id).catch(() => null);
+    if (!m) return null;
+    const existing = (m.tags || []).map((t) => t.name ?? t);
+    const union = Array.from(new Set([...existing, ...wanted]));
+    return library.bulk.update([id], { tags: union }).catch(() => null);
+  });
+  return { updated: ids.length };
+}
+
 export async function copyLibraryObject(from, to, { move = false } = {}) {
   const res = await fetch('/api/storage/copy', {
     method: 'POST',
