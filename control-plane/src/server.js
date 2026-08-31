@@ -829,6 +829,79 @@ app.get('/api/pub/v1/ingest/capabilities', async (req, reply) => {
   };
 });
 
+// Attach provenance to a model the extension just uploaded.
+//
+// Creator, licence and source page are known at exactly one moment: while the
+// extension is standing on the listing that has them. They cannot be recovered
+// afterwards from the files, so they are worth a round trip now.
+//
+// This lands in the library's custom_meta rather than in new columns. The
+// library is a fork we keep merging upstream into, and every column added here
+// is a conflict carried forever; custom_meta is a JSON blob upstream already
+// maintains.
+//
+// The model does not exist yet when this is called: the objects were written
+// straight to the store, and only a scan turns a folder into a model. So this
+// asks for a scan and then waits for the row to appear, rather than failing on
+// a race it created itself.
+app.post('/api/pub/v1/ingest/metadata', async (req, reply) => {
+  const who = await printHostUser(req, reply); if (!who) return;
+  if (!vaultEnabled()) return reply.code(503).send({ error: 'tenant library not configured' });
+  const inst = await getInstanceForUser(who.userId);
+  if (!inst?.subdomain) return reply.code(409).send({ error: 'no instance for this account' });
+
+  const folder = String(req.body?.folder || '').replace(/^\/+|\/+$/g, '');
+  if (!folder) return reply.code(400).send({ error: 'folder is required' });
+
+  const str = (v) => (typeof v === 'string' ? v.slice(0, 512) : undefined);
+  const meta = {
+    creator: str(req.body?.creator),
+    license: str(req.body?.license),
+    source_site: str(req.body?.source_site)
+  };
+  const sourceUrl = str(req.body?.source_url);
+  for (const k of Object.keys(meta)) if (meta[k] === undefined) delete meta[k];
+  if (Object.keys(meta).length === 0 && !sourceUrl) return { attached: false, reason: 'nothing to attach' };
+
+  const base = vaultBase(inst.subdomain);
+  const headers = { ...vaultServiceHeaders(), 'content-type': 'application/json' };
+  await joinVaultNetwork(inst.subdomain).catch(() => {});
+
+  try {
+    await fetch(base + '/api/library/scan', { method: 'POST', headers: vaultServiceHeaders() }).catch(() => {});
+
+    // Six tries over about half a minute. A scan of a large library takes a
+    // while, and giving up immediately would lose the metadata for exactly the
+    // libraries where it is most useful.
+    let model = null;
+    for (let i = 0; i < 6 && !model; i++) {
+      if (i) await new Promise((r) => setTimeout(r, 5000));
+      const res = await fetch(base + '/api/models?limit=500', { headers: vaultServiceHeaders() });
+      if (!res.ok) continue;
+      const d = await res.json();
+      model = (d.models || []).find((m) =>
+        (m.library_path || '').replace(/^\/library\/?/, '').replace(/\/+$/, '') === folder) || null;
+    }
+    if (!model) return reply.code(404).send({ error: 'no model for that folder yet' });
+
+    const full = await (await fetch(`${base}/api/models/${model.id}`, { headers: vaultServiceHeaders() })).json();
+    let existing = {};
+    try { existing = typeof full.custom_meta === 'string' ? JSON.parse(full.custom_meta || '{}') : (full.custom_meta || {}); } catch { /* keep {} */ }
+
+    // Merge, and do not overwrite anything a person has already typed in.
+    const merged = { ...meta, ...existing };
+    const body = { custom_meta: merged };
+    if (sourceUrl && !full.source_url) body.source_url = sourceUrl;
+
+    const up = await fetch(`${base}/api/models/${model.id}`, { method: 'PUT', headers, body: JSON.stringify(body) });
+    if (!up.ok) return reply.code(502).send({ error: `the library refused the update (${up.status})` });
+    return { attached: true, modelId: model.id };
+  } catch (e) {
+    req.log.error({ err: e.message }, 'ingest metadata failed');
+    return reply.code(502).send({ error: 'library unreachable: ' + e.message });
+  }
+});
+
 app.post('/api/pub/v1/storage/presign', async (req, reply) => {
   const who = await printHostUser(req, reply); if (!who) return;
   const user = await getUserByEmail(who.email);
