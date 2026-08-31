@@ -11,7 +11,7 @@
   import ModelViewer from '$lib/components/ModelViewer.svelte';
   import GcodeViewer from '$lib/components/GcodeViewer.svelte';
   import { library, libraryAsset, previewFile, PREVIEWABLE,
-           objectKeyFor, deleteLibraryObject } from '$lib/library.js';
+           objectKeyFor, deleteLibraryObject, fileStates, setFileState } from '$lib/library.js';
   import { goto } from '$app/navigation';
 
   let materials = $state([]);
@@ -111,6 +111,17 @@
   }
 
   const queueable = (f) => ['gcode', 'bgcode', '3mf'].includes(f.file_type);
+  const states = $derived(fileStates(model));
+  const stateOf = (f) => states[objectKeyFor(f)] || 'untested';
+
+  async function markFile(f, state) {
+    try {
+      await setFileState(model, f, state);
+      await load();
+    } catch (e) {
+      notice = `Could not mark ${f.filename}: ${e.message}`;
+    }
+  }
   const sliceable = (f) => ['stl', '3mf', 'step', 'obj', '3ds', 'amf'].includes(f.file_type);
 
   // A running session cannot be handed a file: the container environment is
@@ -292,6 +303,19 @@
               <span class="fname" title={f.filename}>{f.filename}</span>
             {/if}
             <span class="fsize muted">{fmtSize(f.file_size)}</span>
+            {#if queueable(f)}
+              <select
+                class="state"
+                data-state={stateOf(f)}
+                value={stateOf(f)}
+                onchange={(e) => markFile(f, e.currentTarget.value)}
+              >
+                <option value="untested">Untested</option>
+                <option value="known-good">Known good</option>
+                <option value="failed">Failed</option>
+                <option value="archived">Archived</option>
+              </select>
+            {/if}
             {#if sliceable(f)}
               <button class="act" onclick={() => openInSlicer(f)}>Open in slicer</button>
             {/if}
@@ -388,6 +412,13 @@
     border: 1px solid var(--ophq-border); border-radius: 8px; background: var(--ophq-surface);
   }
   .files li.active { border-color: var(--ophq-primary); }
+  .state {
+    font-size: 0.75rem; padding: 0.15rem 0.35rem; border-radius: 6px;
+    border: 1px solid var(--ophq-border); background: var(--ophq-surface); color: var(--ophq-text-2);
+  }
+  .state[data-state='known-good'] { color: var(--ophq-success); border-color: var(--ophq-success); }
+  .state[data-state='failed'] { color: var(--ophq-danger); border-color: var(--ophq-danger); }
+  .state[data-state='archived'] { opacity: 0.6; }
   .ftype {
     text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.05em;
     color: var(--ophq-primary); min-width: 3.2rem;
