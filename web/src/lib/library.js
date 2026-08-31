@@ -189,6 +189,39 @@ export async function makeLibraryFolder(parentPath = '', folderName) {
  * `/library-files/<path>` and `library_path` as `/library/<path>`. Both are
  * views of the bucket mounted at /library, so the key is whatever follows.
  */
+/**
+ * Read and write the print outcome of one file within a model.
+ *
+ * A library with twenty plates for one model is only useful if it records which
+ * plate actually printed. The state lives in the model's custom_meta, keyed by
+ * object key, rather than in a column: the library is a fork we keep merging
+ * upstream into, and a column added here is a conflict carried forever.
+ */
+export const FILE_STATES = ['untested', 'known-good', 'failed', 'archived'];
+
+export function fileStates(model) {
+  const raw = model?.custom_meta;
+  let meta = {};
+  try { meta = typeof raw === 'string' ? JSON.parse(raw || '{}') : (raw || {}); } catch { meta = {}; }
+  return meta.file_states || {};
+}
+
+export async function setFileState(model, file, state) {
+  const raw = model?.custom_meta;
+  let meta = {};
+  try { meta = typeof raw === 'string' ? JSON.parse(raw || '{}') : (raw || {}); } catch { meta = {}; }
+  const key = objectKeyFor(file);
+  if (!key) throw new Error('that file has no object key');
+  const states = { ...(meta.file_states || {}) };
+  if (state === 'untested') delete states[key]; else states[key] = state;
+  // At most ONE known-good per model. The point of the mark is to answer
+  // "which one do I print", and two answers is the same as none.
+  if (state === 'known-good') {
+    for (const k of Object.keys(states)) if (k !== key && states[k] === 'known-good') states[k] = 'untested';
+  }
+  await library.updateModel(model.id, { custom_meta: { ...meta, file_states: states } });
+}
+
 export function objectKeyFor(file) {
   const raw = file?.url || file?.library_path || '';
   for (const prefix of ['/library-files/', '/library/']) {
@@ -289,6 +322,25 @@ export async function copyLibraryObject(from, to, { move = false } = {}) {
  * models that both contain "plate.gcode" does not have them overwrite each
  * other.
  */
+/**
+ * Turn a failed object-store write into something worth reading.
+ *
+ * The store answers a quota refusal with 403 and an XML body, which reaches the
+ * user as "the object store refused the upload (403)". That reads like a
+ * permissions fault, and the person goes looking for a broken key instead of
+ * deleting something. Quota is the one failure here with an obvious action, so
+ * it gets said plainly.
+ */
+async function describePutFailure(res, name) {
+  let body = '';
+  try { body = await res.text(); } catch { /* nothing to read */ }
+  if (/quota/i.test(body)) {
+    return new Error(`${name} did not fit: your storage is full. Delete something, or ask for more space.`);
+  }
+  if (res.status === 403) return new Error(`${name} was refused by your storage (403).`);
+  return new Error(`${name} could not be stored (${res.status}).`);
+}
+
 export async function unzipToLibrary(file, folderPath = '', onProgress) {
   const { unzipSync } = await import('fflate');
   const buf = new Uint8Array(await file.arrayBuffer());
@@ -323,7 +375,8 @@ export async function unzipToLibrary(file, folderPath = '', onProgress) {
     const key = `${root}/${safe}`;
     const signed = await api.presign({ method: 'PUT', key });
     if (!signed?.url) throw new Error('object storage is not configured for this deployment');
-    await fetch(signed.url, { method: 'PUT', body: new Blob([entries[name]]) });
+    const res = await fetch(signed.url, { method: 'PUT', body: new Blob([entries[name]]) });
+    if (!res.ok) throw await describePutFailure(res, safe);
     done += 1;
     onProgress?.(Math.round((done / names.length) * 100));
   }
@@ -335,7 +388,18 @@ export async function uploadToLibrary(file, folderPath = '', onProgress) {
   const key = (folderPath ? folderPath.replace(/^\/+|\/+$/g, '') + '/' : '') + file.name;
   const signed = await api.presign({ method: 'PUT', key });
   if (!signed?.url) throw new Error('object storage is not configured for this deployment');
-  await putWithProgress(signed.url, file, onProgress);
+  try {
+    await putWithProgress(signed.url, file, onProgress);
+  } catch (e) {
+    // putWithProgress reports the status but not the body, and the body is
+    // where the store says it was a quota refusal rather than a permissions
+    // one. Re-check cheaply with a zero-byte probe to the same key.
+    if (/\b403\b/.test(String(e.message))) {
+      const probe = await fetch(signed.url, { method: 'PUT', body: new Blob([]) }).catch(() => null);
+      if (probe && !probe.ok) throw await describePutFailure(probe, file.name);
+    }
+    throw e;
+  }
   // Never fatal: the object is stored either way and the next scan finds it.
   await api.rescan().catch(() => {});
   return { key: signed.key };

@@ -16,7 +16,7 @@
   import LibraryCollections from '$lib/components/LibraryCollections.svelte';
   import LibrarySettings from '$lib/components/LibrarySettings.svelte';
   import LibraryUpload from '$lib/components/LibraryUpload.svelte';
-  import { library, libraryAsset, previewFile, objectKeyFor,
+  import { library, libraryAsset, previewFile, objectKeyFor, fileStates,
            addTagsTo, inBatches, copyLibraryObject, deleteLibraryObject } from '$lib/library.js';
   import { goto } from '$app/navigation';
 
@@ -166,7 +166,15 @@
       // file worth slicing. Done in parallel: serially this is one round trip
       // per model and feels broken on a large selection.
       const full = await Promise.all(chosen.map((m) => library.model(m.id).catch(() => null)));
-      const keys = full.map((m) => (m ? objectKeyFor(previewFile(m)) : '')).filter(Boolean);
+      // Prefer whatever was marked known good. If someone has said which plate
+      // prints, opening a different one is the wrong answer even when it is a
+      // better file format.
+      const keys = full.map((m) => {
+        if (!m) return '';
+        const st = fileStates(m);
+        const good = (m.files || []).find((f) => st[objectKeyFor(f)] === 'known-good');
+        return objectKeyFor(good || previewFile(m));
+      }).filter(Boolean);
       if (keys.length === 0) { sendError = 'None of those models has a file that can be opened.'; return; }
       const q = new URLSearchParams();
       for (const k of keys) q.append('keys', k);
