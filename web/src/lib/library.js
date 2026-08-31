@@ -222,6 +222,81 @@ export async function setFileState(model, file, state) {
   await library.updateModel(model.id, { custom_meta: { ...meta, file_states: states } });
 }
 
+/**
+ * Mesh integrity reports for this tenant's files.
+ *
+ * NOT under /api/library. The check runs in the engine, not in the library:
+ * the library is a fork we merge upstream into, and a column added there is a
+ * conflict carried forever. The engine and the library are two indexes over the
+ * same bucket, so the control-plane joins them on the path relative to each
+ * one's mount root and hands back a map keyed by exactly what objectKeyFor
+ * produces.
+ *
+ * Never throws. A deployment with no engine, or with the check switched off,
+ * gets an empty map and the pages render without badges.
+ */
+export async function libraryIntegrity() {
+  try {
+    const res = await fetch('/api/library-integrity', { credentials: 'include' });
+    if (!res.ok) return { enabled: false, results: {} };
+    return await res.json();
+  } catch {
+    return { enabled: false, results: {} };
+  }
+}
+
+/** The report for one library file, or null when it has not been checked. */
+export function integrityForFile(results, file) {
+  const key = objectKeyFor(file);
+  return (key && results && results[key]) || null;
+}
+
+/**
+ * The worst report among a model's files.
+ *
+ * Files that could not be checked are skipped rather than counted as clean:
+ * ``checked`` is false for a STEP file, an unparseable file and a file over the
+ * size ceiling alike, and treating any of those as a pass would be a quiet lie.
+ * Returns null when nothing under the model has been checked at all, so the
+ * card shows no badge instead of an unearned green one.
+ */
+export function integrityForModel(results, model) {
+  const dir = objectKeyFor({ library_path: model?.library_path });
+  if (!dir || !results) return null;
+  const prefix = dir.endsWith('/') ? dir : dir + '/';
+  let checked = 0;
+  let problems = 0;
+  let first = null;
+  for (const [key, r] of Object.entries(results)) {
+    if (key !== dir && !key.startsWith(prefix)) continue;
+    if (!r?.checked) continue;
+    checked++;
+    if (r.status === 'problems') {
+      problems++;
+      if (!first) first = r;
+    }
+  }
+  if (!checked) return null;
+  return { status: problems ? 'problems' : 'ok', problems, checked, first };
+}
+
+const FINDING_LABELS = {
+  holes: 'holes',
+  non_manifold_edges: 'non-manifold edges',
+  inconsistent_winding: 'flipped normals'
+};
+
+/** Plain words for a findings list, for a badge title or a line of body text. */
+export function describeFindings(findings) {
+  const parts = (findings || []).map((f) => {
+    const label = FINDING_LABELS[f.code] || f.code;
+    return f.code === 'holes' && f.count ? `${f.count} ${f.count === 1 ? 'hole' : 'holes'}` : label;
+  });
+  if (parts.length === 0) return '';
+  if (parts.length === 1) return parts[0];
+  return parts.slice(0, -1).join(', ') + ' and ' + parts[parts.length - 1];
+}
+
 export function objectKeyFor(file) {
   const raw = file?.url || file?.library_path || '';
   for (const prefix of ['/library-files/', '/library/']) {

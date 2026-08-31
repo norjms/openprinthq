@@ -2191,6 +2191,60 @@ app.get('/api/library-status', async (req, reply) => {
   return { available: true };
 });
 
+// Mesh integrity for the Files tab.
+//
+// The check itself lives in the engine, because the vault is a fork we merge
+// upstream into and every column added there is a conflict carried forever.
+// The engine and the vault are two indexes over the SAME bucket, mounted at
+// different paths, so the join key is the path relative to each one's mount
+// root. Neither side knows the other's file ids, and hashes are not stored on
+// the vault side, so path is what there is.
+//
+// Returns a map of relative path -> report, which is what the Files tab can
+// actually look up: it holds vault library_paths and nothing else.
+const ENGINE_BUCKET_MOUNT = process.env.OPHQ_ENGINE_BUCKET_MOUNT_TARGET || '/app/external/bucket';
+const VAULT_LIBRARY_MOUNT = '/library';
+
+function relativeToMount(absolute, mount) {
+  if (typeof absolute !== 'string') return null;
+  if (!absolute.startsWith(mount)) return null;
+  return absolute.slice(mount.length).replace(/^\/+/, '');
+}
+
+/** Strip the vault's mount prefix off a library_path so the FE can look it up. */
+export function vaultPathKey(libraryPath) {
+  return relativeToMount(libraryPath, VAULT_LIBRARY_MOUNT);
+}
+
+app.get('/api/library-integrity', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  const inst = await getInstanceForUser(user.id);
+  const base = engineBase(inst);
+  // Not an error. A deployment without a running engine has no reports, and the
+  // tab should render without badges rather than show a failure.
+  if (!base) return { enabled: false, results: {} };
+  try {
+    const r = await fetch(base + '/api/v1/library/mesh-integrity', { headers: { accept: 'application/json' } });
+    if (!r.ok) return { enabled: false, results: {} };
+    const d = await r.json();
+    const results = {};
+    for (const entry of Object.values(d.results || {})) {
+      const key = relativeToMount(entry.path, ENGINE_BUCKET_MOUNT);
+      if (!key) continue;
+      results[key] = {
+        status: entry.status,
+        checked: entry.checked,
+        findings: entry.findings || [],
+        stats: entry.stats || {},
+        reason: entry.reason || null
+      };
+    }
+    return { enabled: !!d.enabled, results };
+  } catch {
+    return { enabled: false, results: {} };
+  }
+});
+
 // ---- boot ---------------------------------------------------------------
 try {
   await migrate();
