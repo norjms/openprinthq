@@ -273,6 +273,64 @@ export async function copyLibraryObject(from, to, { move = false } = {}) {
   return res.json();
 }
 
+/**
+ * Unpack a zip in the BROWSER and upload what is inside.
+ *
+ * Models arrive from Printables and MakerWorld as a zip holding an STL, a few
+ * plates and a readme. Storing the zip means the library indexes one opaque
+ * object and the slicer cannot open anything in it, so the archive is expanded
+ * before it is stored.
+ *
+ * Here rather than server-side because the bytes already have to pass through
+ * this machine, and doing it on the control-plane would mean streaming every
+ * archive through a service that deliberately never touches bulk data.
+ *
+ * Entries are placed under a folder named after the archive, so unpacking two
+ * models that both contain "plate.gcode" does not have them overwrite each
+ * other.
+ */
+export async function unzipToLibrary(file, folderPath = '', onProgress) {
+  const { unzipSync } = await import('fflate');
+  const buf = new Uint8Array(await file.arrayBuffer());
+  let entries;
+  try {
+    entries = unzipSync(buf);
+  } catch (e) {
+    throw new Error('that zip could not be read: ' + e.message);
+  }
+
+  const base = file.name.replace(/\.zip$/i, '') || 'archive';
+  const root = (folderPath ? folderPath.replace(/^\/+|\/+$/g, '') + '/' : '') + base;
+
+  const names = Object.keys(entries).filter((n) => {
+    if (n.endsWith('/')) return false;                 // directory entry
+    if (entries[n].length === 0 && n.endsWith('/')) return false;
+    // Archives made on macOS carry a parallel __MACOSX tree of resource forks
+    // and .DS_Store files. Storing those means every model gains a folder of
+    // junk that looks like content.
+    if (n.startsWith('__MACOSX/') || n.split('/').pop().startsWith('._')) return false;
+    if (n.split('/').pop() === '.DS_Store') return false;
+    return true;
+  });
+  if (names.length === 0) throw new Error('that zip contained no files');
+
+  let done = 0;
+  for (const name of names) {
+    // A zip can name an entry ../../etc/passwd. The store would take it
+    // literally, so the path is flattened of traversal before it is used.
+    const safe = name.split('/').filter((p) => p && p !== '.' && p !== '..').join('/');
+    if (!safe) continue;
+    const key = `${root}/${safe}`;
+    const signed = await api.presign({ method: 'PUT', key });
+    if (!signed?.url) throw new Error('object storage is not configured for this deployment');
+    await fetch(signed.url, { method: 'PUT', body: new Blob([entries[name]]) });
+    done += 1;
+    onProgress?.(Math.round((done / names.length) * 100));
+  }
+  await api.rescan().catch(() => {});
+  return { extracted: done, into: root };
+}
+
 export async function uploadToLibrary(file, folderPath = '', onProgress) {
   const key = (folderPath ? folderPath.replace(/^\/+|\/+$/g, '') + '/' : '') + file.name;
   const signed = await api.presign({ method: 'PUT', key });
