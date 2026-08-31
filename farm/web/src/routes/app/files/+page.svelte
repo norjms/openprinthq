@@ -48,6 +48,18 @@
 
   const chosenIds = () => models.filter((m) => selected.has(m.id)).map((m) => m.id);
 
+  /** The deepest folder every one of these keys sits under, '' if they share none. */
+  function commonFolder(keys) {
+    const parts = keys.map((k) => k.split('/').slice(0, -1));
+    if (parts.length === 0) return '';
+    const out = [];
+    for (let i = 0; i < parts[0].length; i++) {
+      const seg = parts[0][i];
+      if (parts.every((p) => p[i] === seg)) out.push(seg); else break;
+    }
+    return out.join('/');
+  }
+
   async function withBulk(label, fn) {
     bulkBusy = true; bulkNote = null;
     try {
@@ -100,13 +112,24 @@
     const ids = chosenIds();
     return withBulk('Moving', async () => {
       const full = await inBatches(ids, (id) => library.model(id).catch(() => null));
-      const files = full.filter(Boolean).flatMap((m) => m.files || []);
+      // Each model keeps its own folder under the destination, and any nesting
+      // inside it. Flattening to basenames would have two models that both hold
+      // a plate.gcode overwrite each other, silently and unrecoverably.
+      const jobs = [];
+      for (const m of full.filter(Boolean)) {
+        const keys = (m.files || []).map(objectKeyFor).filter(Boolean);
+        if (keys.length === 0) continue;
+        const prefix = commonFolder(keys);
+        const folder = prefix.split('/').filter(Boolean).pop() || String(m.id);
+        for (const key of keys) {
+          const rel = prefix && key.startsWith(prefix + '/') ? key.slice(prefix.length + 1) : key.split('/').pop();
+          jobs.push({ key, to: [dest, folder, rel].filter(Boolean).join('/') });
+        }
+      }
       let moved = 0, failed = 0;
-      await inBatches(files, async (f) => {
-        const key = objectKeyFor(f);
-        if (!key) { failed++; return; }
-        const to = (dest ? dest + '/' : '') + key.split('/').pop();
-        try { await copyLibraryObject(key, to, { move: true }); moved++; } catch { failed++; }
+      await inBatches(jobs, async (j) => {
+        if (j.key === j.to) { moved++; return; }
+        try { await copyLibraryObject(j.key, j.to, { move: true }); moved++; } catch { failed++; }
       });
       return failed
         ? `Moved ${moved} file${moved === 1 ? '' : 's'}, ${failed} could not be moved.`
