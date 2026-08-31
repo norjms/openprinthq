@@ -16,7 +16,8 @@
   import LibraryCollections from '$lib/components/LibraryCollections.svelte';
   import LibrarySettings from '$lib/components/LibrarySettings.svelte';
   import LibraryUpload from '$lib/components/LibraryUpload.svelte';
-  import { library, libraryAsset, previewFile, objectKeyFor } from '$lib/library.js';
+  import { library, libraryAsset, previewFile, objectKeyFor,
+           addTagsTo, inBatches, copyLibraryObject, deleteLibraryObject } from '$lib/library.js';
   import { goto } from '$app/navigation';
 
   let state_ = $state('checking'); // checking | library | fallback
@@ -33,6 +34,9 @@
   let selected = $state(new Set());
   let selecting = $state(false);
   let sendError = $state(null);
+  let bulkBusy = $state(false);
+  let bulkNote = $state(null);
+  let collections = $state([]);
 
   function toggle(id) {
     const next = new Set(selected);
@@ -40,6 +44,94 @@
     selected = next;
   }
   function clearSelection() { selected = new Set(); }
+  function selectAllOnPage() { selected = new Set(models.map((m) => m.id)); }
+
+  const chosenIds = () => models.filter((m) => selected.has(m.id)).map((m) => m.id);
+
+  async function withBulk(label, fn) {
+    bulkBusy = true; bulkNote = null;
+    try {
+      const r = await fn();
+      bulkNote = r || label;
+      clearSelection();
+      await load();
+    } catch (e) {
+      bulkNote = `${label} failed: ${e.message}`;
+    } finally {
+      bulkBusy = false;
+    }
+  }
+
+  const bulkTag = () => {
+    const raw = prompt('Add tags (comma separated)');
+    if (!raw) return;
+    const ids = chosenIds();
+    return withBulk('Tagging', async () => {
+      await addTagsTo(ids, raw.split(','));
+      return `Tagged ${ids.length} model${ids.length === 1 ? '' : 's'}.`;
+    });
+  };
+
+  const bulkCategory = (value) => {
+    if (value === '') return;
+    const ids = chosenIds();
+    return withBulk('Setting the category', async () => {
+      await library.bulk.update(ids, { category_id: value === 'none' ? null : Number(value) });
+      return `Moved ${ids.length} model${ids.length === 1 ? '' : 's'} into a category.`;
+    });
+  };
+
+  const bulkCollection = (value) => {
+    if (!value) return;
+    const ids = chosenIds();
+    return withBulk('Adding to the collection', async () => {
+      await library.bulk.addToCollection(Number(value), ids);
+      return `Added ${ids.length} model${ids.length === 1 ? '' : 's'} to the collection.`;
+    });
+  };
+
+  // Moving and deleting act on the OBJECT STORE, not on the index. The
+  // library's bucket mount is read-only, so its own bulk-move and bulk-delete
+  // cannot touch a file; they would report success and change nothing on disk.
+  async function bulkMove() {
+    const folder = prompt('Move the files of the selected models into which folder?');
+    if (folder === null) return;
+    const dest = folder.replace(/^\/+|\/+$/g, '');
+    const ids = chosenIds();
+    return withBulk('Moving', async () => {
+      const full = await inBatches(ids, (id) => library.model(id).catch(() => null));
+      const files = full.filter(Boolean).flatMap((m) => m.files || []);
+      let moved = 0, failed = 0;
+      await inBatches(files, async (f) => {
+        const key = objectKeyFor(f);
+        if (!key) { failed++; return; }
+        const to = (dest ? dest + '/' : '') + key.split('/').pop();
+        try { await copyLibraryObject(key, to, { move: true }); moved++; } catch { failed++; }
+      });
+      return failed
+        ? `Moved ${moved} file${moved === 1 ? '' : 's'}, ${failed} could not be moved.`
+        : `Moved ${moved} file${moved === 1 ? '' : 's'}.`;
+    });
+  }
+
+  async function bulkDelete() {
+    const ids = chosenIds();
+    if (!confirm(`Delete the files of ${ids.length} model${ids.length === 1 ? '' : 's'} from your storage? This cannot be undone.`)) return;
+    return withBulk('Deleting', async () => {
+      const full = await inBatches(ids, (id) => library.model(id).catch(() => null));
+      const files = full.filter(Boolean).flatMap((m) => m.files || []);
+      let gone = 0, failed = 0;
+      await inBatches(files, async (f) => {
+        try { await deleteLibraryObject(objectKeyFor(f)); gone++; } catch { failed++; }
+      });
+      // The index entries go too, or the models linger as empty shells until
+      // the next scan notices their files are missing.
+      await library.bulk.remove(ids, false).catch(() => {});
+      return failed
+        ? `Deleted ${gone} file${gone === 1 ? '' : 's'}, ${failed} could not be deleted.`
+        : `Deleted ${gone} file${gone === 1 ? '' : 's'}.`;
+    });
+  }
 
   async function sendSelectedToSlicer() {
     sendError = null;
@@ -119,6 +211,7 @@
     // Categories are a filter, not the page: a failure here must not stop the
     // grid rendering.
     library.categories().then((c) => { categories = c || []; }).catch(() => {});
+    library.projects.list().then((c) => { collections = c || []; }).catch(() => {});
     await load();
   });
 </script>
@@ -169,16 +262,34 @@
     <span class="count">{totalItems} model{totalItems === 1 ? '' : 's'}</span>
   </div>
 
-  {#if selected.size > 0}
-    <div class="selbar">
+  <div class="selbar" class:idle={selected.size === 0}>
+    {#if selected.size === 0}
+      <button class="act" onclick={selectAllOnPage} disabled={models.length === 0}>Select all on this page</button>
+    {:else}
       <span>{selected.size} selected</span>
-      <button class="act" onclick={sendSelectedToSlicer} disabled={selecting}>
+      <button class="act" onclick={sendSelectedToSlicer} disabled={selecting || bulkBusy}>
         {selecting ? 'Opening...' : 'Send to slicer'}
       </button>
-      <button class="act" onclick={clearSelection}>Clear</button>
-      {#if sendError}<span class="warn">{sendError}</span>{/if}
-    </div>
-  {/if}
+      <button class="act" onclick={bulkTag} disabled={bulkBusy}>Add tags</button>
+      <select disabled={bulkBusy} onchange={(e) => { bulkCategory(e.currentTarget.value); e.currentTarget.value = ''; }}>
+        <option value="">Set category...</option>
+        <option value="none">No category</option>
+        {#each categories as c (c.id)}<option value={c.id}>{c.name}</option>{/each}
+      </select>
+      {#if collections.length > 0}
+        <select disabled={bulkBusy} onchange={(e) => { bulkCollection(e.currentTarget.value); e.currentTarget.value = ''; }}>
+          <option value="">Add to collection...</option>
+          {#each collections as c (c.id)}<option value={c.id}>{c.name}</option>{/each}
+        </select>
+      {/if}
+      <button class="act" onclick={bulkMove} disabled={bulkBusy}>Move files</button>
+      <button class="act danger" onclick={bulkDelete} disabled={bulkBusy}>Delete</button>
+      <button class="act" onclick={clearSelection} disabled={bulkBusy}>Clear</button>
+    {/if}
+    {#if bulkBusy}<span class="muted">Working...</span>{/if}
+    {#if bulkNote}<span class="muted">{bulkNote}</span>{/if}
+    {#if sendError}<span class="warn">{sendError}</span>{/if}
+  </div>
 
   {#if error}<p class="warn">{error}</p>{/if}
 
@@ -301,6 +412,12 @@
     margin-bottom: 0.8rem; padding: 0.5rem 0.7rem;
     border: 1px solid var(--ophq-primary); border-radius: 8px; background: var(--ophq-bg-2);
   }
+  .selbar.idle { border-color: var(--ophq-border); background: transparent; padding: 0.25rem 0; }
+  .selbar select {
+    padding: 0.3rem 0.6rem; border: 1px solid var(--ophq-border); border-radius: 8px;
+    background: var(--ophq-surface); color: var(--ophq-text); font: inherit; font-size: 0.85rem;
+  }
+  .act.danger { color: var(--ophq-danger); border-color: color-mix(in srgb, var(--ophq-danger) 40%, var(--ophq-border)); }
   .act {
     padding: 0.3rem 0.75rem; border: 1px solid var(--ophq-border); border-radius: 8px;
     background: var(--ophq-surface); color: var(--ophq-text); cursor: pointer; font: inherit; font-size: 0.85rem;
