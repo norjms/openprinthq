@@ -5,7 +5,7 @@
   // Shared by the Models grid and the Folders view. It was originally only in
   // Folders, which meant the default view of the Files tab offered no way to
   // add a file at all: the feature existed and was unreachable.
-  import { uploadToLibrary } from '$lib/library.js';
+  import { uploadToLibrary, unzipToLibrary } from '$lib/library.js';
 
   let { folderPath = '', label = 'Upload', ondone = () => {} } = $props();
 
@@ -22,9 +22,14 @@
       i += 1;
       uploading = { name: f.name, percent: 0, index: i, total: chosen.length };
       try {
-        await uploadToLibrary(f, folderPath, (percent) => {
-          uploading = { name: f.name, percent, index: i, total: chosen.length };
-        });
+        const track = (percent) => { uploading = { name: f.name, percent, index: i, total: chosen.length }; };
+        // A zip is unpacked rather than stored. Storing it would leave the
+        // library indexing one opaque object the slicer cannot open.
+        if (/\.zip$/i.test(f.name)) {
+          await unzipToLibrary(f, folderPath, track);
+        } else {
+          await uploadToLibrary(f, folderPath, track);
+        }
       } catch (e) {
         error = `Could not upload ${f.name}: ${e.message}`;
         uploading = null;
