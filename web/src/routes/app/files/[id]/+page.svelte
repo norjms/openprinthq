@@ -30,6 +30,40 @@
   let notice = $state(null);
   let busy = $state(null);
 
+  // Creator, licence and source site live in the library's custom_meta rather
+  // than in columns of their own. The library is a fork we keep merging
+  // upstream into, and a column added here is a conflict carried forever;
+  // custom_meta is a JSON blob upstream already maintains.
+  const meta = $derived.by(() => {
+    const raw = model?.custom_meta;
+    if (!raw) return {};
+    try { return typeof raw === 'string' ? JSON.parse(raw) : raw; } catch { return {}; }
+  });
+
+  async function editMeta(field, label) {
+    const value = prompt(label, meta[field] || '');
+    if (value === null) return;
+    try {
+      const next = { ...meta };
+      if (value.trim()) next[field] = value.trim(); else delete next[field];
+      await library.updateModel(model.id, { custom_meta: next });
+      await load();
+    } catch (e) {
+      notice = `Could not save: ${e.message}`;
+    }
+  }
+
+  async function editSource() {
+    const value = prompt('Source URL', model.source_url || '');
+    if (value === null) return;
+    try {
+      await library.updateModel(model.id, { source_url: value.trim() });
+      await load();
+    } catch (e) {
+      notice = `Could not save: ${e.message}`;
+    }
+  }
+
   const id = $derived($page.params.id);
   const isGcode = $derived(selected && (selected.file_type === 'gcode' || selected.file_type === 'bgcode'));
 
@@ -209,9 +243,27 @@
         {#each model.tags || [] as t (t.id ?? t.name)}<span class="chip">{t.name ?? t}</span>{/each}
       </div>
       {#if model.description}<p class="desc">{model.description}</p>{/if}
-      {#if model.source_url}
-        <p><a href={model.source_url} target="_blank" rel="noreferrer noopener">Source</a></p>
-      {/if}
+      <dl class="prov">
+        <dt>Creator</dt>
+        <dd>
+          {meta.creator || '-'}
+          <button class="link" onclick={() => editMeta('creator', 'Creator')}>edit</button>
+        </dd>
+        <dt>Licence</dt>
+        <dd>
+          {meta.license || '-'}
+          <button class="link" onclick={() => editMeta('license', 'Licence')}>edit</button>
+        </dd>
+        <dt>Source</dt>
+        <dd>
+          {#if model.source_url}
+            <a href={model.source_url} target="_blank" rel="noreferrer noopener">
+              {meta.source_site || 'original listing'}
+            </a>
+          {:else}-{/if}
+          <button class="link" onclick={editSource}>edit</button>
+        </dd>
+      </dl>
       {#if model.print_tips}
         <h3>Print tips</h3>
         <p class="desc">{model.print_tips}</p>
@@ -364,6 +416,16 @@
   }
   .pstate.bad { color: var(--ophq-danger); }
   .pnotes { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .prov {
+    display: grid; grid-template-columns: auto 1fr; gap: 0.2rem 0.8rem;
+    margin: 0.6rem 0; font-size: 0.86rem;
+  }
+  .prov dt { color: var(--ophq-muted); }
+  .prov dd { margin: 0; }
+  .link {
+    background: none; border: 0; padding: 0 0 0 0.4rem; font: inherit; font-size: 0.78rem;
+    color: var(--ophq-primary); cursor: pointer;
+  }
   .notice { color: var(--ophq-text-2); }
   .muted { color: var(--ophq-muted); }
   .warn { color: var(--ophq-warn); }
