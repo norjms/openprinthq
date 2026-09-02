@@ -33,6 +33,17 @@
   ];
   const vendorByKey = Object.fromEntries(vendors.map((v) => [v.key, v]));
 
+  // The port each transport actually listens on. `printers.moonraker_port` is the
+  // generic external-host port for every non-Bambu vendor and its column default
+  // is 7125 (Klipper), so a form that doesn't show a port field must still send
+  // the vendor's own default. Without this a PrusaLink printer is created on
+  // 7125, the engine polls a dead port, and the printer reads offline forever.
+  // Mirrors control-plane/src/routing.js PROFILES.
+  const VENDOR_PORT = {
+    klipper: 7125, octoprint: 80, prusalink: 80, duet: 80,
+    flashforge: 8899, mks: 8080, snapmaker: 8080
+  };
+
   // Catalog comm-mechanism -> our connection vendor. Covers the whole OrcaSlicer set.
   const MECH_TO_VENDOR = {
     bambu_mqtt: 'bambu', moonraker: 'klipper', creality_ws: 'klipper',
@@ -246,6 +257,11 @@
       const val = values[f.key];
       if (val !== undefined && val !== '') body[f.key] = f.type === 'number' ? Number(val) : val;
     }
+    // Vendors whose form has no port field still need their real port written,
+    // or the engine falls back to the 7125 column default. See VENDOR_PORT.
+    if (body.moonraker_port === undefined && VENDOR_PORT[selected.ct] !== undefined) {
+      body.moonraker_port = VENDOR_PORT[selected.ct];
+    }
     // Connector-routed (remote-LAN) printers aren't reachable directly from a
     // cloud-hosted engine at create time — the relay is stood up AFTER creation.
     // Tell the engine to skip its connect pre-flight so the add can succeed; the
@@ -357,7 +373,7 @@
       <button type="button" class="btn btn-ghost btn-sm" onclick={changeSel}>Change</button>
     </div>
 
-    {#if deploymentMode === 'cloud'}
+    {#if deploymentMode !== 'local'}
     <div class="field">
       <label for="site">Site {#if connectors.length}<span class="muted tiny">— which network is this printer on?</span>{/if}</label>
       {#if connectors.length}

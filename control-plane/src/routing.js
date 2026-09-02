@@ -114,15 +114,23 @@ export async function activateRoute(userId, printerId) {
   let printer;
   try { printer = await eng(base, `/api/v1/printers/${printerId}`); }
   catch { return { ok: false, reason: 'printer not found' }; }
-  // On a re-activation printer.moonraker_port is already the relay port, so
-  // prefer the device port recorded on the route.
-  const prof = profileFor(printer, autoAll[printerId]?.direct_port);
+  // Which port does the tunnel dial on the printer? On a re-activation
+  // printer.moonraker_port is already the RELAY port, so the route's recorded
+  // direct_port is the only truth. On a first activation the printer record is
+  // the truth. Reading only direct_port there ignored a printer configured on
+  // a non-default port (a Moonraker on 7126, say) and dialled the profile
+  // default instead.
+  const routed = printer.ip_address === RELAY_HOST;
+  const devicePort = routed
+    ? autoAll[printerId]?.direct_port
+    : (Number(printer.moonraker_port) || undefined);
+  const prof = profileFor(printer, devicePort);
   if (!prof) return { ok: false, reason: `auto-activation not supported for ${printer.connection_type || 'this'} printers yet` };
 
   // Capture the real host once (don't save the relay host as "direct").
   let directHost = printer.ip_address;
-  let directPort = Number(printer.moonraker_port) || null;
-  if (directHost === RELAY_HOST) {
+  let directPort = Number(devicePort) || null;
+  if (routed) {
     const auto = autoAll[printerId] || {};
     directHost = auto.direct_host; directPort = auto.direct_port;
     if (!directHost) return { ok: false, reason: 'lost the printer\'s real address; set it to Direct and re-add' };
