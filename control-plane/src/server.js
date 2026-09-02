@@ -335,6 +335,49 @@ async function printHostUser(req, reply) {
   return who;
 }
 
+// A print host can be addressed generically (/printhost) or scoped to one
+// printer (/printhost/p/<id>). Slicers store the host as a plain URL inside a
+// machine preset, so putting the target in the PATH is what lets one preset per
+// printer exist without inventing a protocol field or a token per machine.
+// Generic stays the "let the scheduler choose" host it has always been.
+function scopedPrinterId(req) {
+  const raw = req.params?.pid;
+  if (raw === undefined) return null;
+  const n = Number(raw);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
+// The printers a slicer session should offer as machines. Deliberately thin:
+// enough to build a preset and label it, nothing about credentials or routing.
+// The session matches `model` against the stock presets in its OWN slicer
+// build, which is the only place that knows what presets exist.
+async function printHostPrinters(req, reply) {
+  const who = await printHostUser(req, reply); if (!who) return;
+  const inst = await getInstanceForUser(who.userId);
+  const base = engineBase(inst);
+  if (!base) return reply.code(409).send({ error: 'no running instance for this account' });
+  try {
+    const r = await fetch(base + '/api/v1/printers/', { headers: { accept: 'application/json' } });
+    if (!r.ok) return reply.code(502).send({ error: 'engine rejected the listing' });
+    const d = await r.json();
+    const arr = Array.isArray(d) ? d : (d.printers || d.items || []);
+    return {
+      host: PUBLIC_URL + '/printhost',
+      printers: arr.filter((pr) => pr.is_active !== false).map((pr) => ({
+        id: pr.id,
+        name: pr.name,
+        model: pr.model || null,
+        connection_type: pr.connection_type || null,
+        nozzle_count: pr.nozzle_count ?? 1,
+        print_host: PUBLIC_URL + '/printhost/p/' + pr.id
+      }))
+    };
+  } catch (e) {
+    return reply.code(502).send({ error: 'engine unreachable: ' + e.message });
+  }
+}
+app.get('/printhost/printers', printHostPrinters);
+
 // A containerised slicer bootstraps itself here instead of us pushing a token
 // into the image. The session already knows two things Kasm gave it: its own
 // session id (KASM_ID) and a Kasm-issued JWT. It presents the session id; we
@@ -369,22 +412,27 @@ app.post('/printhost/bootstrap', async (req, reply) => {
     api_key: token,
     host_type: 'octoprint',
     printer_name: 'OpenPrintHQ',
+    printers_url: PUBLIC_URL + '/printhost/printers',
     expires_at: expires.toISOString()
   };
 });
 
 // Slicers probe this to decide whether the host is real before offering Send.
 // Returning OctoPrint's shape is what makes the connection test pass.
-app.get('/printhost/api/version', async (req, reply) => {
+const printHostVersion = async (req, reply) => {
   const who = await printHostUser(req, reply); if (!who) return;
   return { api: '0.1', server: '1.3.10', text: 'OctoPrint 1.3.10 (OpenPrintHQ)' };
-});
+};
+app.get('/printhost/api/version', printHostVersion);
+app.get('/printhost/p/:pid/api/version', printHostVersion);
 
 // PrusaSlicer/Orca also probe this one on some host types.
-app.get('/printhost/api/settings', async (req, reply) => {
+const printHostSettings = async (req, reply) => {
   const who = await printHostUser(req, reply); if (!who) return;
   return { feature: { sdSupport: false }, webcam: { flipH: false, flipV: false } };
-});
+};
+app.get('/printhost/api/settings', printHostSettings);
+app.get('/printhost/p/:pid/api/settings', printHostSettings);
 
 // ---- library access for a slicer session ---------------------------------
 // The file dialog inside a containerised slicer sees the container filesystem,
@@ -392,7 +440,7 @@ app.get('/printhost/api/settings', async (req, reply) => {
 // pull from the user's OpenPrintHQ library using the token it already holds,
 // which closes the other half of the loop: models in, plates out.
 
-app.get('/printhost/files', async (req, reply) => {
+const printHostFiles = async (req, reply) => {
   const who = await printHostUser(req, reply); if (!who) return;
   const inst = await getInstanceForUser(who.userId);
   const base = engineBase(inst);
@@ -412,9 +460,11 @@ app.get('/printhost/files', async (req, reply) => {
   } catch (e) {
     return reply.code(502).send({ error: 'engine unreachable: ' + e.message });
   }
-});
+};
+app.get('/printhost/files', printHostFiles);
+app.get('/printhost/p/:pid/files', printHostFiles);
 
-app.get('/printhost/files/:id/download', async (req, reply) => {
+const printHostDownload = async (req, reply) => {
   const who = await printHostUser(req, reply); if (!who) return;
   const inst = await getInstanceForUser(who.userId);
   const base = engineBase(inst);
@@ -432,9 +482,11 @@ app.get('/printhost/files/:id/download', async (req, reply) => {
   } catch (e) {
     return reply.code(502).send({ error: 'engine unreachable: ' + e.message });
   }
-});
+};
+app.get('/printhost/files/:id/download', printHostDownload);
+app.get('/printhost/p/:pid/files/:id/download', printHostDownload);
 
-app.post('/printhost/api/files/local', async (req, reply) => {
+const printHostUpload = async (req, reply) => {
   const who = await printHostUser(req, reply); if (!who) return;
   const inst = await getInstanceForUser(who.userId);
   const base = engineBase(inst);
@@ -479,20 +531,24 @@ app.post('/printhost/api/files/local', async (req, reply) => {
     return !!m && /^(true|1|yes)$/i.test(m[2].trim());
   })();
 
+  // A scoped host pins the job to its printer; the generic host leaves it
+  // unassigned for the scheduler, which is what it has always done.
+  const printerId = scopedPrinterId(req);
   let queued = false, queueError = null;
   if (fileId && wantsPrint) {
     try {
       const qr = await fetch(base + '/api/v1/library/files/add-to-queue', {
         method: 'POST',
         headers: { 'content-type': 'application/json', accept: 'application/json' },
-        body: JSON.stringify({ file_ids: [fileId] })
+        body: JSON.stringify(printerId ? { file_ids: [fileId], printer_id: printerId }
+                                       : { file_ids: [fileId] })
       });
       const qj = await qr.json().catch(() => ({}));
       if (qr.ok && !(qj?.errors?.length)) queued = true;
       else queueError = qj?.errors?.[0]?.error || ('queue rejected (' + qr.status + ')');
     } catch (e) { queueError = e.message; }
   }
-  if (queueError) req.log.warn({ fileId, queueError }, 'print-host queue failed');
+  if (queueError) req.log.warn({ fileId, printerId, queueError }, 'print-host queue failed');
 
   // OctoPrint's documented 201 response shape. Slicers parse `done`.
   reply.code(201);
@@ -501,9 +557,11 @@ app.post('/printhost/api/files/local', async (req, reply) => {
     files: {
       local: { name, path: name, origin: 'local' }
     },
-    openprinthq: { file_id: fileId, queued, queue_error: queueError }
+    openprinthq: { file_id: fileId, queued, queue_error: queueError, printer_id: printerId }
   };
-});
+};
+app.post('/printhost/api/files/local', printHostUpload);
+app.post('/printhost/p/:pid/api/files/local', printHostUpload);
 
 // A Moonraker-compatible upload endpoint, sitting beside the OctoPrint one.
 //
@@ -514,7 +572,7 @@ app.post('/printhost/api/files/local', async (req, reply) => {
 //
 // Auth is the same per-user print-host token, presented as X-Api-Key, which is
 // exactly what Moonraker clients already send.
-app.post('/printhost/server/files/upload', async (req, reply) => {
+const printHostUploadMoonraker = async (req, reply) => {
   const who = await printHostUser(req, reply); if (!who) return;
   const inst = await getInstanceForUser(who.userId);
   const base = engineBase(inst);
@@ -553,20 +611,22 @@ app.post('/printhost/server/files/upload', async (req, reply) => {
     return !!m && /^(true|1|yes)$/i.test(m[1].trim());
   })();
 
+  const printerId = scopedPrinterId(req);
   let queued = false, queueError = null;
   if (fileId && wantsPrint) {
     try {
       const qr = await fetch(base + '/api/v1/library/files/add-to-queue', {
         method: 'POST',
         headers: { 'content-type': 'application/json', accept: 'application/json' },
-        body: JSON.stringify({ file_ids: [fileId] })
+        body: JSON.stringify(printerId ? { file_ids: [fileId], printer_id: printerId }
+                                       : { file_ids: [fileId] })
       });
       const qj = await qr.json().catch(() => ({}));
       if (qr.ok && !(qj?.errors?.length)) queued = true;
       else queueError = qj?.errors?.[0]?.error || ('queue rejected (' + qr.status + ')');
     } catch (e) { queueError = e.message; }
   }
-  if (queueError) req.log.warn({ fileId, queueError }, 'moonraker print-host queue failed');
+  if (queueError) req.log.warn({ fileId, printerId, queueError }, 'moonraker print-host queue failed');
 
   // Moonraker's documented response shape. Clients parse item.path and, when
   // they asked to print, print_started. Reporting print_started for a QUEUED job
@@ -576,9 +636,11 @@ app.post('/printhost/server/files/upload', async (req, reply) => {
     item: { path: name, root: 'gcodes' },
     print_started: queued,
     action: 'create_file',
-    openprinthq: { file_id: fileId, queued, queue_error: queueError }
+    openprinthq: { file_id: fileId, queued, queue_error: queueError, printer_id: printerId }
   };
-});
+};
+app.post('/printhost/server/files/upload', printHostUploadMoonraker);
+app.post('/printhost/p/:pid/server/files/upload', printHostUploadMoonraker);
 
 // ---- tenant object storage ----------------------------------------------
 // Provisioned on first use: a bucket and a key scoped to it, per tenant.
