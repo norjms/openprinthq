@@ -30,7 +30,14 @@
   const num = (v) => (v != null && v !== '' ? Number(v) : null);
 
   // ---- capability gates (derived, never probed) ---------------------------
-  const dualNozzle = $derived((st.nozzles?.length || 0) > 1 || T.nozzle_2 != null);
+  // A printer that declares one nozzle never gets Left/Right cards, whatever the
+  // status payload carries. A single-nozzle machine was rendering an empty
+  // "R" row next to the real one.
+  const dualNozzle = $derived(
+    Number(meta?.nozzle_count) === 1
+      ? false
+      : ((st.nozzles?.length || 0) > 1 || T.nozzle_2 != null)
+  );
   const canChamber = $derived(isBambu && (!!st.supports_chamber_heater || chamberHeater));
   const canFans = $derived(isBambu);
   const canAirduct = $derived(isBambu && st.airduct_mode != null);

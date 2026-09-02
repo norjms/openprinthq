@@ -44,6 +44,9 @@ const MANUFACTURER = {
 export function printerLabel(connectionType, model) {
   const mfr = MANUFACTURER[String(connectionType || '').toLowerCase()] || '';
   const m = prettyModel(model || '');
+  // The model can already carry the brand: the printer catalog hands back
+  // "Prusa MK4S", not "MK4S", so prepending would read "Prusa Prusa MK4S".
+  if (mfr && m.toLowerCase().startsWith(mfr.toLowerCase())) return m;
   return [mfr, m].filter(Boolean).join(' ').trim();
 }
 
