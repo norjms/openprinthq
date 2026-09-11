@@ -39,6 +39,21 @@ async function req(path, opts = {}) {
   return ct.includes('application/json') ? res.json() : res.text();
 }
 
+// Filament inventory has two engine backends with the same spool shape: the
+// built-in one (/inventory) and the tenant's Spoolman (/spoolman/inventory).
+// The engine's own setting says which is live; it is cached briefly so a page
+// making several inventory calls asks once.
+let invCache = null;
+async function inv(path) {
+  if (!invCache || Date.now() - invCache.at > 30000) {
+    const s = await req('/engine/api/v1/settings').catch(() => null);
+    const on = s && (s.spoolman_enabled === true || s.spoolman_enabled === 'true');
+    invCache = { at: Date.now(), base: on ? '/engine/api/v1/spoolman/inventory' : '/engine/api/v1/inventory', spoolman: !!on };
+  }
+  return invCache.base + path;
+}
+export function resetInventoryMode() { invCache = null; }
+
 export const api = {
   health: () => req('/health'),
   me: () => req('/me'),
@@ -176,12 +191,35 @@ export const api = {
   updateBomItem: (id, itemId, body) => req('/engine/api/v1/projects/' + id + '/bom/' + itemId, { method: 'PATCH', body: JSON.stringify(body) }),
   deleteBomItem: (id, itemId) => req('/engine/api/v1/projects/' + id + '/bom/' + itemId, { method: 'DELETE' }),
   // ---- inventory (spools) ----
-  spoolsInv: () => req('/engine/api/v1/inventory/spools'),
+  // Make sure the tenant's Spoolman is up (and existing spools moved into it)
+  // before the inventory is read. Returns { mode: 'spoolman' | 'internal' }.
+  filamentBackend: async () => { const r = await req('/filament-backend'); resetInventoryMode(); return r; },
+  inventoryIsSpoolman: async () => { await inv(''); return invCache.spoolman; },
+  spoolsInv: async () => req(await inv('/spools')),
+  // Storage locations are mode-agnostic in the engine (synced with Spoolman).
   spoolLocations: () => req('/engine/api/v1/inventory/locations'),
-  addSpool: (body) => req('/engine/api/v1/inventory/spools', { method: 'POST', body: JSON.stringify(body) }),
-  addSpoolsBulk: (spool, quantity) => req('/engine/api/v1/inventory/spools/bulk', { method: 'POST', body: JSON.stringify({ spool, quantity }) }),
-  updateSpool: (id, body) => req('/engine/api/v1/inventory/spools/' + id, { method: 'PATCH', body: JSON.stringify(body) }),
-  archiveSpool: (id) => req('/engine/api/v1/inventory/spools/' + id + '/archive', { method: 'POST' }),
+  addSpool: async (body) => req(await inv('/spools'), { method: 'POST', body: JSON.stringify(body) }),
+  addSpoolsBulk: async (spool, quantity) => req(await inv('/spools/bulk'), { method: 'POST', body: JSON.stringify({ spool, quantity }) }),
+  updateSpool: async (id, body) => req(await inv('/spools/' + id), { method: 'PATCH', body: JSON.stringify(body) }),
+  archiveSpool: async (id) => req(await inv('/spools/' + id + '/archive'), { method: 'POST' }),
+  // Slot bindings: which spool feeds which printer slot. Klipper printers use
+  // the external slot (ams 255, tray 0), which is what usage is charged to.
+  slotAssignments: async () => {
+    const sm = (await inv('')) && invCache.spoolman;
+    return req(sm ? '/engine/api/v1/spoolman/inventory/slot-assignments/all' : '/engine/api/v1/inventory/assignments');
+  },
+  assignSpool: async (spoolId, printerId, amsId, trayId) => {
+    const sm = (await inv('')) && invCache.spoolman;
+    return sm
+      ? req('/engine/api/v1/spoolman/inventory/slot-assignments', { method: 'POST', body: JSON.stringify({ spoolman_spool_id: spoolId, printer_id: printerId, ams_id: amsId, tray_id: trayId }) })
+      : req('/engine/api/v1/inventory/assignments', { method: 'POST', body: JSON.stringify({ spool_id: spoolId, printer_id: printerId, ams_id: amsId, tray_id: trayId }) });
+  },
+  unassignSpool: async (a) => {
+    const sm = (await inv('')) && invCache.spoolman;
+    return sm
+      ? req('/engine/api/v1/spoolman/inventory/slot-assignments/' + a.spoolman_spool_id, { method: 'DELETE' })
+      : req('/engine/api/v1/inventory/assignments/' + a.printer_id + '/' + a.ams_id + '/' + a.tray_id, { method: 'DELETE' });
+  },
   // ---- cloud (Bambu / OrcaSlicer cloud presets) ----
   cloudStatus: () => req('/engine/api/v1/cloud/status'),
   // ---- API keys (#15): scoped keys for the /webhook/* automation endpoints ----
@@ -332,7 +370,7 @@ export const api = {
   filePlateThumbUrl: (id, idx) => base + '/engine/api/v1/library/files/' + id + '/plate-thumbnail/' + idx,
   fileGcode: (id) => req('/engine/api/v1/library/files/' + id + '/gcode'),
   fileDownloadUrl: (id) => base + '/engine/api/v1/library/files/' + id + '/download',
-  spools: () => req('/engine/api/v1/inventory/spools'),
+  spools: async () => req(await inv('/spools')),
   printStats: () => req('/engine/api/v1/archives/stats'),
   printLog: (limit = 25) => req('/engine/api/v1/print-log/?limit=' + limit),
   // Filtered print-log for reports (#25): {date_from,date_to,printer_id,status,limit,offset}

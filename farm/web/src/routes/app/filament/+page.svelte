@@ -7,6 +7,9 @@
   let loading = $state(true);
   let error = $state(null);
   let spools = $state([]);
+  let backend = $state(null);      // { mode: 'spoolman' | 'internal' } from the control-plane
+  let printers = $state([]);
+  let assignments = $state([]);    // slot bindings, either backend's shape
 
   let busyId = $state(null);
   let toast = $state(null);
@@ -41,21 +44,70 @@
         total: label,
         costPerKg: cpk,
         value,
-        location: s.location ?? s.location_name ?? ''
+        location: s.storage_location ?? s.location ?? s.location_name ?? ''
       };
     });
   }
   async function load() {
     loading = true; error = null;
     try {
+      // First visit after a deploy brings the tenant's Spoolman up and moves any
+      // existing spools into it; later visits return straight away.
+      if (!backend) backend = await api.filamentBackend().catch(() => ({ mode: 'internal' }));
       const eng = await api.engineSettings().catch(() => null);
       if (eng?.currency) cur = eng.currency;
       spools = norm(await api.spools());
+      printers = ((await api.printers().catch(() => [])) || []);
+      assignments = ((await api.slotAssignments().catch(() => [])) || []);
     }
     catch (e) { error = e.status === 409 ? 'no-instance' : (e.message || 'engine unreachable'); }
     finally { loading = false; }
   }
   onMount(load);
+
+  // ---- slot bindings (which spool feeds which printer) ----
+  const isExternal = (p) => String(p?.connection_type || 'bambu').toLowerCase() !== 'bambu';
+  const spoolIdOf = (a) => a.spoolman_spool_id ?? a.spool_id;
+  const printerName = (id) => printers.find((p) => p.id === id)?.name || `Printer ${id}`;
+  function slotLabel(printerId, amsId, trayId) {
+    const p = printers.find((x) => x.id === printerId);
+    if (amsId === 255 || amsId === 254) return isExternal(p) ? 'extruder' : 'external spool';
+    if (amsId >= 128) return `AMS HT ${amsId - 127}`;
+    return `AMS ${String.fromCharCode(65 + amsId)}${trayId + 1}`;
+  }
+  const bindingsFor = (s) => assignments.filter((a) => spoolIdOf(a) === s.id);
+
+  let assign = $state(null);   // { spool, printerId, slot }
+  let asBusy = $state(false);
+  function slotOptions(printerId) {
+    const p = printers.find((x) => x.id === Number(printerId));
+    if (!p) return [];
+    if (isExternal(p)) return [{ v: '255:0', l: 'Extruder' }];
+    const out = [];
+    for (let a = 0; a < 4; a++) for (let t = 0; t < 4; t++) out.push({ v: `${a}:${t}`, l: `AMS ${String.fromCharCode(65 + a)} slot ${t + 1}` });
+    out.push({ v: '255:0', l: 'External spool' });
+    return out;
+  }
+  function openAssign(s) {
+    const first = printers[0];
+    assign = { spool: s, printerId: first ? String(first.id) : '', slot: first ? slotOptions(first.id)[0]?.v : '' };
+  }
+  function onPrinterChange() { if (assign) assign.slot = slotOptions(assign.printerId)[0]?.v || ''; }
+  async function saveAssign() {
+    if (!assign?.printerId || !assign.slot) return;
+    asBusy = true;
+    const [amsId, trayId] = assign.slot.split(':').map(Number);
+    try {
+      await api.assignSpool(assign.spool.id, Number(assign.printerId), amsId, trayId);
+      toast = { kind: 'ok', text: `${assign.spool.name} now feeds ${printerName(Number(assign.printerId))} (${slotLabel(Number(assign.printerId), amsId, trayId)}).` };
+      assign = null; await load();
+    } catch (e) { toast = { kind: 'err', text: e.message || 'could not assign' }; }
+    finally { asBusy = false; setTimeout(() => (toast = null), 5000); }
+  }
+  async function removeBinding(a) {
+    try { await api.unassignSpool(a); await load(); }
+    catch (e) { toast = { kind: 'err', text: e.message || 'could not unassign' }; setTimeout(() => (toast = null), 5000); }
+  }
   const pct = (s) => (s.remaining != null && s.total ? Math.max(0, Math.min(100, Math.round((s.remaining / s.total) * 100))) : null);
 
   // Inventory summary (deep inventory: standing stock, weight, value).
@@ -144,7 +196,7 @@
 <PageTitle page="Filament" />
 
 <div class="head">
-  <div><h1>Filament</h1><p class="muted">Spool inventory, usage and cost.</p></div>
+  <div><h1>Filament</h1><p class="muted">Spool inventory, usage and cost.{#if backend?.mode === 'spoolman'} <span class="pill" title="Inventory is stored in your own Spoolman">Spoolman</span>{/if}</p></div>
   <div class="flex gap">
     <button class="btn btn-ghost btn-sm" onclick={load}>Refresh</button>
     <button class="btn btn-primary btn-sm" onclick={openAdd}>+ Add spool</button>
@@ -154,7 +206,7 @@
 {#if toast}<div class="toast {toast.kind}">{toast.text}</div>{/if}
 
 {#if loading}
-  <div class="card card-pad muted">Loading spools…</div>
+  <div class="card card-pad muted">{backend ? 'Loading spools...' : 'Setting up your filament inventory...'}</div>
 {:else if error === 'no-instance'}
   <div class="card card-pad"><p class="muted">Provision your instance from the <a href="/app">overview</a> first.</p></div>
 {:else if error}
@@ -186,9 +238,13 @@
           <div class="bar"><div class="fill" style="width:{pct(s)}%"></div></div>
           <div class="muted mono rem">{s.remaining} g left · {pct(s)}%{#if s.value != null} · {money(s.value)}{/if}</div>
         {/if}
+        {#each bindingsFor(s) as a}
+          <div class="bind muted mono tiny">On {printerName(a.printer_id)}, {slotLabel(a.printer_id, a.ams_id, a.tray_id)} <button class="btn btn-ghost btn-xs" onclick={() => removeBinding(a)} title="Unassign from this slot" aria-label="Unassign">&times;</button></div>
+        {/each}
         <div class="sfoot">
           <span class="muted mono tiny">{s.brand}{#if s.location} · {s.location}{/if}{#if s.costPerKg != null} · {sym}{s.costPerKg}/kg{/if}</span>
           <div class="acts">
+            {#if printers.length}<button class="btn btn-ghost btn-xs" onclick={() => openAssign(s)} disabled={busyId === s.id} title="Load this spool on a printer, so its prints are charged to it">Assign</button>{/if}
             <button class="btn btn-ghost btn-xs" onclick={() => openAdjust(s)} disabled={busyId === s.id} title="Adjust remaining weight / log waste">Adjust</button>
             <button class="btn btn-ghost btn-xs" onclick={() => printLabel(s)} title="Print a spool label">Label</button>
             {#if confirmArch === s.id}
@@ -252,6 +308,31 @@
   </div>
 {/if}
 
+{#if assign}
+  <div class="overlay no-print" role="presentation" onclick={() => (assign = null)}>
+    <div class="dialog card sm" role="dialog" onclick={(e) => e.stopPropagation()}>
+      <div class="dhead"><div><span class="eyebrow">Load on a printer</span><h3>{assign.spool.name}</h3></div><button class="btn btn-ghost btn-sm" onclick={() => (assign = null)} aria-label="Close">&times;</button></div>
+      <div class="fld">
+        <label for="asp">Printer</label>
+        <select id="asp" class="input" bind:value={assign.printerId} onchange={onPrinterChange}>
+          {#each printers as p}<option value={String(p.id)}>{p.name}</option>{/each}
+        </select>
+      </div>
+      <div class="fld">
+        <label for="ass">Slot</label>
+        <select id="ass" class="input" bind:value={assign.slot}>
+          {#each slotOptions(assign.printerId) as o}<option value={o.v}>{o.l}</option>{/each}
+        </select>
+      </div>
+      <p class="muted hint">Filament used by prints on this slot is deducted from this spool. Bambu spools with an RFID tag are bound automatically when loaded.</p>
+      <div class="flex gap dactions">
+        <button class="btn btn-primary" onclick={saveAssign} disabled={asBusy || !assign.slot}>{asBusy ? 'Saving...' : 'Assign'}</button>
+        <button class="btn btn-ghost" onclick={() => (assign = null)} disabled={asBusy}>Cancel</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
 {#if labelSpool}
   <div class="printonly">
     <div class="label-card">
@@ -290,6 +371,8 @@
   .toast.err { color: var(--ophq-danger); border-color: rgba(255,92,108,0.3); background: rgba(255,92,108,0.08); }
   .empty .btn { margin-top: 1rem; }
   .acts { display: flex; align-items: center; gap: 0.3rem; flex-wrap: wrap; }
+  .bind { margin-top: 0.4rem; display: flex; align-items: center; gap: 0.3rem; }
+  .pill { font-size: 0.7rem; padding: 0.05rem 0.45rem; border-radius: 999px; border: 1px solid var(--ophq-border); color: var(--ophq-text-2); vertical-align: middle; }
 
   .overlay { position: fixed; inset: 0; background: rgba(5,8,12,0.66); backdrop-filter: blur(3px); display: grid; place-items: center; z-index: 100; padding: 1.5rem; }
   .dialog { width: 100%; max-width: 520px; padding: 1.5rem; box-shadow: var(--shadow-glow); }
