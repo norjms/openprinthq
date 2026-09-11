@@ -32,6 +32,7 @@ import { kasmConfigured, kasmEngines, kasmImageFor, ensureKasmUser, ensureSessio
   sessionStatus as kasmSessionStatus } from './kasm.js';
 import { registerConnectorRoutes, connectorOnline, isConnectorOnline, proxyViaConnector, openTcpStream, connectorEvictionCount, connectorHasDuplicateAgents, connectorClientIdentity } from './connector.js';
 import { provisionForUser, ensureEngineBucketMount, ensureVault, vaultScan, vaultBase, vaultEnabled, joinVaultNetwork } from './provisioner.js';
+import { ensureSpoolman, touchSpoolman, spoolmanEnabled } from './spoolman.js';
 import { vaultUserHeaders } from './vault-auth.js';
 import { startBatch, activeBatchForUser, advanceBatch, cancelBatch, startOrchestrator } from './batch.js';
 import { activateRoute, deactivateRoute, reconcileRoutes } from './routing.js';
@@ -2122,6 +2123,10 @@ app.all('/api/engine/*', async (req, reply) => {
   const inst = await getInstanceForUser(user.id);
   const base = engineBase(inst);
   if (!base) return reply.code(409).send({ error: 'no running instance for this account' });
+  // Keep the tenant's Spoolman attached. An engine promotion recreates the
+  // engine on its primary network only; this puts it back within minutes of
+  // any activity. Throttled and never awaited.
+  touchSpoolman(inst.subdomain, req.log);
   const enginePath = req.url.replace(/^\/api\/engine/, '') || '/';
   const method = req.method;
   // Trace: engine calls go to the user's CLOUD engine, not their LAN connector.
@@ -2152,6 +2157,25 @@ app.all('/api/engine/*', async (req, reply) => {
     return reply.send(Buffer.from(await res.arrayBuffer()));
   } catch (e) {
     return reply.code(502).send({ error: 'engine unreachable: ' + e.message });
+  }
+});
+
+// Which inventory backend the tenant's engine is on, bringing Spoolman up (and
+// moving any built-in spools into it) first if it is not there yet. The
+// Filament page awaits this before reading spools, so the first visit after a
+// deploy shows the migrated inventory rather than an empty one.
+app.get('/api/filament-backend', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  const inst = await getInstanceForUser(user.id);
+  if (!inst?.subdomain) return reply.code(409).send({ error: 'no instance for this account' });
+  if (!spoolmanEnabled()) return { mode: 'internal', reason: 'disabled' };
+  try {
+    const r = await ensureSpoolman(inst.subdomain, { attempts: 10 });
+    if (r.migrated) req.log.info({ userId: user.id, report: r.report }, 'inventory moved into spoolman');
+    return { mode: r.mode, reason: r.reason, detail: r.detail };
+  } catch (e) {
+    req.log.warn({ userId: user.id, err: e.message }, 'spoolman ensure failed');
+    return { mode: 'internal', reason: 'error', detail: e.message };
   }
 });
 
@@ -2333,6 +2357,19 @@ try {
     }
   } catch (e) { console.error('[logship] restore failed', e.message); }
   reconcileRoutes().catch((e) => console.error('reconcileRoutes', e.message));
+  // Bring every tenant's Spoolman up after a deploy, one at a time, so engines
+  // recreated by a promotion are reattached before anyone opens the app.
+  if (spoolmanEnabled()) {
+    (async () => {
+      for (const i of await listAllInstances()) {
+        if (!i.subdomain) continue;
+        try {
+          const r = await ensureSpoolman(i.subdomain, { force: true, attempts: 20 });
+          console.log(`[spoolman] ${i.subdomain}: ${r.mode}${r.migrated ? ' (migrated)' : ''}${r.reason ? ' ' + r.reason : ''}`);
+        } catch (e) { console.error(`[spoolman] ${i.subdomain}: ${e.message}`); }
+      }
+    })().catch((e) => console.error('[spoolman] boot reconcile', e.message));
+  }
   // Resume + drive any running temperature-staggered batches.
   startOrchestrator(8000);
   await app.listen({ host: '0.0.0.0', port: PORT });
