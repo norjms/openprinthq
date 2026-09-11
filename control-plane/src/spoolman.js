@@ -34,9 +34,13 @@ const IMAGE = process.env.OPHQ_SPOOLMAN_IMAGE || '';
 const PG_HOST = process.env.OPHQ_PG_HOST || '10.10.10.254';
 const PG_PORT = process.env.OPHQ_PG_PORT || '5432';
 const PG_PASS = process.env.OPHQ_PG_PASS || '';
-// The Postgres container to attach to each tenant network. Found by its compose
-// service label when unset, which is right for the standard deploy stack.
+// The Postgres container to attach to each tenant network. Found when unset: a
+// compose `postgres` service that is ALSO on the shared network. The network
+// filter is not optional. A host can run more than one compose `postgres`
+// (prod runs Authentik's own next to ours), and attaching the wrong one would
+// hand every tenant Spoolman a database server that has none of their roles.
 const PG_CONTAINER = process.env.OPHQ_PG_CONTAINER || '';
+const DOCKER_NETWORK = process.env.OPHQ_DOCKER_NETWORK || 'openprinthq_default';
 const RECONCILE_MS = Number(process.env.OPHQ_SPOOLMAN_RECONCILE_MS || 120000);
 
 export function spoolmanEnabled() { return !!IMAGE && !!PG_PASS; }
@@ -77,10 +81,14 @@ async function ensureDatabase(subdomain) {
 
 async function pgContainer() {
   if (PG_CONTAINER) return PG_CONTAINER;
-  const { stdout } = await exec('docker', ['ps', '-q', '--filter', 'label=com.docker.compose.service=postgres']);
-  const id = stdout.trim().split('\n')[0];
-  if (!id) throw new Error('postgres container not found (set OPHQ_PG_CONTAINER)');
-  return id;
+  const { stdout } = await exec('docker', [
+    'ps', '-q', '--filter', 'label=com.docker.compose.service=postgres', '--filter', `network=${DOCKER_NETWORK}`
+  ]);
+  const ids = stdout.trim().split('\n').filter(Boolean);
+  if (ids.length !== 1) {
+    throw new Error(`expected one postgres on ${DOCKER_NETWORK}, found ${ids.length} (set OPHQ_PG_CONTAINER)`);
+  }
+  return ids[0];
 }
 
 async function connect(net, container, alias) {
