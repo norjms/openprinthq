@@ -12,6 +12,7 @@ import { promisify } from 'node:util';
 import { pool, adminPool, getInstanceForUser, getTenantStorage } from './db.js';
 import { vaultAuthSecret, vaultServiceHeaders } from './vault-auth.js';
 import { randomBytes } from 'node:crypto';
+import { ensureSpoolman } from './spoolman.js';
 
 const exec = promisify(execFile);
 
@@ -583,6 +584,8 @@ export async function provisionForUser(user) {
   if (engine.started) {
     configureEngine(subdomain); // fire-and-forget slicer setup
     if (bucketDir) registerBucketFolder(subdomain);
+    // Filament inventory in the tenant's own Spoolman from day one.
+    ensureSpoolman(subdomain, { force: true }).catch(() => {});
   }
   // Fire-and-forget: a slow library must not hold up provisioning, and it is
   // reconciled on the storage path anyway.
