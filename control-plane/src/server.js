@@ -33,6 +33,7 @@ import { kasmConfigured, kasmEngines, kasmImageFor, ensureKasmUser, ensureSessio
 import { registerConnectorRoutes, connectorOnline, isConnectorOnline, proxyViaConnector, openTcpStream, connectorEvictionCount, connectorHasDuplicateAgents, connectorClientIdentity } from './connector.js';
 import { provisionForUser, ensureEngineBucketMount, ensureVault, vaultScan, vaultBase, vaultEnabled, joinVaultNetwork } from './provisioner.js';
 import { ensureSpoolman, touchSpoolman, spoolmanEnabled } from './spoolman.js';
+import { registerTagWriterRoutes } from './tagwriter.js';
 import { vaultUserHeaders } from './vault-auth.js';
 import { startBatch, activeBatchForUser, advanceBatch, cancelBatch, startOrchestrator } from './batch.js';
 import { activateRoute, deactivateRoute, reconcileRoutes } from './routing.js';
@@ -642,6 +643,15 @@ const printHostUploadMoonraker = async (req, reply) => {
 };
 app.post('/printhost/server/files/upload', printHostUploadMoonraker);
 app.post('/printhost/p/:pid/server/files/upload', printHostUploadMoonraker);
+
+// NFC tag writer (desktop app next to a USB reader). Lives under /printhost so
+// it inherits the forward-auth exemption; accepts user-minted access keys only.
+registerTagWriterRoutes(app, {
+  resolveToken: resolvePrintHostToken,
+  getInstance: getInstanceForUser,
+  engineBase,
+  publicUrl: PUBLIC_URL
+});
 
 // ---- tenant object storage ----------------------------------------------
 // Provisioned on first use: a bucket and a key scoped to it, per tenant.
