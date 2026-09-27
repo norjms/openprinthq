@@ -21,10 +21,24 @@ export function sameName(a, b) {
   return norm(a) === norm(b) && norm(a) !== '';
 }
 
-/// Only the fields the intake screen shows or the label prints.
+/// GenFilament's own FilamentSpecs field set, in its order, plus the identity
+/// fields the intake screen shows. Kept complete rather than trimmed to the
+/// label's four values: the app sends this object straight back on a
+/// correction, so a field dropped here would be a field silently erased.
+export const SPEC_FIELDS = [
+  'filament_type', 'density', 'temperature_vitrification',
+  'nozzle_temp_normal', 'nozzle_temp_initial_layer', 'nozzle_temp_high_flow',
+  'nozzle_temp_range_low', 'nozzle_temp_range_high',
+  'bed_temp', 'chamber_temp', 'flow_ratio', 'pressure_advance',
+  'fan_min_speed', 'fan_max_speed', 'slow_down_layer_time',
+  'filament_cost_estimate', 'notes', 'confidence'
+];
+
 export function slimFilament(f) {
   if (!f || typeof f !== 'object') return null;
-  const s = f.specs || {};
+  const src = f.specs || {};
+  const specs = {};
+  for (const k of SPEC_FIELDS) specs[k] = src[k] ?? null;
   return {
     id: f.id,
     manufacturer_id: f.manufacturer_id,
@@ -36,20 +50,7 @@ export function slimFilament(f) {
     color_name: f.color_name ?? null,
     color_hex: f.color_hex ?? null,
     notes: f.notes ?? null,
-    specs: {
-      filament_type: s.filament_type ?? null,
-      density: s.density ?? null,
-      nozzle_temp_normal: s.nozzle_temp_normal ?? null,
-      nozzle_temp_initial_layer: s.nozzle_temp_initial_layer ?? null,
-      nozzle_temp_range_low: s.nozzle_temp_range_low ?? null,
-      nozzle_temp_range_high: s.nozzle_temp_range_high ?? null,
-      bed_temp: s.bed_temp ?? null,
-      chamber_temp: s.chamber_temp ?? null,
-      flow_ratio: s.flow_ratio ?? null,
-      pressure_advance: s.pressure_advance ?? null,
-      filament_cost_estimate: s.filament_cost_estimate ?? null,
-      confidence: s.confidence ?? null
-    }
+    specs
   };
 }
 
@@ -111,6 +112,31 @@ export function registerGenFilamentRoutes(app, deps) {
       if (!r.ok) return fail(reply, r, 'manufacturer listing');
       const list = Array.isArray(r.data) ? r.data : [];
       return { manufacturers: list.map((m) => ({ id: m.id, name: m.name, website: m.website ?? null })) };
+    } catch (e) {
+      return reply.code(502).send({ error: 'GenFilament unreachable: ' + e.message });
+    }
+  });
+
+  // A brand the catalog has never seen (the common case for a small filament
+  // maker) has to exist before its filament can be stored, so the intake screen
+  // can create one rather than dead-ending on an unknown name.
+  app.post('/printhost/genfilament/manufacturers', async (req, reply) => {
+    const who = await guard(req, reply); if (!who) return;
+    const name = (req.body?.name || '').toString().trim();
+    if (!name) return reply.code(400).send({ error: 'name is required' });
+    try {
+      const existing = await gf('/api/manufacturers/');
+      if (existing.ok && Array.isArray(existing.data)) {
+        const hit = existing.data.find((m) => sameName(m.name, name));
+        if (hit) return { manufacturer: { id: hit.id, name: hit.name, website: hit.website ?? null }, created: false };
+      }
+      const r = await gf('/api/manufacturers/', {
+        method: 'POST',
+        body: { name, website: req.body?.website || null, notes: req.body?.notes || null }
+      });
+      if (!r.ok) return fail(reply, r, 'manufacturer create');
+      req.log.info({ userId: who.id ?? who.userId, name }, 'genfilament manufacturer created');
+      return { manufacturer: { id: r.data?.id, name: r.data?.name ?? name, website: r.data?.website ?? null }, created: true };
     } catch (e) {
       return reply.code(502).send({ error: 'GenFilament unreachable: ' + e.message });
     }
