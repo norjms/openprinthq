@@ -297,8 +297,10 @@
           <div class="bar"><div class="fill" style="width:{pct(s)}%"></div></div>
           <div class="muted mono rem">{s.remaining} g left · {pct(s)}%{#if s.value != null} · {money(s.value)}{/if}</div>
         {/if}
-        {#if s.presetId}
-          <div class="muted mono tiny preset" title="Slicer preset {s.presetId}">Preset: {s.presetName || s.presetId}</div>
+        {#if s.presetId && s.presetName && s.presetName !== s.name}
+          <div class="muted mono tiny preset" title="Slicer preset {s.presetId}">Preset: {s.presetName}</div>
+        {:else if /^P[0-9a-f]{7}$/.test(s.presetId)}
+          <div class="muted mono tiny preset" title="Slicer preset {s.presetId}">GenFilament preset</div>
         {/if}
         {#each bindingsFor(s) as a}
           <div class="bind muted mono tiny">On {printerName(a.printer_id)}, {slotLabel(a.printer_id, a.ams_id, a.tray_id)} <button class="btn btn-ghost btn-xs" onclick={() => removeBinding(a)} title="Unassign from this slot" aria-label="Unassign">&times;</button></div>
@@ -492,7 +494,7 @@
   .pill { font-size: 0.7rem; padding: 0.05rem 0.45rem; border-radius: 999px; border: 1px solid var(--ophq-border); color: var(--ophq-text-2); vertical-align: middle; }
 
   .overlay { position: fixed; inset: 0; background: rgba(5,8,12,0.66); backdrop-filter: blur(3px); display: grid; place-items: center; z-index: 100; padding: 1.5rem; }
-  .dialog { width: 100%; max-width: 520px; padding: 1.5rem; box-shadow: var(--shadow-glow); }
+  .dialog { width: 100%; max-width: 520px; max-height: calc(100vh - 3rem); overflow-y: auto; padding: 1.5rem; box-shadow: var(--shadow-glow); }
   .dialog.sm { max-width: 380px; }
   .dhead { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; }
   .dhead h3 { margin: 0.2rem 0 0; font-size: 1.15rem; }
