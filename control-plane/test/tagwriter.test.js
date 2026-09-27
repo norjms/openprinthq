@@ -16,6 +16,9 @@ function build({ mode = 'spoolman', kind = 'extension', patchStatus = 200, calls
     calls.push({ url, method: opts.method || 'GET', body: opts.body });
     const json = (status, body) => ({ ok: status < 400, status, text: async () => JSON.stringify(body) });
     if (url.endsWith('/api/v1/settings')) return json(200, { spoolman_enabled: mode === 'spoolman' });
+    if (url.endsWith('/spools') && opts.method === 'POST') {
+      return json(201, { ...SPOOL, id: 42, tag_uid: null, ...JSON.parse(opts.body) });
+    }
     if (url.endsWith('/spools') && (opts.method || 'GET') === 'GET') {
       return json(200, [SPOOL, { ...SPOOL, id: 8, tag_uid: null, archived_at: '2026-01-01' }]);
     }
@@ -177,4 +180,31 @@ test('unlink is refused to slicer tokens', async () => {
     method: 'POST', url: '/printhost/tags/unlink', headers: { 'x-api-key': 'good' }, payload: { spool_id: 7 }
   });
   assert.equal(r.statusCode, 403);
+});
+
+test('creating a spool forwards only known fields', async () => {
+  const calls = [];
+  const r = await build({ calls }).inject({
+    method: 'POST', url: '/printhost/tags/spools', headers: { 'x-api-key': 'good' },
+    payload: { material: 'PA', subtype: '645', brand: 'taulman3D', rgba: '000000FF', label_weight: 450,
+               core_weight: 230, nonsense: 'drop me' }
+  });
+  assert.equal(r.statusCode, 200);
+  assert.equal(r.json().spool.id, 42);
+  const post = calls.find((c) => c.method === 'POST' && c.url.endsWith('/spools'));
+  const sent = JSON.parse(post.body);
+  assert.equal(sent.core_weight, 230);
+  assert.equal('nonsense' in sent, false);
+  assert.equal(post.url, 'http://ophq-acme:8000/api/v1/spoolman/inventory/spools');
+});
+
+test('creating a spool needs a material', async () => {
+  const r = await build().inject({
+    method: 'POST', url: '/printhost/tags/spools', headers: { 'x-api-key': 'good' }, payload: { brand: 'taulman3D' }
+  });
+  assert.equal(r.statusCode, 400);
+});
+
+test('slimSpool carries core weight for the label', () => {
+  assert.equal(slimSpool({ ...SPOOL, core_weight: 230 }).core_weight, 230);
 });

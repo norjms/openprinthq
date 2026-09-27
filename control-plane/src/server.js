@@ -33,7 +33,8 @@ import { kasmConfigured, kasmEngines, kasmImageFor, ensureKasmUser, ensureSessio
 import { registerConnectorRoutes, connectorOnline, isConnectorOnline, proxyViaConnector, openTcpStream, connectorEvictionCount, connectorHasDuplicateAgents, connectorClientIdentity } from './connector.js';
 import { provisionForUser, ensureEngineBucketMount, ensureVault, vaultScan, vaultBase, vaultEnabled, joinVaultNetwork } from './provisioner.js';
 import { ensureSpoolman, touchSpoolman, spoolmanEnabled } from './spoolman.js';
-import { registerTagWriterRoutes } from './tagwriter.js';
+import { registerTagWriterRoutes, accessKeyUser } from './tagwriter.js';
+import { registerGenFilamentRoutes } from './genfilament.js';
 import { vaultUserHeaders } from './vault-auth.js';
 import { startBatch, activeBatchForUser, advanceBatch, cancelBatch, startOrchestrator } from './batch.js';
 import { activateRoute, deactivateRoute, reconcileRoutes } from './routing.js';
@@ -653,6 +654,23 @@ registerTagWriterRoutes(app, {
   publicUrl: PUBLIC_URL
 });
 
+// Filament specs for that workflow come from GenFilament, which has no auth of
+// its own and is not on the public edge, so it is reached only through here.
+// OPHQ_GENFILAMENT_API_URL is the BROWSER path (a relative /genfilament-api
+// handled by the edge, with forward-auth in front). Server to server needs a
+// real origin, so that is its own variable and a relative value is ignored
+// here rather than being turned into a request that leaves and re-enters.
+const GENFILAMENT_ORIGIN = (() => {
+  const explicit = (process.env.OPHQ_GENFILAMENT_API_ORIGIN || '').trim();
+  if (explicit) return explicit;
+  const shared = (process.env.OPHQ_GENFILAMENT_API_URL || '').trim();
+  return /^https?:\/\//i.test(shared) ? shared : '';
+})();
+registerGenFilamentRoutes(app, {
+  requireUser: accessKeyUser(resolvePrintHostToken),
+  baseUrl: GENFILAMENT_ORIGIN
+});
+
 // ---- tenant object storage ----------------------------------------------
 // Provisioned on first use: a bucket and a key scoped to it, per tenant.
 //
@@ -1134,11 +1152,7 @@ app.get('/api/instance', async (req, reply) => {
     status: inst.status, subdomain: inst.subdomain, dbName: inst.db_name,
     port: inst.port, engineVersion: engineDisplay(inst.engine_version),
     createdAt: inst.created_at, features: inst.features || {},
-    genfilamentUrl: process.env.OPHQ_GENFILAMENT_URL || '',
-    // Browser-reachable base of the GenFilament API (normally a same-origin path the
-    // edge proxies behind SSO). The Filament page reads /api/presets from it to link
-    // spools to generated slicer presets; unset hides that picker.
-    genfilamentApi: process.env.OPHQ_GENFILAMENT_API_URL || ''
+    genfilamentUrl: process.env.OPHQ_GENFILAMENT_URL || ''
   };
 });
 
