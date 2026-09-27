@@ -2,12 +2,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import Fastify from 'fastify';
-import { registerGenFilamentRoutes, slimFilament, sameName } from '../src/genfilament.js';
+import { registerGenFilamentRoutes, slimFilament, sameName, SPEC_FIELDS } from '../src/genfilament.js';
 
 const FILAMENTS = [
   {
     id: 1531, manufacturer_id: 4, manufacturer: { id: 4, name: 'taulman3D' },
-    product_name: 'PA 645', material_type: 'PA', color_name: 'Black', color_hex: '#000000',
+    product_name: 'PA 645', material_type: 'PA', color_name: 'Black', color_hex: '#000000', secret: 'nope',
     specs: { filament_type: 'PA', density: 1.13, nozzle_temp_normal: 245, bed_temp: 100, chamber_temp: 60, confidence: 'high' }
   },
   {
@@ -27,7 +27,10 @@ function build({ kind = 'extension', baseUrl = 'http://genfilament:8000', calls 
     calls.push({ url, method: opts.method || 'GET', body: opts.body });
     const json = (status, body) => ({ ok: status < 400, status, text: async () => JSON.stringify(body) });
     if (url.endsWith('/api/health')) return json(200, { status: 'ok' });
-    if (url.endsWith('/api/manufacturers/')) return json(200, [{ id: 4, name: 'taulman3D', website: 'https://taulman3d.com' }]);
+    if (url.endsWith('/api/manufacturers/') && (opts.method || 'GET') === 'GET')
+      return json(200, [{ id: 4, name: 'taulman3D', website: 'https://taulman3d.com' }]);
+    if (url.endsWith('/api/manufacturers/') && opts.method === 'POST')
+      return json(201, { id: 41, name: JSON.parse(opts.body).name, website: null });
     if (url.endsWith('/api/filaments/') && (opts.method || 'GET') === 'GET') return json(200, FILAMENTS);
     if (url.endsWith('/api/filaments/') && opts.method === 'POST') return json(201, { ...FILAMENTS[0], id: 2000 });
     if (url.includes('/api/filaments/') && opts.method === 'PUT') return json(200, { ...FILAMENTS[0], notes: 'corrected' });
@@ -63,13 +66,17 @@ test('sameName ignores case and spacing', () => {
   assert.equal(sameName('', ''), false);
 });
 
-test('slimFilament keeps the label fields and drops the rest', () => {
+test('slimFilament carries every spec field and drops anything else', async () => {
   const f = slimFilament(FILAMENTS[0]);
   assert.equal(f.manufacturer, 'taulman3D');
   assert.equal(f.specs.nozzle_temp_normal, 245);
   assert.equal(f.specs.bed_temp, 100);
   assert.equal(f.specs.confidence, 'high');
-  assert.equal('slow_down_layer_time' in f.specs, false);
+  // present but unset rather than absent, so an edit round-trip cannot erase a
+  // field the app never saw.
+  assert.equal(f.specs.slow_down_layer_time, null);
+  assert.deepEqual(Object.keys(f.specs), SPEC_FIELDS);
+  assert.equal('secret' in f, false);
 });
 
 test('every route needs a valid key', async () => {
@@ -170,4 +177,32 @@ test('a correction updates the stored filament', async () => {
   assert.equal(r.statusCode, 200);
   assert.equal(r.json().filament.notes, 'corrected');
   assert.equal(calls.find((c) => c.method === 'PUT').url.endsWith('/api/filaments/1531'), true);
+});
+
+test('a brand that already exists is reused rather than duplicated', async () => {
+  const calls = [];
+  const r = await build({ calls }).inject({
+    method: 'POST', url: '/printhost/genfilament/manufacturers', headers: KEY, payload: { name: ' TAULMAN3D ' }
+  });
+  assert.equal(r.statusCode, 200);
+  assert.deepEqual(r.json().manufacturer, { id: 4, name: 'taulman3D', website: 'https://taulman3d.com' });
+  assert.equal(r.json().created, false);
+  assert.equal(calls.filter((c) => c.method === 'POST').length, 0, 'no create call for a brand we already have');
+});
+
+test('an unknown brand is created', async () => {
+  const r = await build().inject({
+    method: 'POST', url: '/printhost/genfilament/manufacturers', headers: KEY, payload: { name: 'Fiberlogy' }
+  });
+  assert.equal(r.statusCode, 200);
+  assert.equal(r.json().manufacturer.id, 41);
+  assert.equal(r.json().manufacturer.name, 'Fiberlogy');
+  assert.equal(r.json().created, true);
+});
+
+test('a brand needs a name', async () => {
+  const r = await build().inject({
+    method: 'POST', url: '/printhost/genfilament/manufacturers', headers: KEY, payload: { website: 'https://x.test' }
+  });
+  assert.equal(r.statusCode, 400);
 });
