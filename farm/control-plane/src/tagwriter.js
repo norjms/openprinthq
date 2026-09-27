@@ -43,6 +43,7 @@ export function slimSpool(s) {
     color_name: s.color_name || null,
     rgba: s.rgba || null,
     label_weight: label,
+    core_weight: num(s.core_weight),
     remaining_weight: label !== null && used !== null ? Math.max(0, label - used) : null,
     nozzle_temp_min: num(s.nozzle_temp_min),
     nozzle_temp_max: num(s.nozzle_temp_max),
@@ -52,11 +53,11 @@ export function slimSpool(s) {
   };
 }
 
-export function registerTagWriterRoutes(app, deps) {
-  const { resolveToken, getInstance, engineBase, publicUrl } = deps;
-  const fetchImpl = deps.fetchImpl || fetch;
-
-  async function tagUser(req, reply) {
+/// The access-key check shared by every desktop-writer route: a user-minted
+/// 'extension' key and nothing else. Slicer bootstrap tokens live in a shared
+/// Kasm image and have no business here.
+export function accessKeyUser(resolveToken) {
+  return async function (req, reply) {
     const key = req.headers['x-api-key'] ||
       (req.headers['authorization'] || '').replace(/^Bearer\s+/i, '');
     if (!key) { reply.code(401).send({ error: 'missing API key' }); return null; }
@@ -66,6 +67,18 @@ export function registerTagWriterRoutes(app, deps) {
       reply.code(403).send({ error: 'this key cannot manage filament, mint an access key in Settings' });
       return null;
     }
+    return who;
+  };
+}
+
+export function registerTagWriterRoutes(app, deps) {
+  const { resolveToken, getInstance, engineBase, publicUrl } = deps;
+  const fetchImpl = deps.fetchImpl || fetch;
+  const keyUser = accessKeyUser(resolveToken);
+
+  async function tagUser(req, reply) {
+    const who = await keyUser(req, reply);
+    if (!who) return null;
     const inst = await getInstance(who.userId);
     const base = engineBase(inst);
     if (!base) { reply.code(409).send({ error: 'no running instance for this account' }); return null; }
@@ -149,6 +162,33 @@ export function registerTagWriterRoutes(app, deps) {
 
   // Free a tag for reuse. The engine clears extra.tag when the spool PATCH
   // carries an explicit null tag_uid, so no engine change is needed for this.
+  // Stock a new spool. The desktop writer calls this after the operator has
+  // verified the filament's specs, so the body is already the shape the engine
+  // wants and this route only guards it.
+  app.post('/printhost/tags/spools', async (req, reply) => {
+    const who = await tagUser(req, reply); if (!who) return;
+    const b = req.body || {};
+    if (!b.material && !b.spoolman_filament_id) {
+      return reply.code(400).send({ error: 'material (or spoolman_filament_id) is required' });
+    }
+    const payload = {};
+    for (const k of ['spoolman_filament_id', 'material', 'subtype', 'brand', 'color_name', 'rgba',
+                     'label_weight', 'core_weight', 'weight_used', 'note', 'cost_per_kg',
+                     'storage_location']) {
+      if (b[k] !== undefined && b[k] !== null) payload[k] = b[k];
+    }
+    try {
+      const mode = await inventoryMode(who.base);
+      const res = await engine(who.base, invBase(mode) + '/spools', { method: 'POST', body: payload });
+      if (!res.ok) return engineError(reply, res, 'spool create');
+      const spool = slimSpool(res.data);
+      req.log.info({ userId: who.userId, spoolId: spool?.id, mode }, 'spool created from the tag writer');
+      return { inventory_mode: mode, spool };
+    } catch (e) {
+      return reply.code(502).send({ error: 'engine unreachable: ' + e.message });
+    }
+  });
+
   app.post('/printhost/tags/unlink', async (req, reply) => {
     const who = await tagUser(req, reply); if (!who) return;
     const uid = req.body?.tag_uid === undefined ? null : normalizeTagUid(req.body.tag_uid);
