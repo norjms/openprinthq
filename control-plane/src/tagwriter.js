@@ -147,6 +147,45 @@ export function registerTagWriterRoutes(app, deps) {
     }
   });
 
+  // Free a tag for reuse. The engine clears extra.tag when the spool PATCH
+  // carries an explicit null tag_uid, so no engine change is needed for this.
+  app.post('/printhost/tags/unlink', async (req, reply) => {
+    const who = await tagUser(req, reply); if (!who) return;
+    const uid = req.body?.tag_uid === undefined ? null : normalizeTagUid(req.body.tag_uid);
+    let spoolId = req.body?.spool_id === undefined ? null : Number(req.body.spool_id);
+    if (req.body?.tag_uid !== undefined && !uid) return reply.code(400).send({ error: 'tag_uid must be 8 to 30 hex characters' });
+    if (spoolId !== null && (!Number.isInteger(spoolId) || spoolId <= 0)) return reply.code(400).send({ error: 'spool_id must be a positive integer' });
+    if (!uid && spoolId === null) return reply.code(400).send({ error: 'tag_uid or spool_id required' });
+    try {
+      const mode = await inventoryMode(who.base);
+      const { res, spools } = await listSpools(who.base, mode);
+      if (!spools) return engineError(reply, res, 'spool listing');
+
+      // Resolve whichever half the caller did not give, and refuse a mismatch
+      // rather than clearing a tag the caller did not mean.
+      const byTag = uid ? spools.find((s) => (s.tag_uid || '').toUpperCase() === uid) : null;
+      if (uid && !byTag) return reply.code(404).send({ error: `no spool is linked to tag ${uid}` });
+      if (spoolId === null) spoolId = byTag.id;
+      else if (byTag && byTag.id !== spoolId) {
+        return reply.code(409).send({ error: `tag ${uid} is linked to spool ${byTag.id}, not ${spoolId}` });
+      }
+
+      const target = spools.find((s) => s.id === spoolId);
+      if (!target) return reply.code(404).send({ error: `spool ${spoolId} not found` });
+      if (!target.tag_uid) return { inventory_mode: mode, spool: target, already_unlinked: true };
+
+      const path = mode === 'spoolman'
+        ? `/api/v1/spoolman/inventory/spools/${spoolId}`
+        : `/api/v1/inventory/spools/${spoolId}`;
+      const r = await engine(who.base, path, { method: 'PATCH', body: { tag_uid: null } });
+      if (!r.ok) return engineError(reply, r, 'tag unlink');
+      req.log.info({ userId: who.userId, spoolId, mode }, 'nfc tag unlinked');
+      return { inventory_mode: mode, spool: slimSpool(r.data), unlinked_tag: target.tag_uid };
+    } catch (e) {
+      return reply.code(502).send({ error: 'engine unreachable: ' + e.message });
+    }
+  });
+
   app.post('/printhost/tags/link', async (req, reply) => {
     const who = await tagUser(req, reply); if (!who) return;
     const spoolId = Number(req.body?.spool_id);
