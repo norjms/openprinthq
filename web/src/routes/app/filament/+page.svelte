@@ -14,6 +14,27 @@
   let busyId = $state(null);
   let toast = $state(null);
   let confirmArch = $state(null);
+
+  // ---- GenFilament presets (link a spool to a generated slicer preset) ----
+  let gfBase = $state(null);       // browser-reachable GenFilament API base; '' = not set up
+  let presets = $state(null);      // loaded on first use
+  let gfErr = $state(null);
+  let gfLoading = $state(false);
+  async function loadPresets() {
+    if (presets || gfLoading || !gfBase) return;
+    gfLoading = true; gfErr = null;
+    try { presets = (await api.genfilamentPresets(gfBase)) || []; }
+    catch (e) { gfErr = e.message || 'GenFilament unavailable'; }
+    finally { gfLoading = false; }
+  }
+  const presetText = (p) => (p.name + ' ' + (p.vendor || '') + ' ' + (p.specs?.filament_type || '')).toLowerCase();
+  function matchPresets(q, limit = 12) {
+    if (!presets) return [];
+    const words = String(q || '').toLowerCase().split(/\s+/).filter(Boolean);
+    const hits = words.length ? presets.filter((p) => { const t = presetText(p); return words.every((w) => t.includes(w)); }) : presets;
+    return hits.slice(0, limit);
+  }
+  const isBasic = (x) => !x || ['basic', 'standard', 'none'].includes(String(x).toLowerCase());
   let cur = $state('USD');
   const CUR_SYM = { USD: '$', EUR: '€', GBP: '£', CAD: '$', AUD: '$', NZD: '$', JPY: '¥', CNY: '¥', CHF: 'CHF ', SEK: 'kr ', NOK: 'kr ', DKK: 'kr ', PLN: 'zł ', INR: '₹', ZAR: 'R ', BRL: 'R$ ', MXN: '$' };
   const sym = $derived(CUR_SYM[cur] || (cur + ' '));
@@ -44,7 +65,10 @@
         total: label,
         costPerKg: cpk,
         value,
-        location: s.storage_location ?? s.location ?? s.location_name ?? ''
+        location: s.storage_location ?? s.location ?? s.location_name ?? '',
+        // Slicer preset the spool is linked to (GenFilament presets are "P" + 7 hex).
+        presetId: s.slicer_filament || '',
+        presetName: s.slicer_filament ? (s.slicer_filament_name || '') : ''
       };
     });
   }
@@ -56,6 +80,7 @@
       if (!backend) backend = await api.filamentBackend().catch(() => ({ mode: 'internal' }));
       const eng = await api.engineSettings().catch(() => null);
       if (eng?.currency) cur = eng.currency;
+      if (gfBase === null) gfBase = (await api.myInstance().catch(() => null))?.genfilamentApi || '';
       spools = norm(await api.spools());
       printers = ((await api.printers().catch(() => [])) || []);
       assignments = ((await api.slotAssignments().catch(() => [])) || []);
@@ -136,10 +161,27 @@
   let addErr = $state(null);
   let form = $state(newForm());
   function newForm() {
-    return { material: 'PLA', subtype: '', brand: '', color_name: '', color: '#1f9d55', label_weight: 1000, cost_per_kg: '', storage_location: '', nozzle_temp_min: '', nozzle_temp_max: '', note: '', quantity: 1 };
+    return { material: 'PLA', subtype: '', brand: '', color_name: '', color: '#1f9d55', label_weight: 1000, cost_per_kg: '', storage_location: '', nozzle_temp_min: '', nozzle_temp_max: '', note: '', quantity: 1, preset: null };
+  }
+  let presetQ = $state('');
+  // Fill the form from a generated preset. Brand is the parent vendor (one Spoolman
+  // vendor per maker); the sub-brand and series go into the sub-type.
+  function applyPreset(p) {
+    const sp = p.specs || {};
+    form.preset = { id: p.filament_id, name: p.name };
+    form.brand = p.vendor || p.brand || '';
+    form.material = p.material_type || sp.filament_type || form.material;
+    form.subtype = [p.sub_brand, isBasic(p.series) ? '' : p.series].filter(Boolean).join(' ');
+    if (sp.nozzle_temp_range_low) form.nozzle_temp_min = sp.nozzle_temp_range_low;
+    if (sp.nozzle_temp_range_high) form.nozzle_temp_max = sp.nozzle_temp_range_high;
+    if (Number(sp.filament_cost_estimate) > 0) form.cost_per_kg = Number(sp.filament_cost_estimate);
+    const c = (p.colors || [])[0];
+    if (c) { if (c.name) form.color_name = c.name; if (c.hex) form.color = c.hex; }
+    presetQ = '';
   }
   async function openAdd() {
-    form = newForm(); addErr = null; showAdd = true;
+    form = newForm(); addErr = null; showAdd = true; presetQ = '';
+    loadPresets();
     try { locations = (await api.spoolLocations().catch(() => [])) || []; } catch { locations = []; }
   }
   function hexToRgba(hex) { const h = String(hex || '').replace('#', ''); return (h.length >= 6 ? h.slice(0, 6) : 'ffffff').toUpperCase() + 'FF'; }
@@ -156,6 +198,7 @@
     if (f.nozzle_temp_min !== '') body.nozzle_temp_min = Number(f.nozzle_temp_min);
     if (f.nozzle_temp_max !== '') body.nozzle_temp_max = Number(f.nozzle_temp_max);
     if (f.note.trim()) body.note = f.note.trim();
+    if (f.preset) { body.slicer_filament = f.preset.id; body.slicer_filament_name = f.preset.name; }
     try {
       const qty = Math.max(1, Math.round(Number(f.quantity) || 1));
       if (qty > 1) await api.addSpoolsBulk(body, qty); else await api.addSpool(body);
@@ -163,6 +206,22 @@
       showAdd = false; await load();
     } catch (e) { addErr = e.message || 'could not add spool'; }
     finally { saving = false; setTimeout(() => (toast = null), 5000); }
+  }
+
+  // ---- link an existing spool to a generated preset ----
+  let link = $state(null);   // { spool, q }
+  let linkBusy = $state(false);
+  function openLink(s) { link = { spool: s, q: '' }; loadPresets(); }
+  async function saveLink(p) {
+    if (!link) return;
+    linkBusy = true;
+    const s = link.spool;
+    try {
+      await api.updateSpool(s.id, p ? { slicer_filament: p.filament_id, slicer_filament_name: p.name } : { slicer_filament: '', slicer_filament_name: '' });
+      toast = { kind: 'ok', text: p ? `${s.name} now uses the ${p.name} preset.` : `Removed the preset link from ${s.name}.` };
+      link = null; await load();
+    } catch (e) { toast = { kind: 'err', text: e.message || 'could not link preset' }; }
+    finally { linkBusy = false; setTimeout(() => (toast = null), 5000); }
   }
 
   // ---- adjust remaining weight (log waste / manual usage) ----
@@ -238,6 +297,9 @@
           <div class="bar"><div class="fill" style="width:{pct(s)}%"></div></div>
           <div class="muted mono rem">{s.remaining} g left · {pct(s)}%{#if s.value != null} · {money(s.value)}{/if}</div>
         {/if}
+        {#if s.presetId}
+          <div class="muted mono tiny preset" title="Slicer preset {s.presetId}">Preset: {s.presetName || s.presetId}</div>
+        {/if}
         {#each bindingsFor(s) as a}
           <div class="bind muted mono tiny">On {printerName(a.printer_id)}, {slotLabel(a.printer_id, a.ams_id, a.tray_id)} <button class="btn btn-ghost btn-xs" onclick={() => removeBinding(a)} title="Unassign from this slot" aria-label="Unassign">&times;</button></div>
         {/each}
@@ -245,6 +307,7 @@
           <span class="muted mono tiny">{s.brand}{#if s.location} · {s.location}{/if}{#if s.costPerKg != null} · {sym}{s.costPerKg}/kg{/if}</span>
           <div class="acts">
             {#if printers.length}<button class="btn btn-ghost btn-xs" onclick={() => openAssign(s)} disabled={busyId === s.id} title="Load this spool on a printer, so its prints are charged to it">Assign</button>{/if}
+            {#if gfBase}<button class="btn btn-ghost btn-xs" onclick={() => openLink(s)} disabled={busyId === s.id} title="Link this spool to a GenFilament slicer preset">Preset</button>{/if}
             <button class="btn btn-ghost btn-xs" onclick={() => openAdjust(s)} disabled={busyId === s.id} title="Adjust remaining weight / log waste">Adjust</button>
             <button class="btn btn-ghost btn-xs" onclick={() => printLabel(s)} title="Print a spool label">Label</button>
             {#if confirmArch === s.id}
@@ -263,6 +326,27 @@
   <div class="overlay no-print" role="presentation" onclick={() => (showAdd = false)}>
     <div class="dialog card" role="dialog" onclick={(e) => e.stopPropagation()}>
       <div class="dhead"><div><span class="eyebrow">Inventory</span><h3>Add spool</h3></div><button class="btn btn-ghost btn-sm" onclick={() => (showAdd = false)} aria-label="Close">✕</button></div>
+      {#if gfBase}
+        <div class="gfpick">
+          <label for="gfq">GenFilament preset</label>
+          {#if form.preset}
+            <div class="chosen"><span class="mono">{form.preset.name}</span><button class="btn btn-ghost btn-xs" onclick={() => (form.preset = null)} aria-label="Clear preset">&times;</button></div>
+          {:else}
+            <input id="gfq" class="input" bind:value={presetQ} placeholder={gfLoading ? 'Loading presets...' : 'Search generated presets, e.g. polylite pla'} autocomplete="off" />
+            {#if gfErr}<p class="err">{gfErr}</p>{/if}
+            {#if presetQ.trim()}
+              <div class="plist">
+                {#each matchPresets(presetQ) as p (p.filament_id)}
+                  <button class="pitem" onclick={() => applyPreset(p)}><span>{p.name}</span><span class="muted mono tiny">{p.specs?.nozzle_temp_range_low ?? ''}{#if p.specs?.nozzle_temp_range_high}-{p.specs.nozzle_temp_range_high}&deg;C{/if}</span></button>
+                {:else}
+                  <div class="muted tiny pad">{presets ? 'No matching presets.' : ''}</div>
+                {/each}
+              </div>
+            {/if}
+          {/if}
+          <p class="muted hint">Optional. Fills in the details below and links the spool to the preset, so a printer slot it is assigned to uses that preset.</p>
+        </div>
+      {/if}
       <div class="grid2">
         <div class="fld">
           <label for="mat">Material *</label>
@@ -303,6 +387,29 @@
       <div class="flex gap dactions">
         <button class="btn btn-primary" onclick={saveAdjust} disabled={adjBusy}>{adjBusy ? 'Saving…' : 'Save'}</button>
         <button class="btn btn-ghost" onclick={() => (adjust = null)} disabled={adjBusy}>Cancel</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if link}
+  <div class="overlay no-print" role="presentation" onclick={() => (link = null)}>
+    <div class="dialog card" role="dialog" onclick={(e) => e.stopPropagation()}>
+      <div class="dhead"><div><span class="eyebrow">GenFilament preset</span><h3>{link.spool.name}</h3></div><button class="btn btn-ghost btn-sm" onclick={() => (link = null)} aria-label="Close">&times;</button></div>
+      {#if link.spool.presetId}<p class="muted tiny">Currently: <span class="mono">{link.spool.presetName || link.spool.presetId}</span></p>{/if}
+      <input class="input" bind:value={link.q} placeholder={gfLoading ? 'Loading presets...' : 'Search generated presets'} autocomplete="off" />
+      {#if gfErr}<p class="err">{gfErr}</p>{/if}
+      <div class="plist tall">
+        {#each matchPresets(link.q, 40) as p (p.filament_id)}
+          <button class="pitem" onclick={() => saveLink(p)} disabled={linkBusy}><span>{p.name}</span><span class="muted mono tiny">{p.specs?.nozzle_temp_range_low ?? ''}{#if p.specs?.nozzle_temp_range_high}-{p.specs.nozzle_temp_range_high}&deg;C{/if}</span></button>
+        {:else}
+          <div class="muted tiny pad">{presets ? 'No matching presets.' : ''}</div>
+        {/each}
+      </div>
+      <p class="muted hint">Only the preset link changes; brand, colour and weight stay as they are. Install the matching bundle in your slicer from the GenFilament tab.</p>
+      <div class="flex gap dactions">
+        {#if link.spool.presetId}<button class="btn btn-ghost" onclick={() => saveLink(null)} disabled={linkBusy}>Remove link</button>{/if}
+        <button class="btn btn-ghost" onclick={() => (link = null)} disabled={linkBusy}>Cancel</button>
       </div>
     </div>
   </div>
@@ -372,6 +479,16 @@
   .empty .btn { margin-top: 1rem; }
   .acts { display: flex; align-items: center; gap: 0.3rem; flex-wrap: wrap; }
   .bind { margin-top: 0.4rem; display: flex; align-items: center; gap: 0.3rem; }
+  .preset { margin-top: 0.4rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gfpick { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.9rem; padding-bottom: 0.9rem; border-bottom: 1px solid var(--ophq-border-soft); }
+  .gfpick label { font-size: 0.78rem; color: var(--ophq-text-2); }
+  .chosen { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.45rem 0.6rem; border: 1px solid var(--ophq-border); border-radius: var(--radius-sm); }
+  .plist { display: flex; flex-direction: column; max-height: 220px; overflow-y: auto; border: 1px solid var(--ophq-border); border-radius: var(--radius-sm); margin-top: 0.3rem; }
+  .plist.tall { max-height: 340px; margin-top: 0.6rem; }
+  .pitem { display: flex; justify-content: space-between; gap: 0.6rem; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--ophq-border-soft); padding: 0.45rem 0.6rem; color: inherit; font: inherit; font-size: 0.86rem; cursor: pointer; }
+  .pitem:hover { background: var(--ophq-bg-2); }
+  .pitem:last-child { border-bottom: 0; }
+  .pad { padding: 0.5rem 0.6rem; }
   .pill { font-size: 0.7rem; padding: 0.05rem 0.45rem; border-radius: 999px; border: 1px solid var(--ophq-border); color: var(--ophq-text-2); vertical-align: middle; }
 
   .overlay { position: fixed; inset: 0; background: rgba(5,8,12,0.66); backdrop-filter: blur(3px); display: grid; place-items: center; z-index: 100; padding: 1.5rem; }
