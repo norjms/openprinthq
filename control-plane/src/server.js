@@ -1134,7 +1134,11 @@ app.get('/api/instance', async (req, reply) => {
     status: inst.status, subdomain: inst.subdomain, dbName: inst.db_name,
     port: inst.port, engineVersion: engineDisplay(inst.engine_version),
     createdAt: inst.created_at, features: inst.features || {},
-    genfilamentUrl: process.env.OPHQ_GENFILAMENT_URL || ''
+    genfilamentUrl: process.env.OPHQ_GENFILAMENT_URL || '',
+    // Browser-reachable base of the GenFilament API (normally a same-origin path the
+    // edge proxies behind SSO). The Filament page reads /api/presets from it to link
+    // spools to generated slicer presets; unset hides that picker.
+    genfilamentApi: process.env.OPHQ_GENFILAMENT_API_URL || ''
   };
 });
 

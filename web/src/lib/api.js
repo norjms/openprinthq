@@ -371,6 +371,15 @@ export const api = {
   fileGcode: (id) => req('/engine/api/v1/library/files/' + id + '/gcode'),
   fileDownloadUrl: (id) => base + '/engine/api/v1/library/files/' + id + '/download',
   spools: async () => req(await inv('/spools')),
+  // Generated slicer presets from GenFilament, one per material line. `base` comes from
+  // /api/instance (genfilamentApi) and is fetched directly, not through the engine.
+  genfilamentPresets: async (gfBase) => {
+    const res = await fetch(gfBase.replace(/\/$/, '') + '/api/presets', { credentials: 'include' });
+    if (!res.ok) throw Object.assign(new Error('GenFilament unavailable (' + res.status + ')'), { status: res.status });
+    const ct = res.headers.get('content-type') || '';
+    if (!ct.includes('application/json')) throw new Error('GenFilament unavailable (not signed in?)');
+    return res.json();
+  },
   printStats: () => req('/engine/api/v1/archives/stats'),
   printLog: (limit = 25) => req('/engine/api/v1/print-log/?limit=' + limit),
   // Filtered print-log for reports (#25): {date_from,date_to,printer_id,status,limit,offset}
