@@ -35,6 +35,7 @@ import { provisionForUser, ensureEngineBucketMount, ensureVault, vaultScan, vaul
 import { ensureSpoolman, touchSpoolman, spoolmanEnabled } from './spoolman.js';
 import { registerTagWriterRoutes, accessKeyUser } from './tagwriter.js';
 import { registerGenFilamentRoutes } from './genfilament.js';
+import { registerTagPageRoutes, spoolCode } from './tagpage.js';
 import { vaultUserHeaders } from './vault-auth.js';
 import { startBatch, activeBatchForUser, advanceBatch, cancelBatch, startOrchestrator } from './batch.js';
 import { activateRoute, deactivateRoute, reconcileRoutes } from './routing.js';
@@ -648,6 +649,7 @@ app.post('/printhost/p/:pid/server/files/upload', printHostUploadMoonraker);
 // NFC tag writer (desktop app next to a USB reader). Lives under /printhost so
 // it inherits the forward-auth exemption; accepts user-minted access keys only.
 registerTagWriterRoutes(app, {
+  secret: SESSION_SECRET,
   resolveToken: resolvePrintHostToken,
   getInstance: getInstanceForUser,
   engineBase,
@@ -666,6 +668,16 @@ const GENFILAMENT_ORIGIN = (() => {
   const shared = (process.env.OPHQ_GENFILAMENT_API_URL || '').trim();
   return /^https?:\/\//i.test(shared) ? shared : '';
 })();
+// The public side of a tag: what a phone gets when it scans one, with no
+// session. Lives under /api/pub/ because that prefix is already exempt from
+// forward-auth at both edges.
+registerTagPageRoutes(app, {
+  listInstances: listAllInstances,
+  engineBase,
+  secret: SESSION_SECRET,
+  genFilamentBase: GENFILAMENT_ORIGIN
+});
+
 registerGenFilamentRoutes(app, {
   requireUser: accessKeyUser(resolvePrintHostToken),
   baseUrl: GENFILAMENT_ORIGIN

@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import Fastify from 'fastify';
 import { registerTagWriterRoutes, normalizeTagUid, slimSpool } from '../src/tagwriter.js';
+import { spoolCode } from '../src/tagpage.js';
 
 const SPOOL = {
   id: 7, material: 'PETG', subtype: 'HF', brand: 'Bambu Lab', color_name: 'Jade White',
@@ -38,6 +39,7 @@ function build({ mode = 'spoolman', kind = 'extension', patchStatus = 200, calls
     getInstance: async () => ({ subdomain: 'acme' }),
     engineBase: (inst) => `http://ophq-${inst.subdomain}:8000`,
     publicUrl: 'https://openprinthq.com',
+    secret: 'test-secret',
     fetchImpl
   });
   return app;
@@ -207,4 +209,14 @@ test('creating a spool needs a material', async () => {
 
 test('slimSpool carries core weight for the label', () => {
   assert.equal(slimSpool({ ...SPOOL, core_weight: 230 }).core_weight, 230);
+});
+
+test('every spool carries the code its label QR would use', async () => {
+  const r = await build().inject({ url: '/printhost/tags/spools', headers: { 'x-api-key': 'good' } });
+  const spools = r.json().spools;
+  assert.equal(spools.length > 0, true);
+  for (const s of spools) {
+    assert.equal(s.code, spoolCode('acme', s.id, 'test-secret'));
+    assert.match(s.code, /^s\d+-[0-9a-f]{10}$/);
+  }
 });

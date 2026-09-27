@@ -20,6 +20,8 @@
 // different paths, so the mode is resolved per request from the engine's own
 // settings, the same way the web client does it.
 
+import { spoolCode } from './tagpage.js';
+
 const TAG_UID_RE = /^[0-9A-F]{8,30}$/;
 
 export function normalizeTagUid(raw) {
@@ -72,7 +74,7 @@ export function accessKeyUser(resolveToken) {
 }
 
 export function registerTagWriterRoutes(app, deps) {
-  const { resolveToken, getInstance, engineBase, publicUrl } = deps;
+  const { resolveToken, getInstance, engineBase, publicUrl, secret } = deps;
   const fetchImpl = deps.fetchImpl || fetch;
   const keyUser = accessKeyUser(resolveToken);
 
@@ -82,7 +84,7 @@ export function registerTagWriterRoutes(app, deps) {
     const inst = await getInstance(who.userId);
     const base = engineBase(inst);
     if (!base) { reply.code(409).send({ error: 'no running instance for this account' }); return null; }
-    return { ...who, base };
+    return { ...who, base, subdomain: inst.subdomain };
   }
 
   async function engine(base, path, opts = {}) {
@@ -113,11 +115,15 @@ export function registerTagWriterRoutes(app, deps) {
     return reply.code(code).send({ error: msg });
   }
 
-  async function listSpools(base, mode) {
+  async function listSpools(base, mode, subdomain) {
     const res = await engine(base, invBase(mode) + '/spools');
     if (!res.ok) return { res };
     const arr = Array.isArray(res.data) ? res.data : (res.data?.items || []);
-    return { res, spools: arr.map(slimSpool).filter((s) => s && !s.archived) };
+    const spools = arr.map(slimSpool).filter((s) => s && !s.archived);
+    // The code a label's QR uses when the spool has no tag yet. Signed, so the
+    // public lookup cannot be walked by spool id.
+    if (subdomain && secret) for (const s of spools) s.code = spoolCode(subdomain, s.id, secret);
+    return { res, spools };
   }
 
   app.get('/printhost/tags/config', async (req, reply) => {
@@ -137,7 +143,7 @@ export function registerTagWriterRoutes(app, deps) {
     const who = await tagUser(req, reply); if (!who) return;
     try {
       const mode = await inventoryMode(who.base);
-      const { res, spools } = await listSpools(who.base, mode);
+      const { res, spools } = await listSpools(who.base, mode, who.subdomain);
       if (!spools) return engineError(reply, res, 'spool listing');
       return { inventory_mode: mode, spools };
     } catch (e) {
@@ -151,7 +157,7 @@ export function registerTagWriterRoutes(app, deps) {
     if (!uid) return reply.code(400).send({ error: 'tag_uid must be 8 to 30 hex characters' });
     try {
       const mode = await inventoryMode(who.base);
-      const { res, spools } = await listSpools(who.base, mode);
+      const { res, spools } = await listSpools(who.base, mode, who.subdomain);
       if (!spools) return engineError(reply, res, 'spool listing');
       const spool = spools.find((s) => (s.tag_uid || '').toUpperCase() === uid) || null;
       return { tag_uid: uid, spool };
@@ -182,6 +188,7 @@ export function registerTagWriterRoutes(app, deps) {
       const res = await engine(who.base, invBase(mode) + '/spools', { method: 'POST', body: payload });
       if (!res.ok) return engineError(reply, res, 'spool create');
       const spool = slimSpool(res.data);
+      if (spool && who.subdomain && secret) spool.code = spoolCode(who.subdomain, spool.id, secret);
       req.log.info({ userId: who.userId, spoolId: spool?.id, mode }, 'spool created from the tag writer');
       return { inventory_mode: mode, spool };
     } catch (e) {
@@ -198,7 +205,7 @@ export function registerTagWriterRoutes(app, deps) {
     if (!uid && spoolId === null) return reply.code(400).send({ error: 'tag_uid or spool_id required' });
     try {
       const mode = await inventoryMode(who.base);
-      const { res, spools } = await listSpools(who.base, mode);
+      const { res, spools } = await listSpools(who.base, mode, who.subdomain);
       if (!spools) return engineError(reply, res, 'spool listing');
 
       // Resolve whichever half the caller did not give, and refuse a mismatch
