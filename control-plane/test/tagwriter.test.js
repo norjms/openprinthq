@@ -21,7 +21,12 @@ function build({ mode = 'spoolman', kind = 'extension', patchStatus = 200, calls
     }
     if (opts.method === 'PATCH') {
       if (patchStatus !== 200) return json(patchStatus, { detail: 'Tag is already assigned to spool 3' });
-      return json(200, { ...SPOOL, tag_uid: JSON.parse(opts.body).tag_uid });
+      const body = JSON.parse(opts.body);
+      // A spool PATCH with a null tag_uid is the unlink; /tag is the link.
+      if (!url.endsWith('/tag') && !url.endsWith('/link-tag')) {
+        return json(200, { ...SPOOL, tag_uid: null });
+      }
+      return json(200, { ...SPOOL, tag_uid: body.tag_uid });
     }
     return json(404, { detail: 'nope' });
   };
@@ -113,4 +118,63 @@ test('bad input is rejected before reaching the engine', async () => {
   });
   assert.equal(r.statusCode, 400);
   assert.equal(calls.filter((c) => c.method === 'PATCH').length, 0);
+});
+
+test('unlink by tag uid clears it through the spool patch', async () => {
+  const calls = [];
+  const r = await build({ calls }).inject({
+    method: 'POST', url: '/printhost/tags/unlink', headers: { 'x-api-key': 'good' },
+    payload: { tag_uid: '04a1b2c3d4e5f6' }
+  });
+  assert.equal(r.statusCode, 200);
+  assert.equal(r.json().unlinked_tag, '04A1B2C3D4E5F6');
+  assert.equal(r.json().spool.tag_uid, null);
+  const patch = calls.find((c) => c.method === 'PATCH');
+  assert.equal(patch.url, 'http://ophq-acme:8000/api/v1/spoolman/inventory/spools/7');
+  assert.deepEqual(JSON.parse(patch.body), { tag_uid: null });
+});
+
+test('unlink by spool id works too', async () => {
+  const r = await build().inject({
+    method: 'POST', url: '/printhost/tags/unlink', headers: { 'x-api-key': 'good' },
+    payload: { spool_id: 7 }
+  });
+  assert.equal(r.statusCode, 200);
+  assert.equal(r.json().unlinked_tag, '04A1B2C3D4E5F6');
+});
+
+test('unlink refuses a tag and spool that disagree', async () => {
+  const calls = [];
+  const r = await build({ calls }).inject({
+    method: 'POST', url: '/printhost/tags/unlink', headers: { 'x-api-key': 'good' },
+    payload: { spool_id: 99, tag_uid: '04A1B2C3D4E5F6' }
+  });
+  assert.equal(r.statusCode, 409);
+  assert.equal(calls.filter((c) => c.method === 'PATCH').length, 0);
+});
+
+test('unlink reports an unknown tag rather than clearing anything', async () => {
+  const calls = [];
+  const r = await build({ calls }).inject({
+    method: 'POST', url: '/printhost/tags/unlink', headers: { 'x-api-key': 'good' },
+    payload: { tag_uid: 'AABBCCDDEE' }
+  });
+  assert.equal(r.statusCode, 404);
+  assert.equal(calls.filter((c) => c.method === 'PATCH').length, 0);
+});
+
+test('unlink uses the internal path in internal mode', async () => {
+  const calls = [];
+  await build({ mode: 'internal', calls }).inject({
+    method: 'POST', url: '/printhost/tags/unlink', headers: { 'x-api-key': 'good' },
+    payload: { spool_id: 7 }
+  });
+  assert.equal(calls.find((c) => c.method === 'PATCH').url, 'http://ophq-acme:8000/api/v1/inventory/spools/7');
+});
+
+test('unlink is refused to slicer tokens', async () => {
+  const r = await build({ kind: 'slicer' }).inject({
+    method: 'POST', url: '/printhost/tags/unlink', headers: { 'x-api-key': 'good' }, payload: { spool_id: 7 }
+  });
+  assert.equal(r.statusCode, 403);
 });
