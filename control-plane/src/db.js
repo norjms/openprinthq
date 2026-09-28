@@ -264,6 +264,10 @@ export async function migrate() {
   await pool.query(`ALTER TABLE printhost_tokens ADD COLUMN IF NOT EXISTS token_id TEXT;`);
   await pool.query(`UPDATE printhost_tokens SET token_id = md5(token) WHERE token_id IS NULL;`);
   await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_printhost_tokens_tid ON printhost_tokens (token_id);`);
+  // Library printer tokens were minted as kind 'slicer' until they got a kind of
+  // their own. Move them, so a slicer purge no longer takes out the library
+  // printer and a library reseed no longer takes out the slicer.
+  await pool.query(`UPDATE printhost_tokens SET kind = 'vault' WHERE label = 'vault' AND kind = 'slicer';`);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS kasm_sessions (
       user_id       INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
