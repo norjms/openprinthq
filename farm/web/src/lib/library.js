@@ -297,10 +297,26 @@ export function describeFindings(findings) {
   return parts.slice(0, -1).join(', ') + ' and ' + parts[parts.length - 1];
 }
 
+// The library hands back file.url already percent-encoded ("My%20Model.stl"),
+// because it is a URL. An object key is NOT a URL: the bucket holds
+// "My Model.stl", and presigning the encoded form names an object that does not
+// exist. That broke "Open in slicer" for any path with a space (the session got
+// a 404, then "could not presign"), and it made delete worse than broken: S3
+// answers 204 for a missing key, so a delete reported success and removed
+// nothing. Decode only what came from the URL; library_path is a plain path and
+// may legitimately contain a literal '%'.
+function decodeKey(k) {
+  try { return decodeURIComponent(k); } catch { return k; }
+}
+
 export function objectKeyFor(file) {
+  const fromUrl = !!file?.url;
   const raw = file?.url || file?.library_path || '';
   for (const prefix of ['/library-files/', '/library/']) {
-    if (raw.startsWith(prefix)) return raw.slice(prefix.length);
+    if (raw.startsWith(prefix)) {
+      const key = raw.slice(prefix.length);
+      return fromUrl ? decodeKey(key) : key;
+    }
   }
   return '';
 }
