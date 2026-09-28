@@ -28,7 +28,7 @@ import { garageConfigured, ensureTenantStorage, usage as storageUsage,
   s3EndpointPublic, s3EndpointLan, s3EndpointEngine, s3PathPrefix, s3Region, presignTtl } from './garage.js';
 import { presign, signedRequest } from './s3sign.js';
 import { kasmConfigured, kasmEngines, kasmImageFor, ensureKasmUser, ensureSession as ensureKasmSession,
-  findSession as findKasmSession, destroySession as destroyKasmSession,
+  findSession as findKasmSession, destroySession as destroyKasmSession, connectUrl as kasmConnectUrl,
   sessionStatus as kasmSessionStatus } from './kasm.js';
 import { registerConnectorRoutes, connectorOnline, isConnectorOnline, proxyViaConnector, openTcpStream, connectorEvictionCount, connectorHasDuplicateAgents, connectorClientIdentity } from './connector.js';
 import { provisionForUser, ensureEngineBucketMount, ensureVault, vaultScan, vaultBase, vaultEnabled, joinVaultNetwork } from './provisioner.js';
@@ -210,6 +210,34 @@ app.post('/api/slicer/session', async (req, reply) => {
     if (row?.kasm_id && row.engine && row.engine !== engine) {
       try { await destroyKasmSession(acct.userId, row.kasm_id); } catch { /* best effort */ }
       await clearKasmSession(user.id);
+    }
+
+    // Opening a model into a session that is already running needs a restart:
+    // the model reaches the container through its environment, and that is
+    // fixed at creation. The page asks the user first, because a restart throws
+    // away whatever is unsaved on the running plate; this only acts when told.
+    if (req.body?.restart === true) {
+      const cur = await getKasmRow(user.id);
+      if (cur?.kasm_id) {
+        try { await destroyKasmSession(acct.userId, cur.kasm_id); } catch { /* best effort */ }
+        await clearKasmSession(user.id);
+      }
+    }
+
+    // Reattach BEFORE minting anything. Minting purges the user's previous
+    // print-host tokens, and a reused container still holds the old one in its
+    // environment, so minting on a reattach left the running slicer unable to
+    // send plates, and handed back a token no container has.
+    {
+      const cur = await getKasmRow(user.id);
+      if (cur?.kasm_id && cur?.session_token) {
+        const live = await findKasmSession(acct.userId, imageId);
+        if (live && String(live.kasm_id).replace(/-/g, '') === String(cur.kasm_id).replace(/-/g, '')) {
+          await setKasmSession(user.id, engine, cur.kasm_id, cur.session_token);
+          return { engine, status: live.operational_status, url: kasmConnectUrl(cur.kasm_id, acct.userId, cur.session_token),
+                   reused: true, provisioned: acct.created, printHost: null, envInjected: false };
+        }
+      }
     }
 
     // Mint the print-host token BEFORE launching, because environment can only

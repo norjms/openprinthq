@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte';
+  import { replaceState } from '$app/navigation';
   import { api } from '$lib/api';
   import PageTitle from '$lib/components/PageTitle.svelte';
 
@@ -86,6 +87,18 @@
   let pendingKey = $state(null);
   let pendingKeys = $state([]);
   let pendingFileName = $state(null);
+  const hasPending = $derived(!!(pendingFileId || pendingKey || pendingKeys.length));
+  const pendingLabel = $derived(pendingKeys.length > 1
+    ? pendingKeys.length + ' models'
+    : (pendingFileName || ('file ' + (pendingFileId || pendingKey))));
+
+  // Once a session has been created with the model in its environment, the
+  // request is spent. Clearing it (and the query string) stops a reload from
+  // offering to restart the slicer for a model that is already open.
+  function clearPending() {
+    pendingFileId = null; pendingKey = null; pendingKeys = []; pendingFileName = null;
+    try { replaceState(window.location.pathname, {}); } catch { /* not fatal */ }
+  }
 
   async function wsLoad() {
     try {
@@ -109,15 +122,24 @@
     clearTimeout(poll);
     poll = setTimeout(wsLoad, ms);
   }
-  async function wsStart() {
+  async function wsStart(restart = false) {
     wsBusy = true; wsError = null;
     justClosed = false;
     try {
-      const r = await api.slicerWorkspaceStart(engine, pendingFileId, pendingKey, pendingKeys);
+      const r = await api.slicerWorkspaceStart(engine, pendingFileId, pendingKey, pendingKeys, restart);
       wsUrl = r.url; wsStatus = r.status;
+      if (r.envInjected) clearPending();
       if (String(r.status || '').toLowerCase() !== 'running') schedulePoll();
     } catch (e) { wsError = e.message || 'could not start the slicer'; }
     finally { wsBusy = false; }
+  }
+  // "Open in slicer" while a session is already running. The model can only
+  // reach a container at creation, so the session has to be replaced, and that
+  // loses anything unsaved on the running plate. Ask rather than assume.
+  async function wsRestartWithPending() {
+    if (!confirm(`Restart the slicer to open ${pendingLabel}? Anything not saved in the current session will be lost.`)) return;
+    wsUrl = null; wsStatus = null;
+    await wsStart(true);
   }
   async function wsStop() {
     wsBusy = true; wsError = null;
@@ -180,20 +202,19 @@
           <span class="muted small">
             {#if !wsUrl}Not running{:else if wsStatus === 'running'}{ENGINES.find((x) => x.key === engine)?.name} running{:else}Starting up{/if}
           </span>
-          {#if (pendingFileId || pendingKey || pendingKeys.length) && !wsUrl}
-            <span class="pill">
-              will open {pendingKeys.length > 1
-                ? pendingKeys.length + ' models'
-                : (pendingFileName || ('file ' + (pendingFileId || pendingKey)))}
-            </span>
+          {#if hasPending}
+            <span class="pill">{wsUrl ? 'waiting to open' : 'will open'} {pendingLabel}</span>
           {/if}
         </div>
         <div class="flex center gap">
+          {#if wsUrl && hasPending}
+            <button class="btn btn-sm" onclick={wsRestartWithPending} disabled={wsBusy}>{wsBusy ? 'Restarting...' : 'Restart and open'}</button>
+          {/if}
           {#if wsUrl}
             <button class="btn btn-ghost btn-sm" onclick={() => (wsFull = !wsFull)}>{wsFull ? 'Exit full screen' : 'Full screen'}</button>
             <button class="btn btn-ghost btn-sm" onclick={wsStop} disabled={wsBusy}>Stop</button>
           {:else}
-            <button class="btn btn-sm" onclick={wsStart} disabled={wsBusy}>{wsBusy ? 'Starting...' : 'Open slicer'}</button>
+            <button class="btn btn-sm" onclick={() => wsStart()} disabled={wsBusy}>{wsBusy ? 'Starting...' : 'Open slicer'}</button>
           {/if}
         </div>
       </div>
