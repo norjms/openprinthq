@@ -421,8 +421,13 @@ export async function bootstrapVault(userId, subdomain, email, attempts = 20) {
 async function seedVaultPrinter(base, userId) {
   const { createPrintHostToken, purgePrintHostTokens } = await import('./db.js');
   const token = randomBytes(24).toString('base64url');
-  await purgePrintHostTokens(userId).catch(() => {});
-  await createPrintHostToken(userId, token, 'vault', null);
+  // Its OWN kind. This runs on every storage request (ensureStorageFor ->
+  // ensureVault -> here), and it used to purge and mint as kind 'slicer', the
+  // same bucket a running slicer session's token lives in. So every presign and
+  // every Files page load revoked the open slicer's token: the first model
+  // fetch worked and every later one, and Send to printer, got a 401.
+  await purgePrintHostTokens(userId, 'vault').catch(() => {});
+  await createPrintHostToken(userId, token, 'vault', null, 'vault');
   // The INTERNAL address, not the public one. The library container sits on the
   // same docker network as the control-plane, so sending a plate to the public
   // hostname would hairpin out to the internet and back, and on a deployment
