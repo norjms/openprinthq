@@ -268,6 +268,8 @@ export async function migrate() {
   // their own. Move them, so a slicer purge no longer takes out the library
   // printer and a library reseed no longer takes out the slicer.
   await pool.query(`UPDATE printhost_tokens SET kind = 'vault' WHERE label = 'vault' AND kind = 'slicer';`);
+  // Scoped API keys (kind 'api', see apikeys.js) carry read, submit or control. Other kinds leave it null.
+  await pool.query(`ALTER TABLE printhost_tokens ADD COLUMN IF NOT EXISTS scope TEXT;`);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS kasm_sessions (
       user_id       INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -836,25 +838,25 @@ export async function clearKasmSession(userId) {
 // into the queue. Deliberately short-lived and scoped to one user: the slicer
 // runs in a desktop the user controls, so this token is the ONLY thing it gets,
 // never printer credentials.
-export async function createPrintHostToken(userId, token, label, expiresAt, kind = 'slicer') {
+export async function createPrintHostToken(userId, token, label, expiresAt, kind = 'slicer', scope = null) {
   // token_id is derived in SQL and read back rather than recomputed in JS, so
   // the handle the caller hands out can never disagree with the stored one.
   const { rows } = await pool.query(
-    `INSERT INTO printhost_tokens (token, token_id, user_id, label, expires_at, kind)
-     VALUES ($1, md5($1), $2, $3, $4, $5) RETURNING token_id`,
-    [token, userId, label || null, expiresAt || null, kind]);
+    `INSERT INTO printhost_tokens (token, token_id, user_id, label, expires_at, kind, scope)
+     VALUES ($1, md5($1), $2, $3, $4, $5, $6) RETURNING token_id`,
+    [token, userId, label || null, expiresAt || null, kind, scope]);
   return { token, tokenId: rows[0].token_id };
 }
 export async function resolvePrintHostToken(token) {
   const { rows } = await pool.query(
-    `SELECT t.user_id, t.expires_at, t.kind, u.email FROM printhost_tokens t
+    `SELECT t.user_id, t.expires_at, t.kind, t.scope, t.token_id, u.email FROM printhost_tokens t
      JOIN users u ON u.id = t.user_id
      WHERE t.token = $1`, [token]);
   const r = rows[0];
   if (!r) return null;
   if (r.expires_at && new Date(r.expires_at).getTime() < Date.now()) return null;
   pool.query('UPDATE printhost_tokens SET last_used_at = now() WHERE token = $1', [token]).catch(() => {});
-  return { userId: r.user_id, email: r.email, kind: r.kind || 'slicer' };
+  return { userId: r.user_id, email: r.email, kind: r.kind || 'slicer', scope: r.scope || null, tokenId: r.token_id };
 }
 /**
  * Tokens a user can see and manage. The secret is never returned: a listing is
@@ -864,7 +866,7 @@ export async function resolvePrintHostToken(token) {
  */
 export async function listPrintHostTokens(userId) {
   const { rows } = await pool.query(
-    `SELECT token_id, label, kind, created_at, last_used_at, expires_at,
+    `SELECT token_id, label, kind, scope, created_at, last_used_at, expires_at,
             left(token, 6) AS token_prefix
        FROM printhost_tokens WHERE user_id = $1 ORDER BY created_at DESC`, [userId]);
   return rows;
