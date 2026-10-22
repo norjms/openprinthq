@@ -236,6 +236,11 @@ export const api = {
   accessKeys: () => req('/access-keys'),
   createAccessKey: (body) => req('/access-keys', { method: 'POST', body: JSON.stringify(body) }),
   revokeAccessKey: (id) => req('/access-keys/' + encodeURIComponent(id), { method: 'DELETE' }),
+  // Integration keys (control-plane /api/api-keys, ophqk_): read, submit or control over the whole engine API,
+  // for Artisan Hub, n8n and scripts. Not the engine's own webhook keys (apiKeys above).
+  integrationKeys: () => req('/api-keys'),
+  createIntegrationKey: (body) => req('/api-keys', { method: 'POST', body: JSON.stringify(body) }),
+  revokeIntegrationKey: (id) => req('/api-keys/' + encodeURIComponent(id), { method: 'DELETE' }),
   // ---- archives / timelapses ----
   archives: (limit = 60) => req('/engine/api/v1/archives/?limit=' + limit),
   archiveThumbUrl: (id) => base + '/engine/api/v1/archives/' + id + '/thumbnail',

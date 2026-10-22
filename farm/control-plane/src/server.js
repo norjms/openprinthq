@@ -1907,7 +1907,8 @@ const MAX_EXT_KEYS = 10;
 
 app.get('/api/access-keys', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
-  const rows = await listPrintHostTokens(user.id);
+  // API keys have their own list (/api/api-keys) with scopes; this one is the extension, slicer and library keys.
+  const rows = (await listPrintHostTokens(user.id)).filter((r) => r.kind !== 'api');
   return rows.map((r) => ({
     id: r.token_id,
     label: r.label,
