@@ -47,7 +47,7 @@
 </script>
 
 <div class="card card-pad">
-  <span class="eyebrow">Browser extension &amp; scripts</span>
+  <span class="eyebrow">Browser extension</span>
   <p class="muted">
     An access key lets the OpenPrintHQ browser extension put downloaded models
     straight into this Files tab. It can add files and read what it added.
