@@ -5,6 +5,7 @@
   import ObicoSettings from '$lib/components/ObicoSettings.svelte';
   import ApiKeys from '$lib/components/ApiKeys.svelte';
   import AccessKeys from '$lib/components/AccessKeys.svelte';
+  import IntegrationKeys from '$lib/components/IntegrationKeys.svelte';
   import Connectors from '$lib/components/Connectors.svelte';
   import LookAndFeel from '$lib/components/LookAndFeel.svelte';
   import GlobalAdmin from '$lib/components/GlobalAdmin.svelte';
@@ -312,6 +313,8 @@ scrape_configs:
 </div>
 
 <AccessKeys />
+
+<IntegrationKeys />
 
 <ApiKeys />
 
