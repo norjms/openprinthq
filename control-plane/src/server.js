@@ -34,6 +34,7 @@ import { registerConnectorRoutes, connectorOnline, isConnectorOnline, proxyViaCo
 import { provisionForUser, ensureEngineBucketMount, ensureVault, vaultScan, vaultBase, vaultEnabled, joinVaultNetwork } from './provisioner.js';
 import { ensureSpoolman, touchSpoolman, spoolmanEnabled } from './spoolman.js';
 import { registerTagWriterRoutes, accessKeyUser } from './tagwriter.js';
+import { API_KEY_PREFIX, SCOPES, scopeFor, presentedKey, keyCaller, normalizeScope } from './apikeys.js';
 import { registerGenFilamentRoutes } from './genfilament.js';
 import { registerTagPageRoutes, spoolCode } from './tagpage.js';
 import { vaultUserHeaders } from './vault-auth.js';
@@ -1127,6 +1128,12 @@ app.post('/api/auth/logout', async (req, reply) => {
 
 // ---- account ------------------------------------------------------------
 app.get('/api/me', async (req, reply) => {
+  if (presentedKey(req)) {
+    const got = await keyCaller(req, reply, 'read', { resolveToken: resolvePrintHostToken, getUser: getUserById });
+    if (!got) return;
+    return { id: got.user.id, email: got.user.email, displayName: got.user.display_name, role: 'user', isOwner: false,
+             hasAccount: true, apiKey: got.key };
+  }
   const email = currentEmail(req);
   if (!email) { reply.code(401).send({ error: 'not authenticated' }); return; }
   const user = await getUserByEmail(email);
@@ -1944,6 +1951,58 @@ app.delete('/api/access-keys/:id', async (req, reply) => {
   return { revoked: true };
 });
 
+// ---- scoped API keys (apikeys.js): programs, not browsers ------------------
+// Managed only from a signed-in session: a key can never list, mint or revoke keys.
+const MAX_API_KEYS = 20;
+
+app.get('/api/api-keys', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  const rows = (await listPrintHostTokens(user.id)).filter((r) => r.kind === 'api');
+  return rows.map((r) => ({
+    id: r.token_id, label: r.label, scope: r.scope, prefix: r.token_prefix,
+    createdAt: r.created_at, lastUsedAt: r.last_used_at, expiresAt: r.expires_at
+  }));
+});
+
+app.post('/api/api-keys', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  const scope = normalizeScope(req.body?.scope);
+  if (!scope) return reply.code(400).send({ error: `scope is one of ${SCOPES.join(', ')}` });
+  const label = String(req.body?.label || '').trim().slice(0, 80) || 'API key';
+  if (await countPrintHostTokens(user.id, 'api') >= MAX_API_KEYS) {
+    return reply.code(409).send({ error: 'key limit reached, revoke one first' });
+  }
+  const days = Number(req.body?.expiresInDays || 0);
+  if (days && !(days >= 1 && days <= 3650)) return reply.code(400).send({ error: 'expiresInDays is 1 to 3650, or 0 for none' });
+  const expiresAt = days > 0 ? new Date(Date.now() + days * 86400000) : null;
+  const secret = API_KEY_PREFIX + randomBytes(32).toString('base64url');
+  const { token, tokenId } = await createPrintHostToken(user.id, secret, label, expiresAt, 'api', scope);
+  req.log.info({ userId: user.id, label, scope }, 'api key minted');
+  return reply.code(201).send({ token, id: tokenId, label, scope, expiresAt: expiresAt ? expiresAt.toISOString() : null });
+});
+
+app.delete('/api/api-keys/:id', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  const ok = await revokePrintHostToken(user.id, String(req.params.id));
+  if (!ok) return reply.code(404).send({ error: 'no such key' });
+  req.log.info({ userId: user.id }, 'api key revoked');
+  return { revoked: true };
+});
+
+/**
+ * The caller of a route that keys may use: the holder of an API key whose scope covers `need`, or else the
+ * signed-in person. A request that carries a key is judged by the key alone, never by identity headers next to
+ * it: key requests bypass forward-auth at the proxy, so those headers prove nothing there.
+ * Answers the user row, or sends the error and answers null.
+ */
+async function callerFor(req, reply, need) {
+  if (!presentedKey(req)) return requireUser(req, reply);
+  const got = await keyCaller(req, reply, need, { resolveToken: resolvePrintHostToken, getUser: getUserById });
+  if (!got) return null;
+  req.apiKey = got.key;
+  return got.user;
+}
+
 // ---- appearance (Look & Feel) ------------------------------------------
 // Per-user theme + branding. Stored as one JSON blob; never shared between
 // users, so one account's theme can't affect another's.
@@ -2187,7 +2246,11 @@ app.get('/api/camera/capability/:printerId', async (req, reply) => {
 // Frontend calls /api/engine/<engine-path>; we resolve the user's instance and
 // forward. (JSON + GET today; multipart upload proxying is a follow-up.)
 app.all('/api/engine/*', async (req, reply) => {
-  const user = await requireUser(req, reply); if (!user) return;
+  const enginePathForScope = req.url.replace(/^\/api\/engine/, '') || '/';
+  const user = await callerFor(req, reply, scopeFor(req.method, enginePathForScope)); if (!user) return;
+  if (req.apiKey && req.method !== 'GET') {
+    req.log.info({ userId: user.id, keyId: req.apiKey.id, scope: req.apiKey.scope, method: req.method, path: enginePathForScope }, 'api key write');
+  }
   const inst = await getInstanceForUser(user.id);
   const base = engineBase(inst);
   if (!base) return reply.code(409).send({ error: 'no running instance for this account' });
