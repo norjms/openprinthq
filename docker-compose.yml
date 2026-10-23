@@ -41,6 +41,8 @@ services:
       - OPHQ_GATEWAY_SECRET=${OPHQ_GATEWAY_SECRET:-}
       - OPHQ_ALLOW_DEV_LOGIN=${OPHQ_ALLOW_DEV_LOGIN:-}
       - OPHQ_ENGINE_HOST=${OPHQ_ENGINE_HOST:-127.0.0.1}
+      # Optional DNS servers for tenant engines (see control-plane/src/engine-dns.js).
+      - OPHQ_ENGINE_DNS=${OPHQ_ENGINE_DNS:-}
       # Slicing ships with the app (bundled orca-slicer-api service below).
       - OPHQ_SLICER_URL=${OPHQ_SLICER_URL:-http://orca-slicer-api:3000}
       - OPHQ_DOCKER_NETWORK=${OPHQ_DOCKER_NETWORK:-openprinthq_default}
