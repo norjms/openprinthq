@@ -25,7 +25,7 @@ Writes made with a key are logged with the key id.
 
 ### The proxy in front
 
-the reverse proxy runs Authentik forward-auth before requests reach the router, so a request that only carries a key is
+The reverse proxy in front runs Authentik forward-auth before requests reach the router, so a request that only carries a key is
 turned away there. Let these through to the router without forward-auth, and the control plane checks the key:
 
 - requests to `/api/` whose `Authorization` header starts with `Bearer ophqk_`, or that carry an `X-API-Key`
