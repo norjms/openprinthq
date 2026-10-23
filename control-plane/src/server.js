@@ -1441,7 +1441,7 @@ app.post('/api/admin/instances', async (req, reply) => {
 });
 
 // ---- public: signup with invite code ------------------------------------
-// Exposed via the reverse proxy /api/pub/ (NO forward-auth). Redeems an invite, creates the
+// Exposed via the reverse proxy's /api/pub/ route (NO forward-auth). Redeems an invite, creates the
 // login user in Authentik, then provisions their instance. Errors are generic
 // (no account/invite enumeration).
 // Tells the signup page whether an invite is required yet — so the very first
@@ -1457,7 +1457,7 @@ app.get('/api/pub/config', async () => {
   return { connector_ws: true, deployment_mode: await getDeploymentMode() };
 });
 // Public SITE branding = the owner's branding, so the logged-out landing page can
-// show the host's configured logo / site name. Unauthenticated (the reverse proxy /api/pub/,
+// show the host's configured logo / site name. Unauthenticated (the proxy's /api/pub/ route,
 // no forward-auth). Returns ONLY the branding sub-object (logos / siteName /
 // wordmark / tagline / trademark / contact) — never theme, a11y, or other users'
 // data. Empty object if no owner exists yet.
