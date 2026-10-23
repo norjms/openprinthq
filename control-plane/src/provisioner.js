@@ -13,6 +13,7 @@ import { pool, adminPool, getInstanceForUser, getTenantStorage } from './db.js';
 import { vaultAuthSecret, vaultServiceHeaders } from './vault-auth.js';
 import { randomBytes } from 'node:crypto';
 import { ensureSpoolman } from './spoolman.js';
+import { parseEngineDns, engineDnsArgs } from './engine-dns.js';
 
 const exec = promisify(execFile);
 
@@ -28,6 +29,8 @@ const PG_HOST = process.env.OPHQ_PG_HOST || '127.0.0.1';
 const PG_PORT = process.env.OPHQ_PG_PORT || '5432';
 const PG_USER = process.env.OPHQ_PG_USER || 'ophq_app';
 const PG_PASS = process.env.OPHQ_PG_PASS || '';
+// DNS servers for tenant engines; see engine-dns.js. Unset keeps Docker's default.
+const ENGINE_DNS = parseEngineDns(process.env.OPHQ_ENGINE_DNS);
 
 // Host directory where the tenant object-store buckets are exposed, one
 // subdirectory per bucket, by a host-side rclone mount. Each engine gets a bind
@@ -138,6 +141,7 @@ async function startEngineContainer({ subdomain, port, dbName, bucketDir = null 
            '--mount', `type=bind,source=${bucketDir},target=${BUCKET_MOUNT_TARGET},readonly,bind-propagation=rslave`]
         : []),
       '--label', `openprinthq.tenant=${subdomain}`,
+      ...engineDnsArgs(ENGINE_DNS),
       ENGINE_IMAGE
     ]);
     return { started: true, port };
@@ -310,6 +314,7 @@ export async function ensureEngineBucketMount(userId, subdomain) {
       '--env-file', envFile,
       '-e', `BAMBUDDY_EXTERNAL_ROOTS=${BUCKET_MOUNT_TARGET}`,
       ...volumes, ...labels,
+      ...engineDnsArgs(ENGINE_DNS, inspect),
       '--mount', `type=bind,source=${bucketDir},target=${BUCKET_MOUNT_TARGET},readonly,bind-propagation=rslave`,
       image
     ]);
