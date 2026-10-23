@@ -24,7 +24,7 @@
     try {
       await api.signup({ code: code.trim(), email: email.trim(), name: name.trim(), password });
       done = true;
-      // Full-page navigation (NOT client-side) so the reverse proxy forward-auth can hand
+      // Full-page navigation (NOT client-side) so the reverse proxy's forward-auth can hand
       // off to the Authentik login cleanly — otherwise the SPA can't follow the
       // external redirect and the app looks broken until a manual refresh.
       setTimeout(() => { window.location.href = '/app'; }, 1100);

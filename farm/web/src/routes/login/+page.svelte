@@ -3,7 +3,7 @@
   import Logo from '$lib/components/Logo.svelte';
   import PageTitle from '$lib/components/PageTitle.svelte';
   // SSO (Authentik) is the only sign-in path. Use a FULL page load (not
-  // client-side nav) so the reverse proxy forward-auth can redirect to the Authentik login.
+  // client-side nav) so the reverse proxy's forward-auth can redirect to the Authentik login.
   onMount(() => { const t = setTimeout(() => { window.location.href = '/app'; }, 900); return () => clearTimeout(t); });
 </script>
 

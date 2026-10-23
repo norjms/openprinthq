@@ -8,7 +8,7 @@
 //
 // Why /printhost. A desktop app cannot complete Authentik forward-auth, and
 // /printhost/* is already exempt from it at both edges (prod Caddy @public,
-// test the reverse proxy location block) and authenticates with X-Api-Key. Living under
+// test reverse-proxy location block) and authenticates with X-Api-Key. Living under
 // it means no edge change, and the existing access-key UI mints the credential.
 //
 // Scope. Only 'extension' access keys are accepted: those are the long-lived
