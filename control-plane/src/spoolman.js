@@ -10,7 +10,16 @@
 // network. Each tenant gets a dedicated INTERNAL network holding exactly three
 // members: their Spoolman, their engine, and Postgres. No other tenant's engine
 // can resolve or route to it, the edge never proxies to it, and --internal
-// denies it outbound access it has no need for.
+// keeps that network off the outside world.
+//
+// Egress. Spoolman does need one thing from outside: its community filament
+// list (SpoolmanDB, downloaded from GitHub). On the internal network alone every
+// sync fails on DNS. So each Spoolman also joins a second, per-tenant network,
+// ophq-spoolman-egress-<sub>, an ordinary bridge with outbound access and NO
+// other member. Nothing new can reach Spoolman (Docker does not route between
+// networks, and nothing else is on that one); Spoolman can reach out, with the
+// same outbound reach the tenant engines already have. Never attach anything
+// else to the egress network. It gets the engines' resolvers (OPHQ_ENGINE_DNS).
 //
 // Database. A dedicated Postgres database AND role per tenant, so the Spoolman
 // container never holds the shared application credential. The role password
@@ -27,6 +36,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createHmac } from 'node:crypto';
 import { adminPool } from './db.js';
+import { parseEngineDns } from './engine-dns.js';
 
 const exec = promisify(execFile);
 
@@ -48,6 +58,19 @@ export function spoolmanEnabled() { return !!IMAGE && !!PG_PASS; }
 const slug = (subdomain) => subdomain.replace(/-/g, '_');
 export const spoolmanName = (subdomain) => `ophq-spoolman-${subdomain}`;
 export const spoolmanNet = (subdomain) => `ophq-spoolman-net-${subdomain}`;
+export const spoolmanEgressNet = (subdomain) => `ophq-spoolman-egress-${subdomain}`;
+
+// Resolvers for Spoolman: the tenant engines' (OPHQ_ENGINE_DNS), or Docker's default when unset.
+export const spoolmanDns = () => parseEngineDns(process.env.OPHQ_ENGINE_DNS);
+export function dnsArgs(servers) {
+  return servers.length ? [...servers.flatMap((d) => ['--dns', d]), '--dns-search', '.'] : [];
+}
+// The container already has the resolvers we want (any, when none are configured).
+export function dnsCurrent(hostDns, servers) {
+  if (!servers.length) return true;
+  const have = Array.isArray(hostDns) ? hostDns : [];
+  return have.length === servers.length && servers.every((d, i) => have[i] === d);
+}
 export const spoolmanUrl = (subdomain) => `http://${spoolmanName(subdomain)}:8000`;
 const dbName = (subdomain) => `spoolman_${slug(subdomain)}`;
 const roleName = (subdomain) => `spoolman_${slug(subdomain)}`;
@@ -107,10 +130,12 @@ async function connect(net, container, alias) {
 async function containerState(name) {
   try {
     const { stdout } = await exec('docker', [
-      'inspect', '-f', '{{.State.Running}}|{{.Image}}|{{range .Config.Env}}{{println .}}{{end}}', name
+      'inspect', '-f', '{{.State.Running}}|{{.Image}}|{{json .HostConfig.Dns}}|{{range .Config.Env}}{{println .}}{{end}}', name
     ]);
-    const [running, image, ...env] = stdout.split('|');
-    return { exists: true, running: running === 'true', image: image.trim(), env: env.join('|') };
+    const [running, image, dns, ...env] = stdout.split('|');
+    let hostDns = [];
+    try { hostDns = JSON.parse(dns) || []; } catch { hostDns = []; }
+    return { exists: true, running: running === 'true', image: image.trim(), dns: hostDns, env: env.join('|') };
   } catch {
     return { exists: false };
   }
@@ -133,7 +158,9 @@ async function ensureContainer(subdomain) {
   const pw = rolePassword(subdomain);
   const st = await containerState(name);
   const imageId = await wantImageId();
-  const current = st.exists && st.running && st.image === imageId && st.env.includes(`SPOOLMAN_DB_PASSWORD=${pw}`);
+  const dns = spoolmanDns();
+  const current = st.exists && st.running && st.image === imageId && st.env.includes(`SPOOLMAN_DB_PASSWORD=${pw}`)
+    && dnsCurrent(st.dns, dns);
   if (current) return { changed: false };
 
   // Spoolman's state is entirely in Postgres, so a recreate loses nothing.
@@ -145,6 +172,7 @@ async function ensureContainer(subdomain) {
   await exec('docker', [
     'run', '-d', '--name', name, '--restart', 'unless-stopped',
     '--network', net,
+    ...dnsArgs(dns),
     '-e', 'SPOOLMAN_DB_TYPE=postgres',
     '-e', `SPOOLMAN_DB_HOST=${PG_HOST}`,
     '-e', `SPOOLMAN_DB_PORT=${PG_PORT}`,
@@ -231,13 +259,18 @@ export async function ensureSpoolman(subdomain, { force = false, attempts = 20 }
   const p = (async () => {
     const net = spoolmanNet(subdomain);
     await exec('docker', ['network', 'create', '--internal', net]).catch(() => {});
+    // Spoolman's own way out (filament list downloads); see "Egress" at the top.
+    const egress = spoolmanEgressNet(subdomain);
+    await exec('docker', ['network', 'create', '--label', `openprinthq.tenant=${subdomain}`,
+      '--label', 'openprinthq.role=spoolman-egress', egress]).catch(() => {});
     await ensureDatabase(subdomain);
     await connect(net, await pgContainer(), PG_HOST);
     const c = await ensureContainer(subdomain);
+    const egressAttached = await connect(egress, spoolmanName(subdomain));
     const engineAttached = await connect(net, `ophq-${subdomain}`);
     const result = await ensureEngineMode(subdomain, attempts);
     if (result.mode === 'spoolman') lastOk.set(subdomain, Date.now());
-    return { ...result, containerChanged: c.changed, engineReattached: engineAttached };
+    return { ...result, containerChanged: c.changed, engineReattached: engineAttached, egressAttached };
   })().finally(() => inflight.delete(subdomain));
 
   inflight.set(subdomain, p);
