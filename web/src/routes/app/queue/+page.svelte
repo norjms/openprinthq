@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
+  import EngineError from '$lib/components/EngineError.svelte';
   import PageTitle from '$lib/components/PageTitle.svelte';
 
   let loading = $state(true);
@@ -288,7 +289,7 @@
 {:else if error === 'no-instance'}
   <div class="card card-pad"><p class="muted">Provision your instance from the <a href="/app">overview</a> first.</p></div>
 {:else if error}
-  <div class="card card-pad"><h3>Engine unreachable</h3><p class="muted">{error}</p><button class="btn btn-ghost btn-sm" onclick={load}>Retry</button></div>
+  <EngineError {error} onretry={load} />
 {:else if items.length === 0}
   <div class="card card-pad empty">
     <div class="ic">≣</div>

@@ -8,6 +8,7 @@
   // SPDX-License-Identifier: AGPL-3.0-or-later
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
+  import EngineError from '$lib/components/EngineError.svelte';
   import PageTitle from '$lib/components/PageTitle.svelte';
   import { branding } from '$lib/stores/appearance';
 
@@ -161,7 +162,7 @@
 {#if error === 'no-instance'}
   <div class="card card-pad no-print"><p class="muted">Provision your instance from the <a href="/app">overview</a> first.</p></div>
 {:else if error}
-  <div class="card card-pad no-print"><h3>Engine unreachable</h3><p class="muted">{error}</p><button class="btn btn-ghost btn-sm" onclick={run}>Retry</button></div>
+  <EngineError {error} onretry={run} class="no-print" />
 {:else}
   <div class="report" id="report">
     <div class="rhead">
