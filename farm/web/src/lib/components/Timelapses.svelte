@@ -3,6 +3,7 @@
   // SPDX-License-Identifier: AGPL-3.0-or-later
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
+  import EngineError from '$lib/components/EngineError.svelte';
 
   let loading = $state(true);
   let error = $state(null);
@@ -59,7 +60,7 @@
 {:else if error === 'no-instance'}
   <div class="card card-pad"><p class="muted">Provision your instance from the <a href="/app">overview</a> first.</p></div>
 {:else if error}
-  <div class="card card-pad"><h3>Engine unreachable</h3><p class="muted">{error}</p><button class="btn btn-ghost btn-sm" onclick={load}>Retry</button></div>
+  <EngineError {error} onretry={load} />
 {:else}
   <label class="filt"><input type="checkbox" bind:checked={onlyTL} /><span>Only prints with a timelapse</span></label>
   {#if shown.length === 0}

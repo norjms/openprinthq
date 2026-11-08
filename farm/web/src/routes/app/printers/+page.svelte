@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
+  import EngineError from '$lib/components/EngineError.svelte';
   import PageTitle from '$lib/components/PageTitle.svelte';
   import CameraImg from '$lib/components/CameraImg.svelte';
   import DownloadClient from '$lib/components/DownloadClient.svelte';
@@ -208,11 +209,7 @@
     <p class="muted">Provision your instance from the <a href="/app">overview</a> to start adding printers.</p>
   </div>
 {:else if error}
-  <div class="card card-pad">
-    <h3>Engine unreachable</h3>
-    <p class="muted">{error}</p>
-    <button class="btn btn-ghost btn-sm" onclick={() => load()}>Retry</button>
-  </div>
+  <EngineError {error} onretry={() => load()} />
 {:else if printers.length === 0}
   {@render clientStatus()}
 

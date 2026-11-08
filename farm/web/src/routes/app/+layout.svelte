@@ -4,6 +4,7 @@
   import AppShell from '$lib/components/AppShell.svelte';
   import { api } from '$lib/api';
   import { warm } from '$lib/camcache.js';
+  import { sessionExpired, reauth } from '$lib/session.js';
   let { children } = $props();
 
   // Keep a small, recent still for every printer so any page that shows a camera
@@ -36,10 +37,42 @@
     // Let the page it is rendering get on with its own loading first. The warm
     // is for the NEXT navigation, never for this one.
     timer = setTimeout(pass, 3000);
-    return () => { stopped = true; if (timer) clearTimeout(timer); };
+
+    // A tab left open long enough outlives its forward-auth session (see
+    // $lib/session.js). When the person comes back to it and the sign-in has
+    // expired, go through sign-in straight away rather than leave them looking at
+    // "unreachable" cards. Only on return, never while they are using the page,
+    // so nothing they are typing is thrown away.
+    function onVisible() {
+      if (document.visibilityState === 'visible' && $sessionExpired) reauth();
+    }
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   });
 </script>
+
+{#if $sessionExpired}
+  <div class="reauth" role="alert">
+    <span>Your sign-in has expired, so live data has stopped updating.</span>
+    <button class="btn btn-primary btn-sm" onclick={reauth}>Sign in again</button>
+  </div>
+{/if}
 
 <AppShell>
   {@render children()}
 </AppShell>
+
+<style>
+  .reauth {
+    position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 1000;
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    max-width: calc(100vw - 32px); padding: 10px 14px; border-radius: 10px;
+    background: var(--ophq-surface); color: var(--ophq-text);
+    border: 1px solid var(--ophq-primary); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  }
+</style>

@@ -3,6 +3,8 @@
 // Talks to the control-plane (via the /api proxy) for account + instance data,
 // and — once provisioned — to the user's own engine instance.
 
+import { probeSession, isSessionExpired, authExpiredError, sessionExpired } from './session.js';
+
 const base = '/api';
 
 async function req(path, opts = {}) {
@@ -15,11 +17,23 @@ async function req(path, opts = {}) {
   if (rest.body !== undefined && !('content-type' in headers)) {
     headers['content-type'] = 'application/json';
   }
-  const res = await fetch(base + path, {
-    headers,
-    credentials: 'include',
-    ...rest
-  });
+  // Once the sign-in is known to have expired every call would only bounce off
+  // the gateway's sign-in redirect, so fail fast with the real reason.
+  if (isSessionExpired()) throw authExpiredError();
+  let res;
+  try {
+    res = await fetch(base + path, {
+      headers,
+      credentials: 'include',
+      ...rest
+    });
+  } catch (e) {
+    // A bare network error is what an expired forward-auth session looks like
+    // from fetch (see session.js). Tell the two apart before blaming the engine.
+    if (await probeSession()) throw authExpiredError();
+    throw e;
+  }
+  if (res.status === 401 && path === '/me') sessionExpired.set(true);
   if (!res.ok) {
     let detail;
     try { detail = await res.json(); } catch { detail = null; }
