@@ -14,6 +14,7 @@ import { vaultAuthSecret, vaultServiceHeaders } from './vault-auth.js';
 import { randomBytes } from 'node:crypto';
 import { ensureSpoolman } from './spoolman.js';
 import { parseEngineDns, engineDnsArgs } from './engine-dns.js';
+import { singleTenant, engineBaseFor } from './tenancy.js';
 
 const exec = promisify(execFile);
 
@@ -60,7 +61,7 @@ const BUCKET_FOLDER_NAME = process.env.OPHQ_ENGINE_BUCKET_FOLDER_NAME || 'OpenPr
 const VAULT_IMAGE = process.env.OPHQ_VAULT_IMAGE || '';
 // Where the tenant bucket appears inside the library container.
 const VAULT_LIBRARY_PATH = '/library';
-export function vaultEnabled() { return !!VAULT_IMAGE; }
+export function vaultEnabled() { return !!VAULT_IMAGE && !singleTenant(); }
 export function vaultBase(subdomain) { return `http://ophq-vault-${subdomain}:3000`; }
 
 function slugify(email) {
@@ -177,7 +178,7 @@ async function bucketDirFor(userId) {
  * Idempotent by name: provisioning is retried, and the engine has no upsert.
  */
 async function registerBucketFolder(subdomain, attempts = 20) {
-  const base = `http://ophq-${subdomain}:8000`;
+  const base = engineBaseFor(subdomain);
   // Retry, because both callers reach here against an engine that has just been
   // started: first provision, and the reconcile immediately after it recreates a
   // container. A single attempt races the engine's boot and loses silently, and
@@ -227,7 +228,7 @@ async function tryRegisterBucketFolder(base) {
 }
 
 async function configureEngine(subdomain) {
-  const base = `http://ophq-${subdomain}:8000`;
+  const base = engineBaseFor(subdomain);
   for (let i = 0; i < 20; i++) {
     try {
       const r = await fetch(base + '/api/v1/settings', { method: 'GET' });
@@ -261,6 +262,7 @@ async function configureEngine(subdomain) {
  * there, so it is safe to call on every storage lookup.
  */
 export async function ensureEngineBucketMount(userId, subdomain) {
+  if (singleTenant()) return { changed: false, reason: 'single-tenant' };
   const bucketDir = await bucketDirFor(userId);
   if (!bucketDir) return { changed: false, reason: 'no-bucket-or-disabled' };
   const name = `ophq-${subdomain}`;
@@ -480,6 +482,7 @@ export async function vaultScan(subdomain) {
  * print-host URL would not resolve without it.
  */
 export async function joinVaultNetwork(subdomain) {
+  if (!vaultEnabled()) return false;
   const self = process.env.HOSTNAME || '';
   if (!self) return false;
   const net = `ophq-vault-net-${subdomain}`;
@@ -548,6 +551,7 @@ async function vaultMatches(name) {
 
 /** Ensure the tenant has a library container, idempotently. */
 export async function ensureVault(userId, subdomain, email) {
+  if (singleTenant()) return { changed: false, reason: 'single-tenant' };
   if (!VAULT_IMAGE) return { changed: false, reason: 'disabled' };
   const bucketDir = await bucketDirFor(userId);
   if (!bucketDir) return { changed: false, reason: 'no-bucket' };
@@ -587,6 +591,17 @@ export async function provisionForUser(user) {
   );
   const inst = rows[0];
   const port = BASE_PORT + inst.id;
+
+  // Single-tenant: the engine and its Spoolman already run, started by whoever
+  // runs the stack, and every account shares them. Nothing to create; only point
+  // the engine at the slicer, which is idempotent.
+  if (singleTenant()) {
+    configureEngine(subdomain);
+    ensureSpoolman(subdomain, { force: true }).catch(() => {});
+    const { rows: upd } = await pool.query(
+      `UPDATE instances SET port = NULL, status = 'running' WHERE id = $1 RETURNING *`, [inst.id]);
+    return { ...upd[0], engine: { started: false, reason: 'single-tenant' } };
+  }
 
   await createTenantDb(dbName);
   const bucketDir = await bucketDirFor(user.id);

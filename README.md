@@ -45,6 +45,9 @@ docker compose up -d --build
 
 The stack is designed to sit behind a reverse proxy (for example Nginx Proxy Manager) with Authentik OIDC for authentication.
 
+Running your own farm? `docker-compose.single.yml` runs one engine and one Spoolman shared by every account, with no
+Docker socket for the control-plane. See [docs/single-tenant.md](docs/single-tenant.md).
+
 ## Licensing
 
 OpenPrintHQ is licensed under the **GNU Affero General Public License v3.0** (`LICENSE`). This is a deliberate, permanent choice: any modified version offered over a network must make its complete source available to users. See `NOTICE` for attribution to the upstream projects OpenPrintHQ builds on (notably **Bambuddy**, whose engine this forks, and open **SimplyPrint** components). A "Source code" link is exposed in the app footer to satisfy AGPL §13.

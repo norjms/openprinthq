@@ -13,11 +13,10 @@ import {
   createBatchRun, getBatchById, getActiveBatchForUser,
   listRunningBatches, updateBatchRun
 } from './db.js';
+import { engineBaseOf } from './tenancy.js';
 
 const ENGINE_PORT = 8000;
-function engineBase(inst) {
-  return inst && inst.subdomain ? `http://ophq-${inst.subdomain}:${ENGINE_PORT}` : null;
-}
+const engineBase = (inst) => engineBaseOf(inst, ENGINE_PORT);
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 const circuitKey = (s) => (s.circuit && String(s.circuit).trim()) || `__solo_${s.printerId}`;
 

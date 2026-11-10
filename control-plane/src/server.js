@@ -44,6 +44,11 @@ import { generateKeyPair, encryptPrivate, invalidateSigningCache, ensureKeyPair,
 import { ensureStream, iceServers, turnCredentials, mintTurn, supportsRtsp, GO2RTC_URL } from './go2rtc.js';
 import { setSink, sinkConfigured, shipServer } from './logship.js';
 import { dbg } from './debuglog.js';
+import { engineBaseOf, singleTenant, engineUrl } from './tenancy.js';
+import {
+  migrateCameras, cameraList, forApi, scopeFor as cameraScope, validSource, addCamera, updateCamera, deleteCamera,
+  setOwnCamera, registerStream, frame as cameraFrame, resync as resyncCameras, startCameraSync
+} from './cameras.js';
 
 // Bambu HMS error dictionary (short_code "XXXX_YYYY" -> human description),
 // extracted from the engine's HMS table. Loaded once at startup and served to
@@ -84,8 +89,9 @@ const PUBLIC_URL = (process.env.OPHQ_PUBLIC_URL || '').replace(/\/+$/, '');
 
 function engineBase(inst) {
   // Engines are on the internal Docker network, not published to the host —
-  // reach them by container name, never via a LAN-exposed port.
-  return inst && inst.subdomain ? `http://ophq-${inst.subdomain}:8000` : null;
+  // reach them by container name, never via a LAN-exposed port. In single-tenant
+  // mode every account shares the one engine at OPHQ_ENGINE_URL (tenancy.js).
+  return engineBaseOf(inst);
 }
 
 const app = Fastify({ logger: true, trustProxy: true, bodyLimit: 1024 * 1024 * 1024 });
@@ -1318,7 +1324,9 @@ function normalizeDeploymentMode(v) {
   return DEPLOYMENT_MODES.includes(m) ? m : 'both';
 }
 async function getDeploymentMode() {
-  return normalizeDeploymentMode(await getAppSetting('deployment_mode', 'both'));
+  // A single-tenant farm shares its printers' network, so it starts in local mode
+  // (no connector downloads); the owner can still change it.
+  return normalizeDeploymentMode(await getAppSetting('deployment_mode', singleTenant() ? 'local' : 'both'));
 }
 
 // Never return the TURN token, only whether one is set and enough of the key id
@@ -2197,7 +2205,18 @@ app.post('/api/camera/webrtc/:printerId', async (req, reply) => {
   }
 
   // Local (same-network) printers: the cloud go2rtc can reach them directly.
-  const name = await ensureStream(inst, user.id, pid);
+  // ?stream= picks one of the printer's named cameras (GET /api/cameras); without
+  // it, the printer's own camera.
+  let name = null;
+  const wanted = String(req.query?.stream || '');
+  if (wanted) {
+    let cam = null;
+    try { cam = (await cameraList({ base: engineBase(inst), inst, userId: user.id }, { withSource: true }))
+      .find((c) => c.stream_name === wanted && c.printer_id === Number(pid) && c.enabled); } catch { /* engine down */ }
+    if (cam && await registerStream(cam.stream_name, cam._source).catch(() => false)) name = cam.stream_name;
+  } else {
+    name = await ensureStream(inst, user.id, pid);
+  }
   if (!name) return reply.code(404).send({ error: 'no WebRTC camera stream for this printer' });
   try {
     const res = await fetch(`${GO2RTC_URL}/api/webrtc?src=${encodeURIComponent(name)}`, {
@@ -2211,6 +2230,117 @@ app.post('/api/camera/webrtc/:printerId', async (req, reply) => {
   } catch (e) {
     return reply.code(502).send({ error: 'signaling relay failed: ' + e.message });
   }
+});
+
+
+// ---- named printer cameras (cameras.js) -------------------------------------
+// Every printer's cameras as named go2rtc streams: its own camera, the engine's
+// external camera, and any added here (a chamber camera, say). A read key can
+// list them and pull single frames, so a program can show a printer's camera
+// without reaching the printer or go2rtc. Adding, changing and removing cameras
+// needs control.
+async function cameraCtx(user) {
+  const inst = await getInstanceForUser(user.id);
+  return { base: engineBase(inst), inst, userId: user.id };
+}
+// The registration loop runs as nobody in particular: in single-tenant mode
+// there is one engine and the camera list is the same for every account.
+async function singleTenantEngine() {
+  return singleTenant() ? { base: engineUrl(), inst: { subdomain: 'single' }, userId: 0 } : null;
+}
+const resyncSoon = (log) => {
+  if (singleTenant()) resyncCameras({ engine: singleTenantEngine, log }).catch(() => {});
+};
+
+app.get('/api/cameras', async (req, reply) => {
+  const user = await callerFor(req, reply, 'read'); if (!user) return;
+  const ctx = await cameraCtx(user);
+  if (!ctx.base) return reply.code(409).send({ error: 'no running instance for this account' });
+  try {
+    return { streams: forApi(await cameraList(ctx)) };
+  } catch (e) {
+    return reply.code(502).send({ error: 'engine unreachable: ' + e.message });
+  }
+});
+
+// One JPEG from one of the caller's own camera streams. Only streams in the
+// caller's list are served, so this can never be used to make go2rtc pull an
+// arbitrary source.
+app.get('/api/cameras/frame.jpeg', async (req, reply) => {
+  const user = await callerFor(req, reply, 'read'); if (!user) return;
+  const src = String(req.query?.src || '');
+  if (!/^[a-z0-9_]{1,80}$/i.test(src)) return reply.code(400).send({ error: 'src is a stream name from /api/cameras' });
+  const ctx = await cameraCtx(user);
+  if (!ctx.base) return reply.code(409).send({ error: 'no running instance for this account' });
+  let mine;
+  try { mine = (await cameraList(ctx, { withSource: true })).find((c) => c.stream_name === src); }
+  catch (e) { return reply.code(502).send({ error: 'engine unreachable: ' + e.message }); }
+  if (!mine) return reply.code(404).send({ error: 'no such camera' });
+  if (!mine.enabled) return reply.code(409).send({ error: 'this camera is switched off' });
+  // Registering is idempotent and cheap, and covers a go2rtc that restarted since the last sync.
+  await registerStream(mine.stream_name, mine._source).catch(() => {});
+  const jpeg = await cameraFrame(mine.stream_name);
+  if (!jpeg) return reply.code(502).send({ error: 'the camera did not return a frame' });
+  reply.header('content-type', 'image/jpeg');
+  reply.header('cache-control', 'no-cache, no-store, must-revalidate');
+  return reply.send(jpeg);
+});
+
+app.post('/api/cameras', async (req, reply) => {
+  const user = await callerFor(req, reply, 'control'); if (!user) return;
+  const inst = await getInstanceForUser(user.id);
+  const scope = cameraScope(inst);
+  if (!scope) return reply.code(409).send({ error: 'no running instance for this account' });
+  const pid = Number(req.body?.printer_id);
+  const name = String(req.body?.name || '').trim().slice(0, 60);
+  const source = validSource(req.body?.url);
+  if (!Number.isInteger(pid) || pid < 1) return reply.code(400).send({ error: 'printer_id is required' });
+  if (!name) return reply.code(400).send({ error: 'name is required' });
+  if (!source) return reply.code(400).send({ error: 'url must be an rtsp, rtsps, rtmp, http or https address' });
+  const row = await addCamera(scope, pid, name, source);
+  resyncSoon(req.log);
+  return reply.code(201).send({ id: row.id, printer_id: row.printer_id, camera_name: row.name, enabled: row.enabled });
+});
+
+app.patch('/api/cameras/:id', async (req, reply) => {
+  const user = await callerFor(req, reply, 'control'); if (!user) return;
+  const scope = cameraScope(await getInstanceForUser(user.id));
+  if (!scope) return reply.code(409).send({ error: 'no running instance for this account' });
+  const b = req.body || {};
+  const patch = {};
+  if (b.name !== undefined) { patch.name = String(b.name).trim().slice(0, 60); if (!patch.name) return reply.code(400).send({ error: 'name cannot be empty' }); }
+  if (b.url !== undefined) { patch.source = validSource(b.url); if (!patch.source) return reply.code(400).send({ error: 'url must be an rtsp, rtsps, rtmp, http or https address' }); }
+  if (b.enabled !== undefined) patch.enabled = Boolean(b.enabled);
+  const row = await updateCamera(scope, Number(req.params.id), patch);
+  if (!row) return reply.code(404).send({ error: 'no such camera' });
+  resyncSoon(req.log);
+  return { id: row.id, printer_id: row.printer_id, camera_name: row.name, enabled: row.enabled };
+});
+
+app.delete('/api/cameras/:id', async (req, reply) => {
+  const user = await callerFor(req, reply, 'control'); if (!user) return;
+  const scope = cameraScope(await getInstanceForUser(user.id));
+  if (!scope) return reply.code(409).send({ error: 'no running instance for this account' });
+  const row = await deleteCamera(scope, Number(req.params.id));
+  if (!row) return reply.code(404).send({ error: 'no such camera' });
+  resyncSoon(req.log);
+  return { deleted: true };
+});
+
+// Rename or switch off a printer's own camera ('builtin') or the engine's ('engine').
+app.put('/api/cameras/printer/:printerId/:kind', async (req, reply) => {
+  const user = await callerFor(req, reply, 'control'); if (!user) return;
+  const scope = cameraScope(await getInstanceForUser(user.id));
+  if (!scope) return reply.code(409).send({ error: 'no running instance for this account' });
+  const kind = String(req.params.kind);
+  if (kind !== 'builtin' && kind !== 'engine') return reply.code(400).send({ error: 'kind is builtin or engine' });
+  const pid = Number(req.params.printerId);
+  if (!Number.isInteger(pid) || pid < 1) return reply.code(400).send({ error: 'bad printer id' });
+  const name = req.body?.name !== undefined ? String(req.body.name).trim().slice(0, 60) || null : undefined;
+  const enabled = req.body?.enabled !== undefined ? Boolean(req.body.enabled) : undefined;
+  const row = await setOwnCamera(scope, pid, kind, { name, enabled });
+  resyncSoon(req.log);
+  return { printer_id: row.printer_id, kind: row.kind, camera_name: row.name, enabled: row.enabled };
 });
 
 // Tells the UI whether a printer can do direct WebRTC video, so it can choose
@@ -2283,6 +2413,9 @@ app.all('/api/engine/*', async (req, reply) => {
   }
   try {
     const res = await fetch(base + enginePath, { method, headers, body });
+    // A printer added, changed or removed changes the camera list: register its
+    // cameras now rather than at the next background pass.
+    if (res.ok && method !== 'GET' && /^\/api\/v1\/printers\/?(\d+\/?)?(\?|$)/.test(enginePath)) resyncSoon(req.log);
     reply.code(res.status);
     const ct = res.headers.get('content-type');
     if (ct) reply.header('content-type', ct);
@@ -2466,6 +2599,7 @@ app.get('/api/library-integrity', async (req, reply) => {
 // ---- boot ---------------------------------------------------------------
 try {
   await migrate();
+  await migrateCameras();
   // Wrap console FIRST: the restore below logs its own result, and installing
   // the wrapper afterwards meant those lines were the one thing that never
   // shipped -- the log claimed nothing about shipping while shipping worked.
@@ -2502,6 +2636,8 @@ try {
       }
     })().catch((e) => console.error('[spoolman] boot reconcile', e.message));
   }
+  // Single-tenant: register every printer camera with go2rtc now, and keep them healthy.
+  startCameraSync({ engine: singleTenantEngine, log: app.log });
   // Resume + drive any running temperature-staggered batches.
   startOrchestrator(8000);
   await app.listen({ host: '0.0.0.0', port: PORT });

@@ -19,6 +19,8 @@
   let camTick = $state(0);
   let camErr = $state({});         // id -> true when snapshot fails
   let zoomId = $state(null);       // printer id shown fullscreen
+  let extras = $state([]);         // named cameras beyond each printer's own (chamber cameras etc.)
+  let extraErr = $state({});       // stream -> true when its frame fails
   let timer = null;
 
   function norm(d) {
@@ -34,6 +36,9 @@
     camErr = {};
     try {
       const base = norm(await api.printers());
+      api.cameras()
+        .then((r) => { extraErr = {}; extras = (r?.streams || []).filter((c) => c.kind !== 'builtin' && c.enabled); })
+        .catch(() => { extras = []; });
 
       // Paint the grid the moment we know WHICH printers exist, rather than
       // waiting on a status call per printer. Status decides a chip; the camera
@@ -111,6 +116,22 @@
             {#if /run|print/.test(p.state) && p.progress != null}<span class="cam-prog mono">{Math.round(p.progress)}%</span>{/if}
           {:else}
             <div class="nocam muted">{p.connected === false ? 'Offline' : 'No camera feed'}</div>
+          {/if}
+        </div>
+      </div>
+    {/each}
+    {#each extras as c (c.stream_name)}
+      <div class="card cam">
+        <div class="camhd">
+          <a href="/app/printers/{c.printer_id}" class="cn">{c.printer_name} · {c.camera_name}</a>
+          <span class="chip {c.state === 'ONLINE' ? 'ok' : c.state === 'OFFLINE' ? 'danger' : ''}">{c.state === 'ONLINE' ? 'online' : c.state === 'OFFLINE' ? 'offline' : 'camera'}</span>
+        </div>
+        <div class="feed">
+          {#if !extraErr[c.stream_name]}
+            <img src={api.cameraFrameUrl(c.stream_name, camTick)} alt="{c.printer_name} {c.camera_name}"
+                 onerror={() => (extraErr = { ...extraErr, [c.stream_name]: true })} />
+          {:else}
+            <div class="nocam muted">No camera feed</div>
           {/if}
         </div>
       </div>

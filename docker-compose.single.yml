@@ -1,0 +1,120 @@
+# OpenPrintHQ - single-tenant stack, for running your own farm
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# One engine and one Spoolman, declared here, shared by every account. The
+# control-plane talks to them by address (OPHQ_ENGINE_URL, OPHQ_SPOOLMAN_URL)
+# and starts no containers, so it does NOT get the Docker socket. See
+# docs/single-tenant.md.
+#
+#   cp .env.single.example .env   # then fill in the values
+#   docker compose -f docker-compose.single.yml up -d
+#
+# Put it behind a reverse proxy that runs Authentik forward-auth for port 80 of
+# the router (see docs/single-tenant.md). Nothing here is published except the
+# router and go2rtc's WebRTC media port.
+
+services:
+  router:
+    image: ${OPHQ_ROUTER_IMAGE:-ghcr.io/norjms/openprinthq-router:prod}
+    restart: unless-stopped
+    ports:
+      - "${OPHQ_HTTP_PORT:-8088}:80"
+    depends_on: [web, control-plane]
+
+  web:
+    image: ${OPHQ_WEB_IMAGE:-ghcr.io/norjms/openprinthq-web:prod}
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+    expose:
+      - "3000"
+
+  control-plane:
+    image: ${OPHQ_CONTROL_PLANE_IMAGE:-ghcr.io/norjms/openprinthq-control-plane:prod}
+    restart: unless-stopped
+    environment:
+      - PORT=8080
+      - DATABASE_URL=postgresql://ophq:${OPHQ_DB_PASSWORD}@postgres:5432/ophq_control
+      - SESSION_SECRET=${SESSION_SECRET}
+      - OPHQ_GATEWAY_SECRET=${OPHQ_GATEWAY_SECRET}
+      - OPHQ_PUBLIC_URL=${OPHQ_PUBLIC_URL:-}
+      # Single-tenant mode: these two replace the per-tenant containers.
+      - OPHQ_ENGINE_URL=http://engine:8000
+      - OPHQ_SPOOLMAN_URL=http://spoolman:8000
+      - OPHQ_SLICER_URL=http://orca-slicer-api:3000
+      - OPHQ_GO2RTC_URL=http://go2rtc:1984
+      - OPHQ_OWNER_GROUP=${OPHQ_OWNER_GROUP:-openprinthq-owners}
+      - OPHQ_USER_GROUP=${OPHQ_USER_GROUP:-openprinthq-users}
+      - OPHQ_TZ=${TZ:-UTC}
+    # No /var/run/docker.sock: single-tenant mode never runs docker.
+    expose:
+      - "8080"
+    depends_on: [postgres, engine]
+
+  engine:
+    image: ${OPHQ_ENGINE_IMAGE:-ghcr.io/norjms/openprinthq-engine:prod}
+    restart: unless-stopped
+    environment:
+      - PORT=8000
+      - TZ=${TZ:-UTC}
+      - DATABASE_URL=postgresql+asyncpg://ophq:${OPHQ_DB_PASSWORD}@postgres:5432/ophq_engine
+      - SLICER_API_URL=http://orca-slicer-api:3000
+    volumes:
+      - engine_data:/app/data
+      - engine_logs:/app/logs
+    expose:
+      - "8000"
+    depends_on: [postgres]
+
+  spoolman:
+    image: ${OPHQ_SPOOLMAN_IMAGE:-ghcr.io/donkie/spoolman:latest}
+    restart: unless-stopped
+    environment:
+      - SPOOLMAN_DB_TYPE=postgres
+      - SPOOLMAN_DB_HOST=postgres
+      - SPOOLMAN_DB_PORT=5432
+      - SPOOLMAN_DB_NAME=spoolman
+      - SPOOLMAN_DB_USERNAME=ophq
+      - SPOOLMAN_DB_PASSWORD=${OPHQ_DB_PASSWORD}
+      - TZ=${TZ:-UTC}
+    expose:
+      - "8000"
+    depends_on: [postgres]
+
+  orca-slicer-api:
+    image: ${OPHQ_SLICER_IMAGE:-ghcr.io/maziggy/orca-slicer-api:latest}
+    restart: unless-stopped
+    environment:
+      - PORT=3000
+    volumes:
+      - orca_data:/app/data
+    expose:
+      - "3000"
+
+  # Every printer camera is a stream here, registered by the control-plane when
+  # it starts and whenever the camera list changes (control-plane/src/cameras.js).
+  go2rtc:
+    image: ${OPHQ_GO2RTC_IMAGE:-alexxit/go2rtc:latest}
+    restart: unless-stopped
+    ports:
+      - "8555:8555/tcp"   # WebRTC media, so browsers on the network get video directly
+      - "8555:8555/udp"
+    volumes:
+      - ./infra/go2rtc/go2rtc.yaml:/config/go2rtc.yaml:ro
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=ophq
+      - POSTGRES_PASSWORD=${OPHQ_DB_PASSWORD}
+      - POSTGRES_DB=ophq_control
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./infra/postgres/single-init.sql:/docker-entrypoint-initdb.d/single-init.sql:ro
+
+volumes:
+  engine_data:
+  engine_logs:
+  orca_data:
+  pg_data:
