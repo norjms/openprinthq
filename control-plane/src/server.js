@@ -2249,7 +2249,7 @@ async function singleTenantEngine() {
   return singleTenant() ? { base: engineUrl(), inst: { subdomain: 'single' }, userId: 0 } : null;
 }
 const resyncSoon = (log) => {
-  if (singleTenant()) resyncCameras({ engine: singleTenantEngine, log, health: false }).catch(() => {});
+  if (singleTenant()) resyncCameras({ engine: singleTenantEngine, log }).catch(() => {});
 };
 
 app.get('/api/cameras', async (req, reply) => {
@@ -2413,6 +2413,9 @@ app.all('/api/engine/*', async (req, reply) => {
   }
   try {
     const res = await fetch(base + enginePath, { method, headers, body });
+    // A printer added, changed or removed changes the camera list: register its
+    // cameras now rather than at the next background pass.
+    if (res.ok && method !== 'GET' && /^\/api\/v1\/printers\/?(\d+\/?)?(\?|$)/.test(enginePath)) resyncSoon(req.log);
     reply.code(res.status);
     const ct = res.headers.get('content-type');
     if (ct) reply.header('content-type', ct);

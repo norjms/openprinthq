@@ -327,8 +327,11 @@ export function startCameraSync({ engine, log = console }) {
   timer.unref?.();
 }
 
+let again = false;
+
 export async function resync({ engine, log = console, health = true }) {
-  if (running) return running;
+  // A change while a pass runs may have missed it: run once more after.
+  if (running) { again = true; return running; }
   running = (async () => {
     const ctx = await engine();
     if (!ctx) return { registered: 0 };
@@ -338,6 +341,9 @@ export async function resync({ engine, log = console, health = true }) {
     if (health) for (const name of r.streams) await frame(name);
     log.info?.(`[cameras] ${r.registered} stream(s) registered`);
     return r;
-  })().finally(() => { running = null; });
+  })().finally(() => {
+    running = null;
+    if (again) { again = false; resync({ engine, log, health }).catch(() => {}); }
+  });
   return running;
 }
