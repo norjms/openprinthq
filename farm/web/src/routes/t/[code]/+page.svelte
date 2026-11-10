@@ -1,4 +1,5 @@
 <script>
+  import { base as basePath } from '$app/paths';
   // What a phone sees when it scans a filament tag or a label's QR code.
   //
   // Deliberately reachable WITHOUT login. The code in the URL is the only
@@ -20,7 +21,7 @@
 
   onMount(async () => {
     try {
-      const r = await fetch(`/api/pub/tag/${encodeURIComponent(code)}`, { headers: { accept: 'application/json' } });
+      const r = await fetch(`${basePath}/api/pub/tag/${encodeURIComponent(code)}`, { headers: { accept: 'application/json' } });
       const body = await r.json().catch(() => ({}));
       if (!r.ok) {
         problem = body.error || `Lookup failed (${r.status})`;
@@ -62,7 +63,7 @@
 </script>
 
 <svelte:head>
-  <title>{state === 'ready' ? title : 'Filament tag'} · OpenPrintHQ</title>
+  <title>{state === 'ready' ? title : 'Filament tag'} · ArtisanHub Farm</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="robots" content="noindex, nofollow" />
 </svelte:head>
@@ -119,7 +120,7 @@
         {#if spool.tag_uid}<div><dt>Tag</dt><dd><code>{spool.tag_uid}</code></dd></div>{/if}
         {#if spool.note}<div class="wide"><dt>Note</dt><dd>{spool.note}</dd></div>{/if}
       </dl>
-      <a class="open" href="/app/filament">Open in OpenPrintHQ</a>
+      <a class="open" href="{basePath}/app/filament">Open in ArtisanHub Farm</a>
     </footer>
   {/if}
 </main>

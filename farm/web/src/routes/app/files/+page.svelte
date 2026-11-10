@@ -1,5 +1,6 @@
 <script>
-  // OpenPrintHQ - the tenant's model library.
+  import { base as basePath } from '$app/paths';
+  // ArtisanHub Farm - the tenant's model library.
   // SPDX-License-Identifier: AGPL-3.0-or-later
   //
   // Native pages, not a frame. The library is our fork of GyroidVault, one
@@ -184,7 +185,7 @@
       const q = new URLSearchParams();
       for (const k of keys) q.append('keys', k);
       if (keys.length === 1) q.set('name', chosen[0].name);
-      goto('/app/slicer?' + q.toString());
+      goto(basePath + '/app/slicer?' + q.toString());
     } catch (e) {
       sendError = e.message;
     } finally {
@@ -353,7 +354,7 @@
         <label class="pick">
           <input type="checkbox" checked={selected.has(m.id)} onchange={() => toggle(m.id)} />
         </label>
-        <a href={`/app/files/${m.id}`}>
+        <a href={`${basePath}/app/files/${m.id}`}>
           <div class="thumb">
             {#if m.thumbnail}
               <img src={libraryAsset(m.thumbnail)} alt="" loading="lazy" />

@@ -1,5 +1,5 @@
 <script>
-  // OpenPrintHQ — advanced Klipper tuning panel (#24).
+  // ArtisanHub Farm — advanced Klipper tuning panel (#24).
   // Surfaces common Klipper/Voron tuning routines as one-click actions that
   // send the right g-code via the engine's raw-gcode route (POST /printers/
   // {id}/gcode) or the dedicated level/emergency-stop routes. Every action that

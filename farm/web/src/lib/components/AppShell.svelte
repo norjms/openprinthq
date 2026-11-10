@@ -1,4 +1,5 @@
 <script>
+  import { base as basePath } from '$app/paths';
   import Logo from './Logo.svelte';
   import ThemeSwitcher from './ThemeSwitcher.svelte';
   import { page } from '$app/state';
@@ -30,7 +31,7 @@
           f.style.cssText = 'position:absolute;left:-9999px;width:0;height:0;border:0';
           document.body.appendChild(f);
         }
-        f.src = '/api/me?ka=' + Date.now();
+        f.src = basePath + '/api/me?ka=' + Date.now();
       }, 15 * 60 * 1000);
     } catch { /* */ }
     return () => { if (ka) clearInterval(ka); };
@@ -46,7 +47,7 @@
   const builtins = $derived(features.genfilament ? [...NAV_ITEMS, GENFILAMENT_ITEM] : NAV_ITEMS);
   const navItems = $derived(mergeNav(builtins, $appearance?.nav));
 
-  const current = $derived(page.url.pathname);
+  const current = $derived(page.url.pathname.slice(basePath.length) || '/');
   // Close the mobile menu whenever the route changes (i.e. after tapping a link).
   $effect(() => { void current; menuOpen = false; });
 </script>
@@ -54,7 +55,7 @@
 <div class="shell" class:menu-open={menuOpen}>
   <aside class="side">
     <div class="side-head">
-      <a href="/app" class="brand"><Logo size={26} /></a>
+      <a href="{basePath}/app" class="brand"><Logo size={26} /></a>
       <button
         type="button"
         class="menu-toggle"
@@ -69,13 +70,17 @@
 
     <div class="side-body">
       <nav>
+        <!-- ArtisanHub Farm: the hub is served at the root of the same name. -->
+        <a href="/" class="navitem hub-back" data-sveltekit-reload>
+          <span class="ic" aria-hidden="true">←</span>ArtisanHub
+        </a>
         {#each navItems as item}
           {#if item.external}
             <a href={item.href} class="navitem" target="_blank" rel="noopener noreferrer">
               <span class="ic" aria-hidden="true">{item.icon}</span>{item.label}
             </a>
           {:else}
-            <a href={item.href}
+            <a href={basePath + item.href}
                class="navitem"
                class:active={item.href === '/app' ? current === '/app' : current.startsWith(item.href)}>
               <span class="ic" aria-hidden="true">{item.icon}</span>{item.label}
@@ -83,14 +88,14 @@
           {/if}
         {/each}
       </nav>
-      <a href="/logout" class="navitem logout" data-sveltekit-preload-data="off">
+      <a href="{basePath}/logout" class="navitem logout" data-sveltekit-preload-data="off">
         <span class="ic" aria-hidden="true">⎋</span>Sign out
       </a>
       <div class="side-foot">
         {#if $branding.trademark}<span class="tm muted">{$branding.trademark}</span>{/if}
         <div class="foot-links">
           <a class="chip ok" href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener license">AGPL-3.0</a>
-          <a class="muted src" href="/legal">source ↗</a>
+          <a class="muted src" href="{basePath}/legal">source ↗</a>
         </div>
       </div>
     </div>

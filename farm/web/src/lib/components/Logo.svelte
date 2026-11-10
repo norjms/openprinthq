@@ -1,5 +1,5 @@
 <script>
-  // OpenPrintHQ wordmark + hex-nozzle mark — brandable per user.
+  // ArtisanHub Farm wordmark + hex-nozzle mark — brandable per user.
   // SPDX-License-Identifier: AGPL-3.0-or-later
   // If the user uploaded a custom logo it replaces the mark + wordmark; otherwise
   // the built-in SVG mark shows with the (optionally renamed) wordmark text. The
@@ -8,9 +8,9 @@
 
   let { size = 30, wordmark = true } = $props();
 
-  const text = $derived($branding?.wordmark || $branding?.siteName || 'OpenPrintHQ');
+  const text = $derived($branding?.wordmark || $branding?.siteName || 'ArtisanHub Farm');
   const custom = $derived($activeLogo || '');
-  const isDefault = $derived(text === 'OpenPrintHQ');
+  const isDefault = $derived(text === 'ArtisanHub Farm');
 </script>
 
 {#if custom}
@@ -33,7 +33,7 @@
     </svg>
     {#if wordmark}
       {#if isDefault}
-        <span class="wm">OpenPrint<b>HQ</b></span>
+        <span class="wm">ArtisanHub <b>Farm</b></span>
       {:else}
         <span class="wm">{text}</span>
       {/if}

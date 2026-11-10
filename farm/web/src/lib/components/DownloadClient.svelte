@@ -1,4 +1,5 @@
 <script>
+  import { base as basePath } from '$app/paths';
   // Download + install instructions for the OpenPrintHQ Cloud Client — the
   // outbound-only connector that bridges this cloud instance to printers on a
   // private LAN. Buttons point at the public release page; Docker runs inline.
@@ -71,7 +72,7 @@ volumes:
         <strong>Cloud Client</strong> connector on any always-on machine there (a PC, Mac, mini-PC or
         Raspberry Pi). It dials <em>out</em> to your instance over HTTPS — no port-forwarding and no
         inbound firewall rules. First create a token in
-        <a href="/app/settings#connectors">Settings → Connectors</a>, then install and paste it in.
+        <a href="{basePath}/app/settings#connectors">Settings → Connectors</a>, then install and paste it in.
       </p>
     </div>
   </div>

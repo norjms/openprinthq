@@ -77,7 +77,7 @@
 <ModalShell title="Print options" subtitle="On-board monitoring while a job runs" width="560px"
             busy={!!busyKey} {onclose}>
   <p class="muted tiny lead">
-    These run on the printer itself, not in OpenPrintHQ, so they keep working when
+    These run on the printer itself, not in ArtisanHub Farm, so they keep working when
     this page is closed. Halting on detection is safer; sensitivity trades false
     alarms against missed failures.
   </p>

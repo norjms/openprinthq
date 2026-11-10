@@ -1,5 +1,6 @@
 <script>
-  // OpenPrintHQ - a single model in the tenant's library.
+  import { base as basePath } from '$app/paths';
+  // ArtisanHub Farm - a single model in the tenant's library.
   // SPDX-License-Identifier: AGPL-3.0-or-later
   //
   // Preview, files, downloads and send-to-queue. Meshes go to ModelViewer
@@ -146,7 +147,7 @@
   function openInSlicer(f) {
     const key = objectKeyFor(f);
     if (!key) { notice = 'That file has no object key, so it cannot be opened in the slicer.'; return; }
-    goto('/app/slicer?' + new URLSearchParams({ key, name: f.filename }).toString());
+    goto(basePath + '/app/slicer?' + new URLSearchParams({ key, name: f.filename }).toString());
   }
 
   async function removeFile(f) {
@@ -181,7 +182,7 @@
       // read-only, so asking it to unlink fails, and the object store is where
       // a real delete has to happen. This removes the index entry only.
       await library.deleteModel(model.id, false);
-      goto('/app/files');
+      goto(basePath + '/app/files');
     } catch (e) {
       notice = `Could not remove the model: ${e.message}`;
     }
@@ -236,7 +237,7 @@
 
 <PageTitle page={model ? model.name : 'Model'} />
 
-<p class="back"><a href="/app/files">Back to library</a></p>
+<p class="back"><a href="{basePath}/app/files">Back to library</a></p>
 
 {#if loading}
   <p class="muted">Loading...</p>

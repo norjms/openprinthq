@@ -1,4 +1,5 @@
 <script>
+  import { base as basePath } from '$app/paths';
   import { onMount } from 'svelte';
   import Logo from '$lib/components/Logo.svelte';
   import PageTitle from '$lib/components/PageTitle.svelte';
@@ -27,7 +28,7 @@
       // Full-page navigation (NOT client-side) so the reverse proxy's forward-auth can hand
       // off to the Authentik login cleanly — otherwise the SPA can't follow the
       // external redirect and the app looks broken until a manual refresh.
-      setTimeout(() => { window.location.href = '/app'; }, 1100);
+      setTimeout(() => { window.location.href = basePath + '/app'; }, 1100);
     } catch (err) {
       error = err?.message || 'Signup failed. Please try again.';
       busy = false;
@@ -43,10 +44,10 @@
     {#if done}
       <h2>You're in 🎉</h2>
       <p class="muted">Your account and private instance are ready — taking you to secure sign-in…</p>
-      <a class="btn btn-primary full" href="/app" data-sveltekit-reload>Continue with SSO →</a>
+      <a class="btn btn-primary full" href="{basePath}/app" data-sveltekit-reload>Continue with SSO →</a>
     {:else}
       <h2>Create your account</h2>
-      <p class="muted">{inviteRequired ? 'Redeem your invite code to get your own private OpenPrintHQ instance.' : 'Set up the first account — you’ll be the owner.'}</p>
+      <p class="muted">{inviteRequired ? 'Redeem your invite code to get your own private ArtisanHub Farm instance.' : 'Set up the first account — you’ll be the owner.'}</p>
       <form onsubmit={submit} class="form">
         {#if inviteRequired}
           <label>Invite code
@@ -65,7 +66,7 @@
         {#if error}<p class="err" role="alert">{error}</p>{/if}
         <button class="btn btn-primary full" disabled={busy}>{busy ? 'Creating…' : 'Create account'}</button>
       </form>
-      <p class="muted small">Already have an account? <a href="/app" data-sveltekit-reload>Sign in</a></p>
+      <p class="muted small">Already have an account? <a href="{basePath}/app" data-sveltekit-reload>Sign in</a></p>
     {/if}
   </div>
 </div>

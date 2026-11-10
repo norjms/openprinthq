@@ -1,4 +1,5 @@
 <script>
+  import { base as basePath } from '$app/paths';
   // Camera cluster: title bar of real actions, then the feed.
   // SPDX-License-Identifier: AGPL-3.0-or-later
   //
@@ -67,7 +68,7 @@
   function snapshot() {
     // Straight to the engine's snapshot route in a new tab; the browser handles
     // saving it. Nothing to build here.
-    window.open(`/api/engine/api/v1/printers/${printerId}/camera/snapshot?t=${Date.now()}`, '_blank');
+    window.open(`${basePath}/api/engine/api/v1/printers/${printerId}/camera/snapshot?t=${Date.now()}`, '_blank');
   }
 
   const sourceLabel = $derived(

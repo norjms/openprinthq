@@ -1,4 +1,5 @@
 <script>
+  import { base as basePath } from '$app/paths';
   // Live camera via WebRTC (peer-to-peer to go2rtc, co-located with the
   // printers) with graceful fallback to the cached-snapshot path.
   //
@@ -120,7 +121,7 @@
       // control-plane; STUN-only fallback if that call fails.
       let ice = [{ urls: 'stun:stun.cloudflare.com:3478' }, { urls: 'stun:stun.l.google.com:19302' }];
       try {
-        const r = await fetch('/api/camera/ice', { credentials: 'include' });
+        const r = await fetch(basePath + '/api/camera/ice', { credentials: 'include' });
         if (r.ok) { const j = await r.json(); if (Array.isArray(j.iceServers) && j.iceServers.length) ice = j.iceServers; }
       } catch { /* keep STUN default */ }
       pc = new RTCPeerConnection({ iceServers: ice });
@@ -156,7 +157,7 @@
       await pc.setLocalDescription(await pc.createOffer());
       await waitForIce(pc);
 
-      const res = await fetch(`/api/camera/webrtc/${printerId}`, {
+      const res = await fetch(`${basePath}/api/camera/webrtc/${printerId}`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'content-type': 'application/json' },

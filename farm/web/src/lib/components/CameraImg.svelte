@@ -1,4 +1,5 @@
 <script>
+  import { base as basePath } from '$app/paths';
   // Camera image with instant-load caching.
   //
   // The camera feed is a JPEG snapshot polled through the engine gateway. On a
@@ -38,7 +39,7 @@
   // for a genuinely fresh frame.
   const MOUNTED = Date.now();
   function liveUrl(t) {
-    return `/api/engine/api/v1/printers/${printerId}/camera/snapshot?t=${MOUNTED}.${t}`;
+    return `${basePath}/api/engine/api/v1/printers/${printerId}/camera/snapshot?t=${MOUNTED}.${t}`;
   }
 
   function loadLive(t) {

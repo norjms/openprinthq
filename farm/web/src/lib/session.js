@@ -16,6 +16,7 @@
 // redirect: 'manual'. An opaque redirect (or a 401) there means the sign-in
 // expired, not the engine. Callers then reauth() instead of retrying.
 import { writable, get } from 'svelte/store';
+import { base as basePath } from '$app/paths';
 
 export const sessionExpired = writable(false);
 
@@ -26,7 +27,7 @@ export function probeSession() {
   if (probing) return probing;
   probing = (async () => {
     try {
-      const r = await fetch('/api/me', { credentials: 'include', redirect: 'manual', cache: 'no-store' });
+      const r = await fetch(basePath + '/api/me', { credentials: 'include', redirect: 'manual', cache: 'no-store' });
       const expired = r.type === 'opaqueredirect' || r.status === 401;
       if (expired) sessionExpired.set(true);
       return expired;

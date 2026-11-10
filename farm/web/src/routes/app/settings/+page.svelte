@@ -1,4 +1,5 @@
 <script>
+  import { base as basePath } from '$app/paths';
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
   import NotificationSettings from '$lib/components/NotificationSettings.svelte';
@@ -88,7 +89,7 @@
   async function copy(text, which) {
     try { await navigator.clipboard.writeText(text); copied = which; setTimeout(() => (copied = null), 1500); } catch { /* ignore */ }
   }
-  const homepageSnippet = $derived(`- OpenPrintHQ:
+  const homepageSnippet = $derived(`- ArtisanHub Farm:
     widget:
       type: customapi
       url: ${summaryUrl}
@@ -103,7 +104,7 @@
   const haSnippet = $derived(`# configuration.yaml
 sensor:
   - platform: rest
-    name: OpenPrintHQ
+    name: ArtisanHub Farm
     resource: ${summaryUrl}
     value_template: "{{ value_json.printers_online }}"
     json_attributes:
@@ -202,7 +203,7 @@ scrape_configs:
       <div><span>name</span>{me?.displayName ?? '—'}</div>
       <div><span>auth</span>Authentik SSO</div>
     </div>
-    <a href="/logout" class="btn btn-ghost btn-sm">Sign out</a>
+    <a href="{basePath}/logout" class="btn btn-ghost btn-sm">Sign out</a>
   </div>
 
   <div class="card card-pad">
@@ -215,14 +216,14 @@ scrape_configs:
         <div><span>created</span>{fmtDate(inst.createdAt)}</div>
       </div>
     {:else}
-      <p class="muted">No instance yet — provision one from the <a href="/app">overview</a>.</p>
+      <p class="muted">No instance yet — provision one from the <a href="{basePath}/app">overview</a>.</p>
     {/if}
   </div>
 </div>
 
 <div class="card card-pad rate-card">
   <span class="eyebrow">Currency &amp; electricity rate</span>
-  <p class="muted">Currency and per-kWh cost used for all cost figures in <a href="/app/statistics">Statistics</a> and filament stock value.</p>
+  <p class="muted">Currency and per-kWh cost used for all cost figures in <a href="{basePath}/app/statistics">Statistics</a> and filament stock value.</p>
   <div class="cur-row">
     <label for="cursel">Currency</label>
     <select id="cursel" class="input cursel" value={currency} onchange={(e) => saveCurrency(e.target.value)} disabled={curSaving}>
@@ -240,7 +241,7 @@ scrape_configs:
 
 <div class="card card-pad circ-card">
   <span class="eyebrow">Power circuits</span>
-  <p class="muted">Group printers by the breaker circuit they're plugged into. <a href="/app/queue">Temperature-staggered batch printing</a> serialises heat-up within a circuit so machines on the same breaker never surge together — printers on different circuits preheat in parallel. Leave blank for a printer that shares no circuit.</p>
+  <p class="muted">Group printers by the breaker circuit they're plugged into. <a href="{basePath}/app/queue">Temperature-staggered batch printing</a> serialises heat-up within a circuit so machines on the same breaker never surge together — printers on different circuits preheat in parallel. Leave blank for a printer that shares no circuit.</p>
   {#if circPrinters.length === 0}
     <p class="muted">No printers yet — add printers to assign circuits.</p>
   {:else}

@@ -88,6 +88,7 @@ export function filterPresetsForConnected(presets, printers) {
   return out.length ? out : presets;
 }
 
+import { base as basePath } from '$app/paths';
 import { PRINTER_IMAGES } from './printerImages.js';
 
 // Resolve a printer's cover image (from the bundled OrcaSlicer set) by matching
@@ -106,7 +107,7 @@ export function printerImage(connectionType, model) {
   add(_normImg(label).replace(/\br\d\b/g, ' ').replace(/\s+/g, ' ').trim()); // drop R2/R1 etc.
   add(model);
   for (const t of tries) {
-    if (PRINTER_IMAGES[t]) return '/printers/' + encodeURIComponent(PRINTER_IMAGES[t]);
+    if (PRINTER_IMAGES[t]) return basePath + '/printers/' + encodeURIComponent(PRINTER_IMAGES[t]);
   }
   return null;
 }

@@ -1,4 +1,5 @@
 <script>
+  import { base as basePath } from '$app/paths';
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
   import EngineError from '$lib/components/EngineError.svelte';
@@ -73,7 +74,7 @@
   // fixed at creation, so this has to be set before the session starts.
   function openInSlicer(f) {
     const q = new URLSearchParams({ file: String(f.id), name: f.name });
-    window.location.href = '/app/slicer?' + q.toString();
+    window.location.href = basePath + '/app/slicer?' + q.toString();
   }
 
   async function addToQueue(f) {
@@ -359,14 +360,14 @@
 {#if toast}
   <div class="toast {toast.kind}">
     <span>{toast.text}</span>
-    {#if toast.kind === 'ok'}<a href="/app/queue" class="tlink">View queue →</a>{/if}
+    {#if toast.kind === 'ok'}<a href="{basePath}/app/queue" class="tlink">View queue →</a>{/if}
   </div>
 {/if}
 
 {#if loading}
   <div class="card card-pad muted">Loading library…</div>
 {:else if error === 'no-instance'}
-  <div class="card card-pad"><p class="muted">Provision your instance from the <a href="/app">overview</a> first.</p></div>
+  <div class="card card-pad"><p class="muted">Provision your instance from the <a href="{basePath}/app">overview</a> first.</p></div>
 {:else if error}
   <EngineError {error} onretry={load} />
 {:else if files.length === 0}
@@ -484,7 +485,7 @@
       {#if batchLoading}
         <p class="muted">Loading printers…</p>
       {:else if batchPrinters.length === 0}
-        <p class="muted">No printers found. <a href="/app/printers/add">Add a printer</a> first.</p>
+        <p class="muted">No printers found. <a href="{basePath}/app/printers/add">Add a printer</a> first.</p>
       {:else}
         <div class="plist">
           {#each batchPrinters as p (p.id)}
@@ -507,7 +508,7 @@
             <label for="mp">Max printers preheating at once <span class="muted">(per circuit)</span></label>
             <input id="mp" class="input mp-in" type="number" min="1" max="20" bind:value={batchMaxPreheat} disabled={batchBusy} />
           </div>
-          <p class="muted hint">Printers on different circuits preheat in parallel. Set circuits in <a href="/app/settings">Settings → Power circuits</a>. You can override the wait any time from the <a href="/app/queue">queue</a>.</p>
+          <p class="muted hint">Printers on different circuits preheat in parallel. Set circuits in <a href="{basePath}/app/settings">Settings → Power circuits</a>. You can override the wait any time from the <a href="{basePath}/app/queue">queue</a>.</p>
         {:else}
           <p class="muted hint">All selected printers will start at once (no heat-up staggering).</p>
         {/if}

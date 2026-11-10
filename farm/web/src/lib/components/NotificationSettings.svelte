@@ -1,5 +1,5 @@
 <script>
-  // OpenPrintHQ — notification channels (Discord/Telegram/email/Pushover/ntfy/webhook)
+  // ArtisanHub Farm — notification channels (Discord/Telegram/email/Pushover/ntfy/webhook)
   // SPDX-License-Identifier: AGPL-3.0-or-later
   import { onMount } from 'svelte';
   import { api } from '$lib/api';

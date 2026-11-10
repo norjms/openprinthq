@@ -1,5 +1,5 @@
 <script>
-  // OpenPrintHQ - 3D preview for a library model file (STL / 3MF).
+  // ArtisanHub Farm - 3D preview for a library model file (STL / 3MF).
   // SPDX-License-Identifier: AGPL-3.0-or-later
   //
   // three is imported dynamically. It is the largest dependency in the app by

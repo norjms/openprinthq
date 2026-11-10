@@ -1,4 +1,5 @@
 <script>
+  import { base as basePath } from '$app/paths';
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
   import EngineError from '$lib/components/EngineError.svelte';
@@ -96,17 +97,17 @@
 {:else if loading}
   <div class="card card-pad muted">Loading cameras…</div>
 {:else if error === 'no-instance'}
-  <div class="card card-pad"><p class="muted">Provision your instance from the <a href="/app">overview</a> first.</p></div>
+  <div class="card card-pad"><p class="muted">Provision your instance from the <a href="{basePath}/app">overview</a> first.</p></div>
 {:else if error}
   <EngineError {error} onretry={load} />
 {:else if printers.length === 0}
-  <div class="card card-pad empty"><div class="ic">📷</div><h3>No printers yet</h3><p class="muted"><a href="/app/printers/add">Add a printer</a> to see its camera here.</p></div>
+  <div class="card card-pad empty"><div class="ic">📷</div><h3>No printers yet</h3><p class="muted"><a href="{basePath}/app/printers/add">Add a printer</a> to see its camera here.</p></div>
 {:else}
   <div class="grid cams">
     {#each printers as p (p.id)}
       <div class="card cam">
         <div class="camhd">
-          <a href="/app/printers/{p.id}" class="cn">{p.name}</a>
+          <a href="{basePath}/app/printers/{p.id}" class="cn">{p.name}</a>
           <span class="chip {tone(p.state)}">{p.state}</span>
         </div>
         <div class="feed">
@@ -123,7 +124,7 @@
     {#each extras as c (c.stream_name)}
       <div class="card cam">
         <div class="camhd">
-          <a href="/app/printers/{c.printer_id}" class="cn">{c.printer_name} · {c.camera_name}</a>
+          <a href="{basePath}/app/printers/{c.printer_id}" class="cn">{c.printer_name} · {c.camera_name}</a>
           <span class="chip {c.state === 'ONLINE' ? 'ok' : c.state === 'OFFLINE' ? 'danger' : ''}">{c.state === 'ONLINE' ? 'online' : c.state === 'OFFLINE' ? 'offline' : 'camera'}</span>
         </div>
         <div class="feed">

@@ -1,5 +1,5 @@
 <script>
-  // OpenPrintHQ — API keys & webhooks (#15).
+  // ArtisanHub Farm — API keys & webhooks (#15).
   // Create/scope/revoke API keys (engine /api-keys) that authenticate the
   // /webhook/* automation endpoints. The full key is shown exactly once at
   // creation. Docs the available webhook endpoints.
@@ -115,7 +115,7 @@
   {:else if error}
     <p class="err">{error} · <button class="btn btn-ghost btn-xs" onclick={load}>Retry</button></p>
   {:else if keys.length === 0}
-    <p class="muted none">No API keys yet. Create one to drive OpenPrintHQ from scripts or other apps.</p>
+    <p class="muted none">No API keys yet. Create one to drive ArtisanHub Farm from scripts or other apps.</p>
   {:else}
     <div class="klist">
       {#each keys as k (k.id)}

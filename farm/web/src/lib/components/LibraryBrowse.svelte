@@ -1,5 +1,6 @@
 <script>
-  // OpenPrintHQ - folder view of the tenant's library.
+  import { base as basePath } from '$app/paths';
+  // ArtisanHub Farm - folder view of the tenant's library.
   // SPDX-License-Identifier: AGPL-3.0-or-later
   //
   // The model grid is the library as the library sees it; this is the bucket as
@@ -75,7 +76,7 @@
   function openInSlicer(f) {
     const key = objectKeyFor(f);
     if (!key) { notice = 'That file has no object key, so it cannot be opened in the slicer.'; return; }
-    goto('/app/slicer?' + new URLSearchParams({ key, name: f.name }).toString());
+    goto(basePath + '/app/slicer?' + new URLSearchParams({ key, name: f.name }).toString());
   }
 
   async function relocate(f, move) {
@@ -167,7 +168,7 @@
       <div class="row">
         <span class="ftype">{f.ext || f.type}</span>
         {#if f.model_id}
-          <a class="fname" href={`/app/files/${f.model_id}`}>{f.name}</a>
+          <a class="fname" href={`${basePath}/app/files/${f.model_id}`}>{f.name}</a>
         {:else}
           <span class="fname">{f.name}</span>
         {/if}

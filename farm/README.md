@@ -1,3 +1,23 @@
+# ArtisanHub Farm
+
+The print farm part of [ArtisanHub](https://github.com/norjms/artisan-hub): a fork of
+[OpenPrintHQ](https://github.com/norjms/openprinthq), run single-tenant, in ArtisanHub's look, and served under
+the hub's own name at `/farm`. The ArtisanHub installer sets it up when you choose "Install it for me" for the
+print farm.
+
+- Single-tenant only: one engine and one Spoolman, started by the installer, and no Docker socket
+  ([docs/single-tenant.md](docs/single-tenant.md)).
+- Sign-in is the hub's Authentik, through forward-auth in the farm's router.
+- Images: `ghcr.io/norjms/artisan-hub-farm-{web,control-plane,router}`, built by
+  [.github/workflows/build.yml](.github/workflows/build.yml) on every push to `main`; the web image is built
+  with `BASE_PATH=/farm`.
+- Changes come from OpenPrintHQ: `git fetch openprinthq && git merge openprinthq/main`. OpenPrintHQ stays its
+  own product.
+
+Free software under the GNU AGPL-3.0, like OpenPrintHQ. The rest of this file is OpenPrintHQ's.
+
+---
+
 # OpenPrintHQ
 
 **One command center for every 3D printer.** OpenPrintHQ brings Bambu Lab, Creality, Prusa, Snapmaker and Voron printers into a single private HQ — queue, slice, monitor and manage your whole farm from one place. Every user gets their own isolated instance.

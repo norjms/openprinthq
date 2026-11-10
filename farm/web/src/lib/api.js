@@ -3,9 +3,10 @@
 // Talks to the control-plane (via the /api proxy) for account + instance data,
 // and — once provisioned — to the user's own engine instance.
 
+import { base as basePath } from '$app/paths';
 import { probeSession, isSessionExpired, authExpiredError, sessionExpired } from './session.js';
 
-const base = '/api';
+const base = basePath + '/api';
 
 async function req(path, opts = {}) {
   const { headers: optHeaders, ...rest } = opts;

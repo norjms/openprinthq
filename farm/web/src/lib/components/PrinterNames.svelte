@@ -55,7 +55,7 @@
 
 <div class="card card-pad">
   <span class="eyebrow">Printer names</span>
-  <p class="muted">Printers announce an internal model code (e.g. Bambu's <code>O1D</code>) rather than a marketing name (<code>H2D</code>). OpenPrintHQ learns the friendly name the first time someone types it when adding a printer, and shows it everywhere after. Lock a mapping to pin it — locked names can't be overwritten by what users type. Mappings are platform-wide.</p>
+  <p class="muted">Printers announce an internal model code (e.g. Bambu's <code>O1D</code>) rather than a marketing name (<code>H2D</code>). ArtisanHub Farm learns the friendly name the first time someone types it when adding a printer, and shows it everywhere after. Lock a mapping to pin it — locked names can't be overwritten by what users type. Mappings are platform-wide.</p>
 
   <div class="addform">
     <select class="input v" bind:value={fVendor}>

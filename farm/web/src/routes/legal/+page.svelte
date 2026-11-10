@@ -10,7 +10,8 @@
   // AGPL §13 source offer — the complete corresponding source is published in the
   // public repositories (the app + the print engine). Linking them satisfies the
   // network-use source requirement and stays current with the deployed version.
-  const APP_REPO = 'https://github.com/norjms/openprinthq';
+  const APP_REPO = 'https://github.com/norjms/artisan-hub-farm';
+  const UPSTREAM_REPO = 'https://github.com/norjms/openprinthq';
   const ENGINE_REPO = 'https://github.com/norjms/openprinthq-engine';
   const CLIENT_REPO = 'https://github.com/norjms/openprinthq-cloud-client';
   // Deployed commit SHAs (injected at build time via vite `define`). When present,
@@ -34,7 +35,8 @@
   <header class="phead">
     <span class="eyebrow">Open source</span>
     <h1>License, attribution &amp; source</h1>
-    <p class="lead">OpenPrintHQ is free software under the GNU Affero General Public License v3.0.
+    <p class="lead">ArtisanHub Farm is the print farm part of ArtisanHub, a fork of
+      <a href={UPSTREAM_REPO} rel="noopener">OpenPrintHQ</a>. Like OpenPrintHQ, it is free software under the GNU Affero General Public License v3.0.
       Everything on this page is public — no account required — because the AGPL guarantees every
       user of this instance access to its license and complete source.</p>
   </header>

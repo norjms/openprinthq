@@ -1,4 +1,5 @@
 <script>
+  import { base as basePath } from '$app/paths';
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
   import PageTitle from '$lib/components/PageTitle.svelte';
@@ -73,7 +74,7 @@
     <h1>Overview</h1>
     <p class="muted">Your {$branding.siteName} command center.</p>
   </div>
-  <a href="/app/printers" class="btn btn-primary btn-sm">+ Add printer</a>
+  <a href="{basePath}/app/printers" class="btn btn-primary btn-sm">+ Add printer</a>
 </div>
 
 {#if loading}
@@ -82,7 +83,7 @@
   <div class="card card-pad provision glow">
     <span class="eyebrow">Almost there</span>
     <h2>Enter your invite code</h2>
-    <p>You're signed in. OpenPrintHQ is invite-only — enter the code you were given to create your private HQ.{#if !needsInvite} You're the first user, so no code is needed — just continue.{/if}</p>
+    <p>You're signed in. ArtisanHub Farm is invite-only — enter the code you were given to create your private HQ.{#if !needsInvite} You're the first user, so no code is needed — just continue.{/if}</p>
     {#if needsInvite}
       <input class="input claim-input" placeholder="Invite code" bind:value={inviteCode} onkeydown={(e) => { if (e.key === 'Enter') claim(); }} />
     {/if}
@@ -93,7 +94,7 @@
   <div class="card card-pad provision glow">
     <span class="eyebrow">Welcome</span>
     <h2>Let's spin up your private HQ</h2>
-    <p>You don't have an instance yet. We'll provision an isolated OpenPrintHQ — your own database and workspace — just for you.</p>
+    <p>You don't have an instance yet. We'll provision an isolated ArtisanHub Farm — your own database and workspace — just for you.</p>
     <button class="btn btn-primary" onclick={provision} disabled={provisioning}>
       {provisioning ? 'Provisioning…' : 'Provision my instance →'}
     </button>
@@ -110,13 +111,13 @@
       <span class="eyebrow">Get started</span>
       <h2>Your HQ is live — add your first printer</h2>
       <div class="steps">
-        <a class="step" href="/app/printers/add">
+        <a class="step" href="{basePath}/app/printers/add">
           <b>1</b><span>Add a printer</span><small>Bambu, Creality, Prusa, Snapmaker, Voron &amp; more</small>
         </a>
-        <a class="step" href="/app/files">
+        <a class="step" href="{basePath}/app/files">
           <b>2</b><span>Upload a model</span><small>STL or 3MF to your private library</small>
         </a>
-        <a class="step" href="/app/files">
+        <a class="step" href="{basePath}/app/files">
           <b>3</b><span>Slice &amp; queue</span><small>OrcaSlicer built in, then send to print</small>
         </a>
       </div>
@@ -124,7 +125,7 @@
   {:else}
     <div class="tiles">
       {#each tiles as t}
-        <a class="card card-pad tile" href={t.href}>
+        <a class="card card-pad tile" href={basePath + t.href}>
           <span class="muted">{t.label}</span>
           <b class:ok={t.accent === 'ok'}>{t.value}</b>
         </a>
@@ -133,9 +134,9 @@
   {/if}
 
   <div class="quick">
-    <a class="card card-pad qa" href="/app/printers/add"><span class="qi">＋</span><span><b>Add printer</b><small>Connect a machine</small></span></a>
-    <a class="card card-pad qa" href="/app/files"><span class="qi">◈</span><span><b>Upload &amp; slice</b><small>STL / 3MF → G-code</small></span></a>
-    <a class="card card-pad qa" href="/app/queue"><span class="qi">≣</span><span><b>Print queue</b><small>Manage the fleet queue</small></span></a>
+    <a class="card card-pad qa" href="{basePath}/app/printers/add"><span class="qi">＋</span><span><b>Add printer</b><small>Connect a machine</small></span></a>
+    <a class="card card-pad qa" href="{basePath}/app/files"><span class="qi">◈</span><span><b>Upload &amp; slice</b><small>STL / 3MF → G-code</small></span></a>
+    <a class="card card-pad qa" href="{basePath}/app/queue"><span class="qi">≣</span><span><b>Print queue</b><small>Manage the fleet queue</small></span></a>
   </div>
 
   <div class="card card-pad">
@@ -145,7 +146,7 @@
     </div>
     <div class="kv mono">
       <div><span>instance</span>{instance?.subdomain ?? '—'}</div>
-      <div><span>access</span><a href="/app">{host || '—'}</a></div>
+      <div><span>access</span><a href="{basePath}/app">{host || '—'}</a></div>
       <div><span>engine</span>{instance?.engineVersion ?? 'openprinthq-engine'}</div>
       <div><span>created</span>{fmtDate(instance?.createdAt)}</div>
     </div>

@@ -1,4 +1,5 @@
 <script>
+  import { base as basePath } from '$app/paths';
   import Logo from './Logo.svelte';
   import { branding } from '$lib/stores/appearance';
   // AGPL-3.0 §13: the running instance must offer its source to EVERY user,
@@ -21,16 +22,16 @@
       </div>
       <div class="col">
         <h4>Product</h4>
-        <a href="/#features">Features</a>
-        <a href="/#printers">Supported printers</a>
-        <a href="/#how">How it works</a>
-        <a href="/app" data-sveltekit-reload>Launch your HQ</a>
+        <a href="{basePath}/#features">Features</a>
+        <a href="{basePath}/#printers">Supported printers</a>
+        <a href="{basePath}/#how">How it works</a>
+        <a href="{basePath}/app" data-sveltekit-reload>Launch your HQ</a>
       </div>
       <div class="col">
         <h4>Open</h4>
-        <a href="/legal#source">Source code</a>
-        <a href="/legal#license">License (AGPL-3.0)</a>
-        <a href="/legal#attribution">Attribution &amp; credits</a>
+        <a href="{basePath}/legal#source">Source code</a>
+        <a href="{basePath}/legal#license">License (AGPL-3.0)</a>
+        <a href="{basePath}/legal#attribution">Attribution &amp; credits</a>
       </div>
     </div>
     <hr class="divider" />
@@ -47,7 +48,7 @@
           </span>
         {/if}
         <!-- AGPL §13 source offer — kept for license compliance -->
-        <span class="muted">Source available (<a href="/legal">AGPL-3.0</a>) to every user of this instance.</span>
+        <span class="muted">Source available (<a href="{basePath}/legal">AGPL-3.0</a>) to every user of this instance.</span>
       </span>
     </div>
   </div>

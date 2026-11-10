@@ -4,7 +4,8 @@
 </script>
 
 <script>
-  // OpenPrintHQ — per-printer detail & control.
+  import { base as basePath } from '$app/paths';
+  // ArtisanHub Farm — per-printer detail & control.
   // SPDX-License-Identifier: AGPL-3.0-or-later
   //
   // One shell for every printer type: camera, printing progress, the control
@@ -58,7 +59,7 @@
   let camTimer;
   let camAvailable = $state(true);
   function openCamera() {
-    window.open(`/app/printers/${id}/camera`, '_blank');
+    window.open(`${basePath}/app/printers/${id}/camera`, '_blank');
   }
 
   // ---- per-printer settings ----------------------------------------------
@@ -448,7 +449,7 @@
 {/snippet}
 
 <div class="head">
-  <a href="/app/printers" class="btn btn-ghost btn-sm" data-tip="Back to all printers"
+  <a href="{basePath}/app/printers" class="btn btn-ghost btn-sm" data-tip="Back to all printers"
      aria-label="Back to all printers">← Printers</a>
   <div class="head-actions">
     {#if !editing && !loading && !error}
@@ -469,12 +470,12 @@
 {:else if error === 'not-found'}
   <div class="card card-pad">
     <h3>Printer not found</h3>
-    <p class="muted">This printer may have been removed. <a href="/app/printers">Back to printers</a>.</p>
+    <p class="muted">This printer may have been removed. <a href="{basePath}/app/printers">Back to printers</a>.</p>
   </div>
 {:else if error === 'no-instance'}
   <div class="card card-pad">
     <h3>No instance yet</h3>
-    <p class="muted">Provision your instance from the <a href="/app">overview</a> first.</p>
+    <p class="muted">Provision your instance from the <a href="{basePath}/app">overview</a> first.</p>
   </div>
 {:else}
   {#if error}<p class="err banner">{error}</p>{/if}
@@ -515,7 +516,7 @@
     showBedEjection={!!meta?.show_bed_ejection}
     onclose={() => (settingsOpen = false)}
     onsave={(cfg) => { meta = { ...meta, ...cfg }; }}
-    ondelete={() => goto('/app/printers')} />
+    ondelete={() => goto(basePath + '/app/printers')} />
 {/if}
 
 <style>

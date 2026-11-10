@@ -1,4 +1,5 @@
 <script>
+  import { base as basePath } from '$app/paths';
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
   import EngineError from '$lib/components/EngineError.svelte';
@@ -287,7 +288,7 @@
 {#if loading}
   <div class="card card-pad muted">Loading queue…</div>
 {:else if error === 'no-instance'}
-  <div class="card card-pad"><p class="muted">Provision your instance from the <a href="/app">overview</a> first.</p></div>
+  <div class="card card-pad"><p class="muted">Provision your instance from the <a href="{basePath}/app">overview</a> first.</p></div>
 {:else if error}
   <EngineError {error} onretry={load} />
 {:else if items.length === 0}
@@ -295,7 +296,7 @@
     <div class="ic">≣</div>
     <h3>Queue is empty</h3>
     <p class="muted">Slice a model or add a G-code file to the queue — jobs across your whole fleet show up here.</p>
-    <a class="btn btn-primary" href="/app/files">Go to files</a>
+    <a class="btn btn-primary" href="{basePath}/app/files">Go to files</a>
   </div>
 {:else if shownItems.length === 0}
   <div class="card card-pad muted flt-empty">
@@ -347,7 +348,7 @@
     {/each}
   </div>
   {#if printers.length === 0}
-    <p class="muted hint">No printers yet — items stay unassigned until you <a href="/app/printers/add">add a printer</a>. The scheduler dispatches unassigned jobs to any compatible machine.</p>
+    <p class="muted hint">No printers yet — items stay unassigned until you <a href="{basePath}/app/printers/add">add a printer</a>. The scheduler dispatches unassigned jobs to any compatible machine.</p>
   {/if}
 {/if}
 

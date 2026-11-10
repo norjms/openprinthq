@@ -103,8 +103,8 @@ export const DEFAULT_A11Y = { underline: false, focus: false, targets: false, fo
 export const ACCESSIBLE_DEFAULT_A11Y = { underline: true, focus: true, targets: true, font: false, motion: false };
 
 export const DEFAULT_BRANDING = {
-  siteName: 'OpenPrintHQ',
-  tagline: 'One command center for every 3D printer.',
+  siteName: 'ArtisanHub Farm',
+  tagline: 'The print farm part of ArtisanHub.',
   // Three per-mode logo variants (data-URIs; empty = built-in wordmark). The app
   // shows the one matching the active theme mode so the mark stays legible on any
   // background: `light` for Light mode, `dark` for Dark mode, `accessible` for

@@ -2,7 +2,7 @@
   let { title, blurb, roadmap = [] } = $props();
 </script>
 
-<svelte:head><title>{title} · OpenPrintHQ</title></svelte:head>
+<svelte:head><title>{title} · ArtisanHub Farm</title></svelte:head>
 
 <div class="head">
   <h1>{title}</h1>

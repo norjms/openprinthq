@@ -1,5 +1,5 @@
 <script>
-  // OpenPrintHQ — bed ejection & continuous printing (#20).
+  // ArtisanHub Farm — bed ejection & continuous printing (#20).
   // Stores a per-printer "eject" g-code macro (engine settings) and can run it
   // on demand or automatically when a print finishes. Continuous printing
   // itself is handled by the engine queue scheduler (it auto-starts the next

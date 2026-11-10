@@ -178,7 +178,7 @@
     <h3>Printer hosting mode</h3>
     <p class="muted small">Controls which kinds of printers this deployment can manage, and how the Printers page presents adding them.</p>
     <ul class="muted small modelist">
-      <li><b>Local</b> — printers live on the <em>same network as OpenPrintHQ</em> and are reached directly. The Cloud Client download and connectors UI are hidden. (You can still reveal them from the Printers page if you have a printer on another network.)</li>
+      <li><b>Local</b> — printers live on the <em>same network as ArtisanHub Farm</em> and are reached directly. The Cloud Client download and connectors UI are hidden. (You can still reveal them from the Printers page if you have a printer on another network.)</li>
       <li><b>Remote</b> — printers live on a <em>different network</em>, reached through a Cloud Client connector installed on that LAN. Adding printers is disabled until at least one client has paired; once one does, the page unlocks.</li>
       <li><b>Both</b> — manage local and remote printers together. Everything is available: add directly on this network <em>and</em> add via a connector.</li>
     </ul>

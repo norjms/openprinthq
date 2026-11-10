@@ -1,4 +1,5 @@
 <script>
+  import { base as basePath } from '$app/paths';
   // Timelapse gallery. Rendered as a tab under the Cameras page.
   // SPDX-License-Identifier: AGPL-3.0-or-later
   import { onMount } from 'svelte';
@@ -58,7 +59,7 @@
 {#if loading}
   <div class="card card-pad muted">Loading…</div>
 {:else if error === 'no-instance'}
-  <div class="card card-pad"><p class="muted">Provision your instance from the <a href="/app">overview</a> first.</p></div>
+  <div class="card card-pad"><p class="muted">Provision your instance from the <a href="{basePath}/app">overview</a> first.</p></div>
 {:else if error}
   <EngineError {error} onretry={load} />
 {:else}

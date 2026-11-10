@@ -1,4 +1,5 @@
 <script>
+  import { base as basePath } from '$app/paths';
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
   import PageTitle from '$lib/components/PageTitle.svelte';
@@ -134,7 +135,7 @@
     </p>
   </div>
   <div class="flex gap">
-    <a class="btn btn-ghost btn-sm" href="/app/printers">Back to printers</a>
+    <a class="btn btn-ghost btn-sm" href="{basePath}/app/printers">Back to printers</a>
     <button class="btn btn-primary btn-sm" onclick={() => (showCreate = !showCreate)}>
       {showCreate ? 'Cancel' : '+ New group'}
     </button>
@@ -253,7 +254,7 @@
           {#if g.printers?.length}
             <div class="chips">
               {#each g.printers as p (p.id)}
-                <a class="chip static {p.is_active ? '' : 'off'}" href="/app/printers/{p.id}">
+                <a class="chip static {p.is_active ? '' : 'off'}" href="{basePath}/app/printers/{p.id}">
                   {label(p)}{p.is_active ? '' : ' · inactive'}
                 </a>
               {/each}

@@ -19,6 +19,7 @@
 // them and only one printer in three ever cached anything. The feature had been
 // a no-op since it was written. Downscaling first brings the same frames to
 // 21-47KB, which is both under any sane cap and plenty for a placeholder.
+import { base as basePath } from '$app/paths';
 
 const PREFIX = 'ophq_cam_';
 const KEY = (id) => `${PREFIX}${id}`;
@@ -117,7 +118,7 @@ export function fetchAndCache(printerId) {
     img.decoding = 'async';
     img.onload = () => { writeFrame(printerId, img); resolve(true); };
     img.onerror = () => resolve(false);
-    img.src = `/api/engine/api/v1/printers/${printerId}/camera/snapshot?t=${Date.now()}`;
+    img.src = `${basePath}/api/engine/api/v1/printers/${printerId}/camera/snapshot?t=${Date.now()}`;
   });
 }
 

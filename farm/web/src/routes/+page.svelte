@@ -1,4 +1,5 @@
 <script>
+  import { base as basePath } from '$app/paths';
   import Header from '$lib/components/Header.svelte';
   import Footer from '$lib/components/Footer.svelte';
   import { branding } from '$lib/stores/appearance';
@@ -16,7 +17,7 @@
   ];
 
   const features = [
-    { icon: '🏢', title: 'Your own private instance', body: 'Every account gets an isolated OpenPrintHQ — its own database, printers and storage. No shared tenancy, no noisy neighbors.' },
+    { icon: '🏢', title: 'Your own private instance', body: 'Every account gets an isolated ArtisanHub Farm — its own database, printers and storage. No shared tenancy, no noisy neighbors.' },
     { icon: '🖨️', title: 'Multi-brand, one HQ', body: 'Built around OrcaSlicer, so it targets what OrcaSlicer targets — Bambu Lab today, with Prusa, Creality, Klipper/Voron and more in active validation. One queue, one dashboard, every machine.' },
     { icon: '🧩', title: 'OrcaSlicer, built in', body: 'Slice STL and 3MF right in the browser with a bundled OrcaSlicer — no desktop install. Send straight to any printer in your fleet.' },
     { icon: '🎥', title: 'Live monitoring', body: 'Peer-to-peer WebRTC camera streams, temperatures, progress and health in real time. Catch failures before they waste a spool.' },
@@ -27,7 +28,7 @@
     { icon: '🎞️', title: 'Timelapses & projects', body: 'Automatic per-print timelapses and project organisation — capture, group and revisit every build.' },
     { icon: '🧵', title: 'Filament & spool tracking', body: 'Track spools, usage and cost automatically. Know what you have on hand and what a print really costs.' },
     { icon: '📈', title: 'Statistics & reports', body: 'Success rates, throughput and usage across the fleet, with printable reports for your records or clients.' },
-    { icon: '🔌', title: 'Integrations', body: 'Per-user read-only tokens expose fleet status to Home Assistant, Homepage and Prometheus — plug OpenPrintHQ into your dashboards.' },
+    { icon: '🔌', title: 'Integrations', body: 'Per-user read-only tokens expose fleet status to Home Assistant, Homepage and Prometheus — plug ArtisanHub Farm into your dashboards.' },
     { icon: '🎨', title: 'Themes & accessibility', body: 'Dark, light and WCAG-tuned accessible modes — accessible mode ships high-contrast colours and larger text by default. Custom colours, text scaling and your own branding — make it yours.' },
     { icon: '🔓', title: 'Social sign-in', body: 'Sign in with Google, Facebook or Microsoft as well as email. Onboarding stays invite-gated, so you keep control of who joins.' },
     { icon: '🧪', title: 'GenFilament — AI profiles', body: 'Generate tuned filament profiles for new or unusual materials with AI, ready to slice. Available as an optional paid add-on.' },
@@ -36,7 +37,7 @@
 
   const steps = [
     { n: '01', t: 'Create your account', d: 'Sign in and we provision a dedicated instance just for you in seconds.' },
-    { n: '02', t: 'Add your printers', d: 'Point OpenPrintHQ at your machines — Bambu Lab, Prusa, Creality, Klipper/Voron, OctoPrint and more.' },
+    { n: '02', t: 'Add your printers', d: 'Point ArtisanHub Farm at your machines — Bambu Lab, Prusa, Creality, Klipper/Voron, OctoPrint and more.' },
     { n: '03', t: 'Run your farm', d: 'Queue, slice, monitor and manage everything from one command center.' }
   ];
 </script>
@@ -56,8 +57,8 @@
       Every user gets their own isolated instance.
     </p>
     <div class="cta">
-      <a href="/signup" class="btn btn-primary">Launch your HQ →</a>
-      <a href="/#how" class="btn btn-ghost">See how it works</a>
+      <a href="{basePath}/signup" class="btn btn-primary">Launch your HQ →</a>
+      <a href="{basePath}/#how" class="btn btn-ghost">See how it works</a>
     </div>
     <div class="stat-row">
       <div><b>9</b><span>printer brands supported &amp; in validation</span></div>
@@ -82,7 +83,7 @@
       {/each}
     </div>
     <p class="small note-validating">
-      OpenPrintHQ targets every printer OrcaSlicer can talk to — Bambu Lab, Prusa, Creality,
+      ArtisanHub Farm targets every printer OrcaSlicer can talk to — Bambu Lab, Prusa, Creality,
       Voron/Klipper (Moonraker), OctoPrint, Snapmaker, FlashForge, MKS and Duet/RepRapFirmware.
       Support beyond Bambu Lab is <strong>actively being tested and validated</strong>, so brands
       roll out as they pass our hardware checks.
@@ -131,13 +132,13 @@
       <span class="eyebrow">Open by principle</span>
       <h2>Free software. Forever.</h2>
       <p>
-        OpenPrintHQ is licensed under the GNU AGPL-3.0. You can read the source, self-host it, audit it and
+        ArtisanHub Farm is licensed under the GNU AGPL-3.0. You can read the source, self-host it, audit it and
         improve it. Built on the shoulders of the open 3D-printing community — with full attribution to the
         projects that made it possible.
       </p>
       <div class="cta">
-        <a href="/legal" class="btn btn-primary">Read the source</a>
-        <a href="/signup" class="btn btn-ghost">Launch your HQ</a>
+        <a href="{basePath}/legal" class="btn btn-primary">Read the source</a>
+        <a href="{basePath}/signup" class="btn btn-ghost">Launch your HQ</a>
       </div>
     </div>
   </div>

@@ -142,7 +142,7 @@
     <div class="field">
       <label for="bname">Site name</label>
       <input id="bname" class="input" type="text" value={draft.branding.siteName}
-             oninput={(e) => setBrand('siteName', e.target.value)} placeholder="OpenPrintHQ" />
+             oninput={(e) => setBrand('siteName', e.target.value)} placeholder="ArtisanHub Farm" />
     </div>
     <div class="field">
       <label for="bword">Wordmark override <span class="muted">(optional)</span></label>

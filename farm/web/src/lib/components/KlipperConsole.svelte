@@ -1,5 +1,5 @@
 <script>
-  // OpenPrintHQ — realtime Klipper/Moonraker console.
+  // ArtisanHub Farm — realtime Klipper/Moonraker console.
   // Streams Klipper's own g-code responses (polled from Moonraker's
   // server.gcode_store via the engine's /klipper/console passthrough) and lets
   // you submit commands. Unlike the generic send-only GcodeConsole, this shows

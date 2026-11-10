@@ -1,5 +1,6 @@
 <script>
-  // OpenPrintHQ — local connectors (#28/#29).
+  import { base as basePath } from '$app/paths';
+  // ArtisanHub Farm — local connectors (#28/#29).
   // Manage outbound-tunnel agents that let this cloud instance reach printers
   // on a private LAN behind NAT/CGNAT/firewalls. Create a connector (token
   // shown once), install the agent on that network, revoke when done.
@@ -177,7 +178,7 @@
   // and the published image instead of at source.
   const instructions = $derived({
     docker: `# On a machine on the same LAN as your printers:\ndocker run -d --name openprinthq-connector --restart unless-stopped \\\n  --network host \\\n  -e OPHQ_CONTROL_URL=${base} \\\n  -e OPHQ_CONNECTOR_TOKEN=${tok} \\\n  ghcr.io/norjms/openprinthq-connector:latest`,
-    linux: `# Download the .deb or .rpm from the Cloud Client releases page,\n# install it, then enter this instance URL and token in the app:\n#   ${base}\n#   ${tok}\nsudo apt install ./OpenPrintHQ.Cloud.Client_*_amd64.deb`,
+    linux: `# Download the .deb or .rpm from the Cloud Client releases page,\n# install it, then enter this instance URL and token in the app:\n#   ${base}\n#   ${tok}\nsudo apt install ./ArtisanHub Farm.Cloud.Client_*_amd64.deb`,
     macos: `# Download the .pkg from the Cloud Client releases page and run it,\n# then enter this instance URL and token in the menu-bar app:\n#   ${base}\n#   ${tok}`,
     windows: `# Download the .msi from the Cloud Client releases page and run it,\n# then enter this instance URL and token in the tray app:\n#   ${base}\n#   ${tok}`
   });
@@ -313,7 +314,7 @@
                 <div class="srrow">
                   <span class="srn">{d.name || 'Printer'}</span>
                   <span class="muted mono tiny">{d.ip}{#if d.serial} · {d.serial}{/if} · {d.vendor}</span>
-                  <a class="btn btn-ghost btn-xs" href={`/app/printers/add?ip=${encodeURIComponent(d.ip)}&vendor=${encodeURIComponent(d.vendor)}&connector=${c.id}&serial=${encodeURIComponent(d.serial||'')}&model=${encodeURIComponent(d.friendly_model||d.model||'')}&code=${encodeURIComponent(d.model||'')}`}>Add</a>
+                  <a class="btn btn-ghost btn-xs" href={`${basePath}/app/printers/add?ip=${encodeURIComponent(d.ip)}&vendor=${encodeURIComponent(d.vendor)}&connector=${c.id}&serial=${encodeURIComponent(d.serial||'')}&model=${encodeURIComponent(d.friendly_model||d.model||'')}&code=${encodeURIComponent(d.model||'')}`}>Add</a>
                 </div>
               {/each}
             {/if}

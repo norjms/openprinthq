@@ -10,10 +10,11 @@
 //   /api/library/*        its API
 //   /api/library-file/*   file content
 //   /api/library-thumb/*  thumbnails
+import { base as basePath } from '$app/paths';
 
 import { api, putWithProgress } from '$lib/api.js';
 
-const API = '/api/library';
+const API = basePath + '/api/library';
 
 async function req(path, opts = {}) {
   const { headers: optHeaders, ...rest } = opts;
@@ -44,8 +45,8 @@ async function req(path, opts = {}) {
  */
 export function libraryAsset(url) {
   if (!url) return '';
-  if (url.startsWith('/library-files/')) return '/api/library-file/' + url.slice('/library-files/'.length);
-  if (url.startsWith('/uploads/')) return '/api/library-thumb/' + url.slice('/uploads/'.length);
+  if (url.startsWith('/library-files/')) return basePath + '/api/library-file/' + url.slice('/library-files/'.length);
+  if (url.startsWith('/uploads/')) return basePath + '/api/library-thumb/' + url.slice('/uploads/'.length);
   return url;
 }
 
@@ -60,7 +61,7 @@ export const library = {
   /** Is there a library for this tenant? Note this is NOT under /api/library:
    *  it is answered by the control-plane, so it works when there is none. */
   status: async () => {
-    const res = await fetch('/api/library-status', { credentials: 'include' });
+    const res = await fetch(basePath + '/api/library-status', { credentials: 'include' });
     if (!res.ok) return { available: false };
     return res.json();
   },
@@ -237,7 +238,7 @@ export async function setFileState(model, file, state) {
  */
 export async function libraryIntegrity() {
   try {
-    const res = await fetch('/api/library-integrity', { credentials: 'include' });
+    const res = await fetch(basePath + '/api/library-integrity', { credentials: 'include' });
     if (!res.ok) return { enabled: false, results: {} };
     return await res.json();
   } catch {
@@ -384,7 +385,7 @@ export async function addTagsTo(ids, tagNames) {
 }
 
 export async function copyLibraryObject(from, to, { move = false } = {}) {
-  const res = await fetch('/api/storage/copy', {
+  const res = await fetch(basePath + '/api/storage/copy', {
     method: 'POST',
     credentials: 'include',
     headers: { 'content-type': 'application/json' },

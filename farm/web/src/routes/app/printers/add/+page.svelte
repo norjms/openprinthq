@@ -1,4 +1,5 @@
 <script>
+  import { base as basePath } from '$app/paths';
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { api } from '$lib/api';
@@ -28,7 +29,7 @@
     { key: 'flashforge', ct: 'flashforge', name: 'FlashForge', sub: 'LAN', ex: 'Adventurer 5M #1', fields: [F.name, F.ip, F.model] },
     { key: 'mks', ct: 'mks', name: 'MKS', sub: 'WiFi module', ex: 'Sidewinder X2 #1', fields: [F.name, F.ip, F.model] },
     { key: 'snapmaker', ct: 'snapmaker', name: 'Snapmaker', sub: 'Artisan · J1 · 2.0', ex: 'Artisan #1',
-      note: 'First connection: tap Allow on the printer’s touchscreen to authorize OpenPrintHQ.',
+      note: 'First connection: tap Allow on the printer’s touchscreen to authorize ArtisanHub Farm.',
       fields: [F.name, F.ip, F.apikey, F.model] }
   ];
   const vendorByKey = Object.fromEntries(vendors.map((v) => [v.key, v]));
@@ -282,7 +283,7 @@
           catch { /* route can be set later from Settings → Connectors */ }
         }
       }
-      goto('/app/printers');
+      goto(basePath + '/app/printers');
     } catch (e2) {
       err = e2.message || 'failed to add printer';
     } finally {
@@ -295,7 +296,7 @@
 
 <div class="head">
   <h1>Add a printer</h1>
-  <a href="/app/printers" class="btn btn-ghost btn-sm">← Back</a>
+  <a href="{basePath}/app/printers" class="btn btn-ghost btn-sm">← Back</a>
 </div>
 
 {#if !selected}
@@ -385,7 +386,7 @@
           <p class="muted tiny">Reached through the <b>{connectors.find((c) => String(c.id) === String(siteConnectorId))?.name}</b> connector. {selectedSiteOnline ? '' : 'That connector is currently offline — the printer is saved and will connect when the Cloud Client is running there.'}</p>
         {/if}
       {:else}
-        <p class="muted tiny">No local connectors yet. Printers are reached directly on this instance’s network. To add printers on a remote site, set up a connector in <a href="/app/settings">Settings → Connectors</a>.</p>
+        <p class="muted tiny">No local connectors yet. Printers are reached directly on this instance’s network. To add printers on a remote site, set up a connector in <a href="{basePath}/app/settings">Settings → Connectors</a>.</p>
       {/if}
     </div>
     {/if}
@@ -464,7 +465,7 @@
     {#if err}<p class="err">{err}</p>{/if}
     <div class="flex gap">
       <button class="btn btn-primary" disabled={busy}>{busy ? 'Connecting…' : 'Add printer'}</button>
-      <a href="/app/printers" class="btn btn-ghost">Cancel</a>
+      <a href="{basePath}/app/printers" class="btn btn-ghost">Cancel</a>
     </div>
   </form>
 {/if}

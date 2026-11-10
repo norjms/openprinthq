@@ -1,9 +1,10 @@
 <script>
-  // OpenPrintHQ - collections in the tenant's library.
+  import { base as basePath } from '$app/paths';
+  // ArtisanHub Farm - collections in the tenant's library.
   // SPDX-License-Identifier: AGPL-3.0-or-later
   //
   // The library calls these projects. They are named collections here because
-  // OpenPrintHQ already has a Projects tab meaning something else, and two
+  // ArtisanHub Farm already has a Projects tab meaning something else, and two
   // things called the same word in one application is the confusion this whole
   // rewrite exists to remove.
   import { onMount } from 'svelte';
@@ -83,7 +84,7 @@
     <div class="grid">
       {#each open.models as m (m.id)}
         <div class="card">
-          <a href={`/app/files/${m.id}`}>
+          <a href={`${basePath}/app/files/${m.id}`}>
             <div class="thumb">
               {#if m.thumbnail}<img src={libraryAsset(m.thumbnail)} alt="" loading="lazy" />{:else}<span class="noimg">no preview</span>{/if}
             </div>

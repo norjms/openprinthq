@@ -1,4 +1,5 @@
-# OpenPrintHQ - single-tenant stack, for running your own farm
+# ArtisanHub Farm - the single-tenant stack. The ArtisanHub installer sets this
+# up for you; this file is for running it by hand.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 # One engine and one Spoolman, declared here, shared by every account. The
@@ -15,14 +16,14 @@
 
 services:
   router:
-    image: ${OPHQ_ROUTER_IMAGE:-ghcr.io/norjms/openprinthq-router:prod}
+    image: ${OPHQ_ROUTER_IMAGE:-ghcr.io/norjms/artisan-hub-farm-router:main}
     restart: unless-stopped
     ports:
       - "${OPHQ_HTTP_PORT:-8088}:80"
     depends_on: [web, control-plane]
 
   web:
-    image: ${OPHQ_WEB_IMAGE:-ghcr.io/norjms/openprinthq-web:prod}
+    image: ${OPHQ_WEB_IMAGE:-ghcr.io/norjms/artisan-hub-farm-web:main}
     restart: unless-stopped
     environment:
       - NODE_ENV=production
@@ -30,7 +31,7 @@ services:
       - "3000"
 
   control-plane:
-    image: ${OPHQ_CONTROL_PLANE_IMAGE:-ghcr.io/norjms/openprinthq-control-plane:prod}
+    image: ${OPHQ_CONTROL_PLANE_IMAGE:-ghcr.io/norjms/artisan-hub-farm-control-plane:main}
     restart: unless-stopped
     environment:
       - PORT=8080

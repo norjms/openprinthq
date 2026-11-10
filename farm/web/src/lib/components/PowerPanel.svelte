@@ -1,5 +1,5 @@
 <script>
-  // OpenPrintHQ — smart-plug power control + energy metering for one printer
+  // ArtisanHub Farm — smart-plug power control + energy metering for one printer
   // SPDX-License-Identifier: AGPL-3.0-or-later
   import { api } from '$lib/api';
 

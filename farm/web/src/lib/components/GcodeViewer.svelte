@@ -1,5 +1,5 @@
 <script>
-  // OpenPrintHQ — in-app G-code toolpath preview (#17).
+  // ArtisanHub Farm — in-app G-code toolpath preview (#17).
   // Fetches a library file's raw g-code (engine `/library/files/{id}/gcode`,
   // which unwraps .gcode.3mf), parses G0/G1 moves into layers, and renders a
   // top-down canvas with a layer slider. Self-contained (no WebGL / deps).

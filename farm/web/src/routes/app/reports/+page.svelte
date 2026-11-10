@@ -1,5 +1,6 @@
 <script>
-  // OpenPrintHQ — print-cost & billing reports (#25).
+  import { base as basePath } from '$app/paths';
+  // ArtisanHub Farm — print-cost & billing reports (#25).
   // Pulls the print log for a chosen period + printer, computes filament/energy
   // cost per job (falling back to grams × default filament cost when a job has
   // no stored cost), and renders a print-optimised report. "Download PDF" uses
@@ -160,7 +161,7 @@
 </div>
 
 {#if error === 'no-instance'}
-  <div class="card card-pad no-print"><p class="muted">Provision your instance from the <a href="/app">overview</a> first.</p></div>
+  <div class="card card-pad no-print"><p class="muted">Provision your instance from the <a href="{basePath}/app">overview</a> first.</p></div>
 {:else if error}
   <EngineError {error} onretry={run} class="no-print" />
 {:else}

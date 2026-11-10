@@ -1,5 +1,5 @@
 <script>
-  // OpenPrintHQ — g-code console & macros (#23).
+  // ArtisanHub Farm — g-code console & macros (#23).
   // Free-form g-code entry + curated macro chips, sent through the engine's
   // raw-gcode route (POST /printers/{id}/gcode). Send-only: the printer's
   // response isn't streamed back, so the log records what was sent and whether

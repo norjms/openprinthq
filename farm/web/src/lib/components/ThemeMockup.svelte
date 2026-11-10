@@ -5,7 +5,7 @@
   // will look without touching the rest of the page.
   import { TOKEN_KEYS } from '$lib/theme';
 
-  let { vars = {}, textScale = 1, brandName = 'OpenPrintHQ', logo = '', compact = false } = $props();
+  let { vars = {}, textScale = 1, brandName = 'ArtisanHub Farm', logo = '', compact = false } = $props();
 
   const styleStr = $derived(
     TOKEN_KEYS.map((k) => (vars[k] ? `${k}:${vars[k]}` : '')).filter(Boolean).join(';') +

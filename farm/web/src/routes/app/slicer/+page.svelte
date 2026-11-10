@@ -1,4 +1,5 @@
 <script>
+  import { base as basePath } from '$app/paths';
   import { onMount } from 'svelte';
   import { replaceState } from '$app/navigation';
   import { api } from '$lib/api';
@@ -174,13 +175,13 @@
 {#if loading}
   <div class="card card-pad muted">Checking slicer…</div>
 {:else if error === 'no-instance'}
-  <div class="card card-pad"><p class="muted">Provision your instance from the <a href="/app">overview</a> first.</p></div>
+  <div class="card card-pad"><p class="muted">Provision your instance from the <a href="{basePath}/app">overview</a> first.</p></div>
 {:else if error}
   <div class="card card-pad"><h3>Slicer unreachable</h3><p class="muted">{error}</p><button class="btn btn-ghost btn-sm" onclick={load}>Retry</button></div>
 {:else}
   <div class="card card-pad engwrap">
     <span class="eyebrow">Slicer engine</span>
-    <p class="muted small">OrcaSlicer is built in and ready. More engines are on the way — <a href="/legal#slicers">credits & licenses</a>.</p>
+    <p class="muted small">OrcaSlicer is built in and ready. More engines are on the way — <a href="{basePath}/legal#slicers">credits & licenses</a>.</p>
     <div class="engines">
       {#each ENGINES as e}
         <button type="button" class="engine" class:on={e.key === engine} class:soon={!e.ready} disabled={!e.ready}
@@ -242,7 +243,7 @@
           <ol class="steps">
             <li>Choose a slicer above, then <b>Open slicer</b>.</li>
             <li>First time only: pick your printer and filament in the slicer's setup wizard.
-              OpenPrintHQ is added as a print destination automatically.</li>
+              ArtisanHub Farm is added as a print destination automatically.</li>
             <li>Bring in a model: use <b>Open in slicer</b> on the Files page, or run
               <code>ophq-get</code> in the slicer's terminal to pull from your library.</li>
             <li>Slice, then <b>Send</b>. The plate lands in your print queue.</li>
@@ -287,7 +288,7 @@
 
   <div class="card card-pad how">
     <span class="eyebrow">How to slice</span>
-    <p class="muted">Upload a model in <a href="/app/files">Files</a>, then use its <b>Slice</b> action. Pick a printer, process and filament (searchable, and auto-filtered to what's compatible with the printer) — OrcaSlicer runs it server-side and, with "Slice &amp; queue" on, the result drops straight into your <a href="/app/queue">Print queue</a>.</p>
+    <p class="muted">Upload a model in <a href="{basePath}/app/files">Files</a>, then use its <b>Slice</b> action. Pick a printer, process and filament (searchable, and auto-filtered to what's compatible with the printer) — OrcaSlicer runs it server-side and, with "Slice &amp; queue" on, the result drops straight into your <a href="{basePath}/app/queue">Print queue</a>.</p>
   </div>
 {/if}
 

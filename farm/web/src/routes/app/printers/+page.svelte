@@ -1,4 +1,5 @@
 <script>
+  import { base as basePath } from '$app/paths';
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
   import EngineError from '$lib/components/EngineError.svelte';
@@ -46,7 +47,7 @@
   }
 
   let deploymentMode = $state('both');
-  let connectors = $state([]);            // OpenPrintHQ client apps paired to this instance
+  let connectors = $state([]);            // ArtisanHub Farm client apps paired to this instance
   let showRemoteConnect = $state(false);  // local mode: user chose to reveal the connect-a-remote-printer section
 
   // At least one Cloud Client has paired (has_client_key) with this instance.
@@ -192,11 +193,11 @@
   </div>
   <div class="flex gap">
     <button class="btn btn-ghost btn-sm" onclick={() => load(false)}>Refresh</button>
-    <a class="btn btn-ghost btn-sm" href="/app/printers/groups">Groups</a>
+    <a class="btn btn-ghost btn-sm" href="{basePath}/app/printers/groups">Groups</a>
     {#if deploymentMode === 'remote' && !hasPairedClient}
       <span class="btn btn-primary btn-sm disabled" aria-disabled="true" title="Install and pair a Cloud Client on your printers' network first — then you can add printers.">+ Add printer</span>
     {:else}
-      <a class="btn btn-primary btn-sm" href="/app/printers/add">+ Add printer</a>
+      <a class="btn btn-primary btn-sm" href="{basePath}/app/printers/add">+ Add printer</a>
     {/if}
   </div>
 </div>
@@ -206,7 +207,7 @@
 {:else if error === 'no-instance'}
   <div class="card card-pad">
     <h3>No instance yet</h3>
-    <p class="muted">Provision your instance from the <a href="/app">overview</a> to start adding printers.</p>
+    <p class="muted">Provision your instance from the <a href="{basePath}/app">overview</a> to start adding printers.</p>
   </div>
 {:else if error}
   <EngineError {error} onretry={() => load()} />
@@ -223,7 +224,7 @@
       <h3>No printers yet</h3>
       {#if hasPairedClient}
         <p class="muted">A client is paired. Add your first printer — Bambu, Klipper (Mainsail/Fluidd), Prusa, Snapmaker and more are supported out of the box.</p>
-        <a class="btn btn-primary" href="/app/printers/add">+ Add your first printer</a>
+        <a class="btn btn-primary" href="{basePath}/app/printers/add">+ Add your first printer</a>
       {:else}
         <p class="muted">Install the Cloud Client on your printers' network and pair it (above). Once a client connects, you can add printers here.</p>
         <span class="btn btn-primary disabled" aria-disabled="true" title="Waiting for a Cloud Client to pair.">+ Add your first printer</span>
@@ -235,7 +236,7 @@
       <div class="ic">🖨️</div>
       <h3>No printers yet</h3>
       <p class="muted">Your engine is live and ready. Add your first printer — Bambu, Klipper (Mainsail/Fluidd), Prusa, Snapmaker and more are supported out of the box.</p>
-      <a class="btn btn-primary" href="/app/printers/add">+ Add your first printer</a>
+      <a class="btn btn-primary" href="{basePath}/app/printers/add">+ Add your first printer</a>
     </div>
     {#if deploymentMode === 'both'}
       <div class="card card-pad"><DownloadClient /></div>
@@ -247,7 +248,7 @@
           <button class="btn btn-ghost btn-sm" onclick={() => (showRemoteConnect = false)}>Hide</button>
         </div>
       {:else}
-        <button class="btn btn-ghost btn-sm reveal" onclick={() => (showRemoteConnect = true)}>Want to add a printer not on the same network as OpenPrintHQ?</button>
+        <button class="btn btn-ghost btn-sm reveal" onclick={() => (showRemoteConnect = true)}>Want to add a printer not on the same network as ArtisanHub Farm?</button>
       {/if}
     {/if}
   {/if}
@@ -259,7 +260,7 @@
       {@const d = dispOf(p)}
       <div class="card card-pad printer">
         <div class="flex between center">
-          <a class="cardlink" href="/app/printers/{p.id}"><h3>{p.name}</h3></a>
+          <a class="cardlink" href="{basePath}/app/printers/{p.id}"><h3>{p.name}</h3></a>
           {#if d.clear}
             <button class="chip accent clearchip" onclick={(e) => clearPlate(p, e)} disabled={clearing[p.id]}>
               {clearing[p.id] ? 'Clearing…' : '✓ Clear plate'}
@@ -268,7 +269,7 @@
             <span class="chip {d.tone}">{d.label}</span>
           {/if}
         </div>
-        <a class="cardlink body" href="/app/printers/{p.id}">
+        <a class="cardlink body" href="{basePath}/app/printers/{p.id}">
           <div class="meta mono">
             {#if printerLabel(p.vendor, p.model)}<span>{printerLabel(p.vendor, p.model)}</span>{/if}
           </div>
@@ -304,9 +305,9 @@
                     onclick={() => pausePrint(p)} disabled={!p.live?.connected || acting[`${p.id}:pause`]}>❙❙</button>
             <button class="cbtn danger" data-tip="Stop print (asks to confirm)" aria-label="Stop print"
                     onclick={() => askStop(p)} disabled={!p.live?.connected}>■</button>
-            <a class="cbtn" href="/app/queue?printer={p.id}" data-tip="Open this printer's queue" aria-label="Open print queue">≣</a>
+            <a class="cbtn" href="{basePath}/app/queue?printer={p.id}" data-tip="Open this printer's queue" aria-label="Open print queue">≣</a>
             <button class="cbtn" data-tip="Open camera fullscreen in a new tab" aria-label="Open camera fullscreen in a new tab"
-                    onclick={() => window.open(`/app/printers/${p.id}/camera`, '_blank')}>⛶</button>
+                    onclick={() => window.open(`${basePath}/app/printers/${p.id}/camera`, '_blank')}>⛶</button>
           </div>
         {/if}
       </div>

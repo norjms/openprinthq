@@ -1,5 +1,5 @@
 <script>
-  // OpenPrintHQ — standalone fullscreen camera view, opened in its own tab.
+  // ArtisanHub Farm — standalone fullscreen camera view, opened in its own tab.
   // Intentionally minimal: just the live stream + a close (✕) button that closes
   // this tab. No zoom, no overlays — the tab that launched it is never touched.
   // SPDX-License-Identifier: AGPL-3.0-or-later

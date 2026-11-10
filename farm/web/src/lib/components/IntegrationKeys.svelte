@@ -1,6 +1,6 @@
 <script>
   // Integration keys (control-plane /api/api-keys): one key per app that drives this farm, such as
-  // Artisan Hub, n8n or a script. A key works on the whole engine API through OpenPrintHQ, limited by its
+  // Artisan Hub, n8n or a script. A key works on the whole engine API through ArtisanHub Farm, limited by its
   // scope; account settings never take one. The secret is shown once, at creation.
   // SPDX-License-Identifier: AGPL-3.0-or-later
   import { onMount } from 'svelte';
@@ -59,7 +59,7 @@
   <span class="eyebrow">Integration keys</span>
   <p class="muted">
     For apps that run this farm for you, such as Artisan Hub, n8n or your own scripts. The app sends the key as
-    <code>Authorization: Bearer ophqk_…</code> and can use OpenPrintHQ's API as far as the key's scope allows.
+    <code>Authorization: Bearer ophqk_…</code> and can use ArtisanHub Farm's API as far as the key's scope allows.
     Sign-in, people, keys and backups always need you, never a key.
   </p>
 
@@ -72,7 +72,7 @@
         <button class="btn btn-ghost btn-sm" onclick={() => (fresh = null)}>Done</button>
       </div>
       <p class="muted tiny">{fresh.label}, {scopeLabel(fresh.scope)}{fresh.expiresAt ? `, until ${fmt(fresh.expiresAt)}` : ', no expiry'}.
-        In Artisan Hub: Settings, Connected services, OpenPrintHQ.</p>
+        The installer connects ArtisanHub for you. To do it by hand: in ArtisanHub, Settings, Connected services, OpenPrintHQ.</p>
     </div>
   {/if}
 

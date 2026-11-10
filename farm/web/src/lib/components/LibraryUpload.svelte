@@ -1,5 +1,5 @@
 <script>
-  // OpenPrintHQ - upload into the tenant's model library.
+  // ArtisanHub Farm - upload into the tenant's model library.
   // SPDX-License-Identifier: AGPL-3.0-or-later
   //
   // Shared by the Models grid and the Folders view. It was originally only in
