@@ -17,9 +17,10 @@ import { spawn } from 'node:child_process';
 import { getInstanceForUser, getAutomation, setRouteDirect, listActiveRoutes, setPlugRoute } from './db.js';
 import { openTcpRelay, closeRelay, connectorOnline, RELAY_HOST, relayPort, proxyViaConnector, onConnectorOnline } from './connector.js';
 import { dbg } from './debuglog.js';
+import { singleTenant, engineBaseOf } from './tenancy.js';
 
 const ENGINE_PORT = 8000;
-const engineBase = (inst) => (inst && inst.subdomain ? `http://ophq-${inst.subdomain}:${ENGINE_PORT}` : null);
+const engineBase = (inst) => engineBaseOf(inst, ENGINE_PORT);
 const MAX_ENDPOINTS = 8;   // relay-port slots reserved per printer
 const CP_PORT = Number(process.env.PORT || 8080);   // control-plane port on the docker net
 
@@ -262,6 +263,9 @@ export function plugRelayPort(plugId) { return PLUG_RELAY_BASE + (Number(plugId)
 // var because relays open and close while that container is running, and env
 // can only change by recreating it.
 async function writeLanProxyMap(userId, text) {
+  // A single-tenant engine shares the printers' network, so it reaches them
+  // directly; there is no relay map to write, and no Docker socket to write it with.
+  if (singleTenant()) return;
   // The container name is derived from the subdomain; there is no
   // container_name column, so reading one silently produced undefined and this
   // whole function returned without writing anything or reporting why.

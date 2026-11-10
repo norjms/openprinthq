@@ -337,6 +337,18 @@ export const api = {
   // to answer this; the stream component used to find out by trying.
   cameraCapability: (id) => req('/camera/capability/' + id),
 
+  // Every printer's named cameras (its own, the engine's external camera, and any
+  // added by URL), with each one's health. Frames come one at a time through the
+  // control-plane, so a tile can show a camera that is not the printer's own.
+  cameras: () => req('/cameras'),
+  cameraFrameUrl: (stream, t = Date.now()) => `${base}/cameras/frame.jpeg?src=${encodeURIComponent(stream)}&t=${t}`,
+  addCamera: (printerId, name, url) =>
+    req('/cameras', { method: 'POST', body: JSON.stringify({ printer_id: Number(printerId), name, url }) }),
+  updateCamera: (id, patch) => req('/cameras/' + id, { method: 'PATCH', body: JSON.stringify(patch) }),
+  deleteCamera: (id) => req('/cameras/' + id, { method: 'DELETE' }),
+  setOwnCamera: (printerId, kind, patch) =>
+    req('/cameras/printer/' + printerId + '/' + kind, { method: 'PUT', body: JSON.stringify(patch) }),
+
   // Objects on the current plate, and skipping some of them mid-print.
   // `reload` re-pulls the 3MF from the printer over FTP, which is slow — only
   // pass it when the cached list looks wrong.

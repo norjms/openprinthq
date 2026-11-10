@@ -20,6 +20,7 @@
   import { api } from '$lib/api';
 
   import PrinterCameraPanel from '$lib/components/PrinterCameraPanel.svelte';
+  import PrinterCameras from '$lib/components/PrinterCameras.svelte';
   import PrinterProgressPanel from '$lib/components/PrinterProgressPanel.svelte';
   import PrinterControlPanel from '$lib/components/PrinterControlPanel.svelte';
   import PrinterFilamentPanel from '$lib/components/PrinterFilamentPanel.svelte';
@@ -401,6 +402,7 @@
       <PrinterCameraPanel printerId={id} printerName={meta?.name || 'printer'} status={st}
                           connected={online} isBambu={isBambu} tick={camTick}
                           onerror={() => (camAvailable = false)} onopen={openCamera} />
+      <PrinterCameras printerId={id} />
 
     {:else if s.key === 'progress'}
       <PrinterProgressPanel printerId={id} status={st} isBambu={isBambu} acting={acting} online={online}
