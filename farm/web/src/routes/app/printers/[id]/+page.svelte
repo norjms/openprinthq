@@ -256,7 +256,9 @@
   function availableKeys(live) {
     const a = new Set(['header', 'progress', 'control', 'power', 'maintenance']);
     if (!live || alerts.length) a.add('alerts');
-    if (!live || camAvailable || st?.cover_url) a.add('camera');
+    // Always: even with no feed of its own, a printer's camera list is where a
+    // camera is added (a chamber camera, or any camera for a printer without one).
+    a.add('camera');
     if (isBambu && showFilamentPanel && (!live || hasFilamentUnit || hasNozzleInfo)) a.add('filament');
     if (isKlipper) { a.add('klipper-tuning'); if (!live || online) a.add('console'); }
     if (showBedEjection) a.add('eject');
@@ -399,9 +401,11 @@
       </div>
 
     {:else if s.key === 'camera'}
-      <PrinterCameraPanel printerId={id} printerName={meta?.name || 'printer'} status={st}
-                          connected={online} isBambu={isBambu} tick={camTick}
-                          onerror={() => (camAvailable = false)} onopen={openCamera} />
+      {#if camAvailable || st?.cover_url}
+        <PrinterCameraPanel printerId={id} printerName={meta?.name || 'printer'} status={st}
+                            connected={online} isBambu={isBambu} tick={camTick}
+                            onerror={() => (camAvailable = false)} onopen={openCamera} />
+      {/if}
       <PrinterCameras printerId={id} />
 
     {:else if s.key === 'progress'}
