@@ -37,6 +37,7 @@ import { promisify } from 'node:util';
 import { createHmac } from 'node:crypto';
 import { adminPool } from './db.js';
 import { parseEngineDns } from './engine-dns.js';
+import { singleTenant, externalSpoolmanUrl, engineBaseFor } from './tenancy.js';
 
 const exec = promisify(execFile);
 
@@ -53,7 +54,8 @@ const PG_CONTAINER = process.env.OPHQ_PG_CONTAINER || '';
 const DOCKER_NETWORK = process.env.OPHQ_DOCKER_NETWORK || 'openprinthq_default';
 const RECONCILE_MS = Number(process.env.OPHQ_SPOOLMAN_RECONCILE_MS || 120000);
 
-export function spoolmanEnabled() { return !!IMAGE && !!PG_PASS; }
+// Single-tenant mode uses the one Spoolman it was given by URL and starts none.
+export function spoolmanEnabled() { return singleTenant() ? !!externalSpoolmanUrl() : !!IMAGE && !!PG_PASS; }
 
 const slug = (subdomain) => subdomain.replace(/-/g, '_');
 export const spoolmanName = (subdomain) => `ophq-spoolman-${subdomain}`;
@@ -71,7 +73,7 @@ export function dnsCurrent(hostDns, servers) {
   const have = Array.isArray(hostDns) ? hostDns : [];
   return have.length === servers.length && servers.every((d, i) => have[i] === d);
 }
-export const spoolmanUrl = (subdomain) => `http://${spoolmanName(subdomain)}:8000`;
+export const spoolmanUrl = (subdomain) => externalSpoolmanUrl() || `http://${spoolmanName(subdomain)}:8000`;
 const dbName = (subdomain) => `spoolman_${slug(subdomain)}`;
 const roleName = (subdomain) => `spoolman_${slug(subdomain)}`;
 const rolePassword = (subdomain) => createHmac('sha256', PG_PASS).update('spoolman:' + subdomain).digest('hex');
@@ -191,7 +193,7 @@ async function ensureContainer(subdomain) {
 }
 
 async function engineJson(subdomain, path, init = {}) {
-  const res = await fetch(`http://ophq-${subdomain}:8000${path}`, {
+  const res = await fetch(`${engineBaseFor(subdomain)}${path}`, {
     ...init,
     headers: { 'content-type': 'application/json', ...(init.headers || {}) },
     signal: AbortSignal.timeout(init.timeoutMs || 15000)
@@ -257,6 +259,13 @@ export async function ensureSpoolman(subdomain, { force = false, attempts = 20 }
   lastTry.set(subdomain, Date.now());
 
   const p = (async () => {
+    if (singleTenant()) {
+      // Nothing to start or attach: the Spoolman is given, and the engine
+      // reaches it on the network they share. Only switch the engine onto it.
+      const result = await ensureEngineMode(subdomain, attempts);
+      if (result.mode === 'spoolman') lastOk.set(subdomain, Date.now());
+      return { ...result, containerChanged: false, engineReattached: false, egressAttached: false };
+    }
     const net = spoolmanNet(subdomain);
     await exec('docker', ['network', 'create', '--internal', net]).catch(() => {});
     // Spoolman's own way out (filament list downloads); see "Egress" at the top.
