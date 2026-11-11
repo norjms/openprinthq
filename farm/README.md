@@ -7,11 +7,12 @@ print farm.
 
 - Single-tenant only: one engine and one Spoolman, started by the installer, and no Docker socket
   ([docs/single-tenant.md](docs/single-tenant.md)).
-- Sign-in is the hub's Authentik, through forward-auth in the farm's router.
-- Images: `ghcr.io/norjms/artisan-hub-farm-{web,control-plane,router}`, built by
-  [.github/workflows/build.yml](.github/workflows/build.yml) on every push to `main`; the web image is built
+- Sign-in is through forward-auth in the farm's router, against the sign-in the ArtisanHub installer runs.
+- Images: `ghcr.io/norjms/artisan-hub-farm-{web,control-plane,router,slicer}`, built for amd64 and arm64 from
+  their folders (`web`, `control-plane`, `infra/router`, `slicer`) and published by the maintainer; the web image is built
   with `BASE_PATH=/apps/farm`, and the router serves that path (`OPHQ_BASE_PATH`), sending the API to the
-  control-plane without it. Running the images by hand, open `http://<host>:8088/apps/farm/`.
+  control-plane without it. The slicer is OrcaSlicer, unmodified, at the version in `slicer/orcaslicer.env`.
+  Running the images by hand, open `http://<host>:8088/apps/farm/`.
 - Changes come from OpenPrintHQ: `git fetch openprinthq && git merge openprinthq/main`. OpenPrintHQ stays its
   own product.
 
