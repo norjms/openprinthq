@@ -1,0 +1,139 @@
+# ArtisanHub Farm's slicing service: OrcaSlicer's command line behind an HTTP API.
+#
+# Built for amd64 and arm64, each on its own kind of runner, whenever slicer/ changes on main. Each build is
+# started and must slice a cube with the OrcaSlicer version in slicer/orcaslicer.env before anything is
+# pushed. Tags: that version, latest, and sha-<short>. The ArtisanHub installer pins the version's digest,
+# and pins linuxserver/orcaslicer at the same version.
+name: slicer
+
+on:
+  push:
+    branches: [main]
+    paths: ["slicer/**", ".github/workflows/slicer.yml"]
+  pull_request:
+    paths: ["slicer/**", ".github/workflows/slicer.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: slicer-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/artisan-hub-farm-slicer
+
+jobs:
+  build:
+    name: slicer ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: v
+        name: Read the OrcaSlicer version
+        run: |
+          set -euo pipefail
+          set -a; . slicer/orcaslicer.env; set +a
+          {
+            echo "version=$ORCASLICER_VERSION"
+            echo "amd64=$ORCASLICER_AMD64_SHA256"
+            echo "arm64=$ORCASLICER_ARM64_SHA256"
+            echo "api=$ORCA_SLICER_API_COMMIT"
+            echo "short=$(echo "$GITHUB_SHA" | cut -c1-7)"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: slicer
+          platforms: linux/${{ matrix.arch }}
+          load: true
+          provenance: false
+          tags: slicer-test:${{ matrix.arch }}
+          build-args: |
+            ORCASLICER_VERSION=${{ steps.v.outputs.version }}
+            ORCASLICER_AMD64_SHA256=${{ steps.v.outputs.amd64 }}
+            ORCASLICER_ARM64_SHA256=${{ steps.v.outputs.arm64 }}
+            ORCA_SLICER_API_COMMIT=${{ steps.v.outputs.api }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=slicer-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=slicer-${{ matrix.arch }}
+
+      - name: Slice a cube with OrcaSlicer ${{ steps.v.outputs.version }}
+        run: |
+          set -euo pipefail
+          docker run -d --name slicer -p 3000:3000 slicer-test:${{ matrix.arch }}
+          for _ in $(seq 60); do
+            if curl -fsS localhost:3000/health > health.json 2>/dev/null; then break; fi
+            sleep 2
+          done
+          cat health.json
+          test "$(jq -r .checks.orcaslicer.version health.json)" = "${{ steps.v.outputs.version }}"
+          python3 slicer/smoke.py http://localhost:3000 "${{ steps.v.outputs.version }}"
+
+      - name: Logs
+        if: failure()
+        run: docker logs slicer || true
+
+      - uses: docker/login-action@v3
+        if: github.event_name != 'pull_request'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push
+        if: github.event_name != 'pull_request'
+        run: |
+          set -euo pipefail
+          tag="$IMAGE:${{ steps.v.outputs.version }}-sha-${{ steps.v.outputs.short }}-${{ matrix.arch }}"
+          docker tag slicer-test:${{ matrix.arch }} "$tag"
+          docker push "$tag"
+
+  publish:
+    name: publish the version's tags
+    needs: build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: v
+        run: |
+          set -euo pipefail
+          . slicer/orcaslicer.env
+          echo "version=$ORCASLICER_VERSION" >> "$GITHUB_OUTPUT"
+          echo "short=$(echo "$GITHUB_SHA" | cut -c1-7)" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: One tag for both architectures
+        run: |
+          set -euo pipefail
+          v="${{ steps.v.outputs.version }}"
+          s="${{ steps.v.outputs.short }}"
+          docker buildx imagetools create \
+            -t "$IMAGE:$v" -t "$IMAGE:latest" -t "$IMAGE:sha-$s" \
+            "$IMAGE:$v-sha-$s-amd64" "$IMAGE:$v-sha-$s-arm64"
+          docker buildx imagetools inspect "$IMAGE:$v"

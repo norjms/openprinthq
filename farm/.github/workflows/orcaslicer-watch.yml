@@ -1,0 +1,74 @@
+# Keep ArtisanHub Farm on the newest OrcaSlicer, in step with linuxserver/orcaslicer.
+#
+# Every day: when OrcaSlicer has a newer full release than slicer/orcaslicer.env names, and linuxserver.io
+# has published linuxserver/orcaslicer at that same version, open a pull request moving the farm's slicer to
+# it, with the release's checksums. Until linuxserver.io has it, nothing moves, so the farm's slicer and the
+# OrcaSlicer desktop the ArtisanHub installer can add always run the same version.
+name: orcaslicer-watch
+
+on:
+  schedule:
+    - cron: "17 9 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: next
+        name: Find a release both images have
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          . slicer/orcaslicer.env
+          gh api repos/OrcaSlicer/OrcaSlicer/releases/latest > release.json
+          version="$(jq -r .tag_name release.json | sed 's/^v//')"
+          if [ "$(jq -r .prerelease release.json)" != "false" ] || [ -z "$version" ]; then
+            echo "no full release"; exit 0
+          fi
+          if [ "$version" = "$ORCASLICER_VERSION" ]; then
+            echo "OrcaSlicer $version: up to date"; exit 0
+          fi
+          code="$(curl -s -o /dev/null -w '%{http_code}' \
+            "https://hub.docker.com/v2/namespaces/linuxserver/repositories/orcaslicer/tags/$version")"
+          if [ "$code" != "200" ]; then
+            echo "OrcaSlicer $version: linuxserver/orcaslicer has no $version yet, so the farm waits"; exit 0
+          fi
+          sum() { jq -r --arg f "$1" '.assets[] | select(.name == $f) | .digest' release.json | sed 's/^sha256://'; }
+          amd64="$(sum "OrcaSlicer_Linux_AppImage_Ubuntu2404_V$version.AppImage")"
+          arm64="$(sum "OrcaSlicer_Linux_AppImage_Ubuntu2404_aarch64_V$version.AppImage")"
+          if [ -z "$amd64" ] || [ -z "$arm64" ]; then
+            echo "OrcaSlicer $version: no Linux AppImages with checksums for both architectures" >&2; exit 1
+          fi
+          sed -i \
+            -e "s/^ORCASLICER_VERSION=.*/ORCASLICER_VERSION=$version/" \
+            -e "s/^ORCASLICER_AMD64_SHA256=.*/ORCASLICER_AMD64_SHA256=$amd64/" \
+            -e "s/^ORCASLICER_ARM64_SHA256=.*/ORCASLICER_ARM64_SHA256=$arm64/" \
+            slicer/orcaslicer.env
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Open a pull request
+        if: steps.next.outputs.version != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.next.outputs.version }}
+        run: |
+          set -euo pipefail
+          branch="orcaslicer-$VERSION"
+          if git ls-remote --exit-code --heads origin "$branch" > /dev/null; then
+            echo "a pull request for OrcaSlicer $VERSION is already open"; exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git commit -am "Slicer: OrcaSlicer $VERSION"
+          git push origin "$branch"
+          gh pr create --base main --head "$branch" --title "Slicer: OrcaSlicer $VERSION" --body \
+            "OrcaSlicer $VERSION is a full release, and linuxserver/orcaslicer has published $VERSION too, so the farm's slicer and the OrcaSlicer desktop stay at one version. Checksums are the release's own. Merging builds and publishes the slicer image; the ArtisanHub installer then pins both images at $VERSION."

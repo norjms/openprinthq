@@ -17,10 +17,9 @@
   import LibraryCollections from '$lib/components/LibraryCollections.svelte';
   import LibrarySettings from '$lib/components/LibrarySettings.svelte';
   import LibraryUpload from '$lib/components/LibraryUpload.svelte';
-  import { library, libraryAsset, previewFile, objectKeyFor, fileStates,
+  import { library, libraryAsset, objectKeyFor,
            addTagsTo, inBatches, copyLibraryObject, deleteLibraryObject,
            libraryIntegrity, integrityForModel, describeFindings } from '$lib/library.js';
-  import { goto } from '$app/navigation';
 
   let state_ = $state('checking'); // checking | library | fallback
   let error = $state(null);
@@ -30,12 +29,8 @@
   let view = $state('models'); // models | folders | collections | settings
   let uploader;                // LibraryUpload, for the drop zone below
   let dragging = $state(false);
-  // Multi-select. A slicer session is created once with a fixed environment, so
-  // opening several models means naming them all before it starts rather than
-  // handing them to a running desktop one at a time.
+  // Multi-select, for the bulk actions below.
   let selected = $state(new Set());
-  let selecting = $state(false);
-  let sendError = $state(null);
   let bulkBusy = $state(false);
   let bulkNote = $state(null);
   let collections = $state([]);
@@ -162,37 +157,6 @@
     });
   }
 
-  async function sendSelectedToSlicer() {
-    sendError = null;
-    const chosen = models.filter((m) => selected.has(m.id));
-    if (chosen.length === 0) return;
-    selecting = true;
-    try {
-      // The grid rows carry no file list, so each model has to be read for the
-      // file worth slicing. Done in parallel: serially this is one round trip
-      // per model and feels broken on a large selection.
-      const full = await Promise.all(chosen.map((m) => library.model(m.id).catch(() => null)));
-      // Prefer whatever was marked known good. If someone has said which plate
-      // prints, opening a different one is the wrong answer even when it is a
-      // better file format.
-      const keys = full.map((m) => {
-        if (!m) return '';
-        const st = fileStates(m);
-        const good = (m.files || []).find((f) => st[objectKeyFor(f)] === 'known-good');
-        return objectKeyFor(good || previewFile(m));
-      }).filter(Boolean);
-      if (keys.length === 0) { sendError = 'None of those models has a file that can be opened.'; return; }
-      const q = new URLSearchParams();
-      for (const k of keys) q.append('keys', k);
-      if (keys.length === 1) q.set('name', chosen[0].name);
-      goto(basePath + '/app/slicer?' + q.toString());
-    } catch (e) {
-      sendError = e.message;
-    } finally {
-      selecting = false;
-    }
-  }
-
   // After an upload the library has to scan before a file becomes a model, and
   // that is asynchronous. Reload once now and once shortly after, so the grid
   // catches up without the person having to work out that they should refresh.
@@ -305,9 +269,6 @@
       <button class="act" onclick={selectAllOnPage} disabled={models.length === 0}>Select all on this page</button>
     {:else}
       <span>{selected.size} selected</span>
-      <button class="act" onclick={sendSelectedToSlicer} disabled={selecting || bulkBusy}>
-        {selecting ? 'Opening...' : 'Send to slicer'}
-      </button>
       <button class="act" onclick={bulkTag} disabled={bulkBusy}>Add tags</button>
       <select disabled={bulkBusy} onchange={(e) => { bulkCategory(e.currentTarget.value); e.currentTarget.value = ''; }}>
         <option value="">Set category...</option>
@@ -326,7 +287,6 @@
     {/if}
     {#if bulkBusy}<span class="muted">Working...</span>{/if}
     {#if bulkNote}<span class="muted">{bulkNote}</span>{/if}
-    {#if sendError}<span class="warn">{sendError}</span>{/if}
   </div>
 
   {#if error}<p class="warn">{error}</p>{/if}

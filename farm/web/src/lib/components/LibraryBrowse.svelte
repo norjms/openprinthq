@@ -9,7 +9,6 @@
   import { onMount } from 'svelte';
   import { library, libraryAsset, makeLibraryFolder,
            objectKeyFor, deleteLibraryObject, copyLibraryObject } from '$lib/library.js';
-  import { goto } from '$app/navigation';
   import LibraryUpload from '$lib/components/LibraryUpload.svelte';
 
   let path = $state('');
@@ -69,14 +68,6 @@
     e.preventDefault();
     dragging = false;
     uploader?.send(e.dataTransfer?.files);
-  }
-
-  const sliceable = (f) => ['stl', '3mf', 'step', 'obj', '3ds', 'amf'].includes((f.ext || f.type || '').toLowerCase());
-
-  function openInSlicer(f) {
-    const key = objectKeyFor(f);
-    if (!key) { notice = 'That file has no object key, so it cannot be opened in the slicer.'; return; }
-    goto(basePath + '/app/slicer?' + new URLSearchParams({ key, name: f.name }).toString());
   }
 
   async function relocate(f, move) {
@@ -173,9 +164,6 @@
           <span class="fname">{f.name}</span>
         {/if}
         <span class="fsize muted">{fmtSize(f.size)}</span>
-        {#if sliceable(f)}
-          <button class="act" onclick={() => openInSlicer(f)}>Open in slicer</button>
-        {/if}
         <a class="act" href={libraryAsset(f.url)} download={f.name}>Download</a>
         <button class="act" onclick={() => relocate(f, true)} disabled={busy === f.url}>Move</button>
         <button class="act" onclick={() => relocate(f, false)} disabled={busy === f.url}>Copy</button>
