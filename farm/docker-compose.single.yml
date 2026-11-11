@@ -10,6 +10,11 @@
 #   cp .env.single.example .env   # then fill in the values
 #   docker compose -f docker-compose.single.yml up -d
 #
+# The published images serve the farm at /apps/farm: the web app is built for
+# that path and the router serves it (OPHQ_BASE_PATH), so open
+# http://<this machine>:8088/apps/farm/. For the root, build the web and router
+# images with BASE_PATH empty.
+#
 # Put it behind a reverse proxy that runs Authentik forward-auth for port 80 of
 # the router (see docs/single-tenant.md). Nothing here is published except the
 # router and go2rtc's WebRTC media port.

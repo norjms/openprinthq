@@ -21,6 +21,10 @@ cp .env.single.example .env      # fill in the secrets: openssl rand -hex 32
 docker compose -f docker-compose.single.yml up -d
 ```
 
+The published images serve the farm at `/apps/farm` (`http://<this machine>:8088/apps/farm/`): the web image is
+built for that path, and the router serves it and sends the API to the control-plane without it. For the root,
+build the web and router images with `BASE_PATH` empty.
+
 Then put it behind your reverse proxy with Authentik forward-auth (below). The first person to sign in becomes
 the owner.
 

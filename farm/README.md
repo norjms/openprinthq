@@ -10,7 +10,8 @@ print farm.
 - Sign-in is the hub's Authentik, through forward-auth in the farm's router.
 - Images: `ghcr.io/norjms/artisan-hub-farm-{web,control-plane,router}`, built by
   [.github/workflows/build.yml](.github/workflows/build.yml) on every push to `main`; the web image is built
-  with `BASE_PATH=/apps/farm`.
+  with `BASE_PATH=/apps/farm`, and the router serves that path (`OPHQ_BASE_PATH`), sending the API to the
+  control-plane without it. Running the images by hand, open `http://<host>:8088/apps/farm/`.
 - Changes come from OpenPrintHQ: `git fetch openprinthq && git merge openprinthq/main`. OpenPrintHQ stays its
   own product.
 
