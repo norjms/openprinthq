@@ -8,7 +8,7 @@ COPY . .
 # Deployed commit SHAs for the /legal AGPL §13 source offer (optional; empty by default).
 ARG OPHQ_APP_COMMIT=""
 ARG OPHQ_ENGINE_COMMIT=""
-# Path the site is served under (ArtisanHub Farm: /farm). Empty = site root.
+# Path the site is served under (ArtisanHub Farm: /apps/farm). Empty = site root.
 ARG BASE_PATH=""
 ENV BASE_PATH=$BASE_PATH
 ENV OPHQ_APP_COMMIT=$OPHQ_APP_COMMIT

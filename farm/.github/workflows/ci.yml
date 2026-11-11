@@ -30,10 +30,10 @@ jobs:
       - name: Build (at the site root, as upstream)
         working-directory: web
         run: npm run build
-      - name: Build under /farm, as the hub serves it
+      - name: Build under /apps/farm, as the hub serves it
         working-directory: web
         env:
-          BASE_PATH: /farm
+          BASE_PATH: /apps/farm
         run: npm run build
 
   control-plane:

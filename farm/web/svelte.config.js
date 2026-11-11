@@ -6,7 +6,7 @@ const config = {
   preprocess: vitePreprocess(),
   kit: {
     adapter: adapter(),
-    // ArtisanHub Farm is served under the hub's name at /farm (BASE_PATH=/farm
+    // ArtisanHub Farm is served under the hub's name at /apps/farm (BASE_PATH=/apps/farm
     // at build time). Empty means the site root, as upstream OpenPrintHQ.
     paths: { base: process.env.BASE_PATH || '', relative: false },
     alias: {

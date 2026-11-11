@@ -3,7 +3,7 @@
 # Every push to main builds web, control-plane and router for amd64 and arm64
 # and tags them sha-<short> and main. The ArtisanHub installer pins them by
 # digest, so a new build changes nothing until the installer is moved to it.
-# The web image is built for the path the hub serves it under, /farm.
+# The web image is built for the path the hub serves it under, /apps/farm.
 name: build
 
 on:
@@ -56,7 +56,7 @@ jobs:
           push: true
           provenance: false
           build-args: |
-            BASE_PATH=/farm
+            BASE_PATH=/apps/farm
             OPHQ_APP_COMMIT=${{ github.sha }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
