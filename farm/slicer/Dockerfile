@@ -3,6 +3,8 @@
 # OrcaSlicer is the official release, unmodified, taken from its Linux AppImage and
 # checked against the release's SHA-256. The version and checksums come from
 # slicer/orcaslicer.env, passed in as build arguments by the build workflow.
+# Debian, not Ubuntu, underneath: the same libraries OrcaSlicer's Ubuntu 24.04 build
+# needs, from Debian's own mirrors.
 ARG ORCASLICER_VERSION
 ARG ORCA_SLICER_API_COMMIT
 
@@ -18,14 +20,11 @@ RUN test -n "$ORCA_SLICER_API_COMMIT" \
  && npm run build \
  && npm prune --omit=dev
 
-FROM ubuntu:24.04 AS orca
+FROM node:22-bookworm AS orca
 ARG TARGETARCH
 ARG ORCASLICER_VERSION
 ARG ORCASLICER_AMD64_SHA256
 ARG ORCASLICER_ARM64_SHA256
-RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates curl \
- && rm -rf /var/lib/apt/lists/*
 WORKDIR /opt
 RUN set -eu; \
     test -n "$ORCASLICER_VERSION"; \
@@ -41,13 +40,13 @@ RUN set -eu; \
     ./orca.AppImage --appimage-extract >/dev/null; \
     rm orca.AppImage
 
-FROM ubuntu:24.04
+FROM debian:trixie-slim
 ARG ORCASLICER_VERSION
 ARG ORCA_SLICER_API_COMMIT
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       ca-certificates curl \
-      libgl1 libgl1-mesa-dri libegl1 libopengl0 libgtk-3-0 libsm6 libice6 \
+      libgl1 libgl1-mesa-dri libegl1 libopengl0 libgtk-3-0t64 libsm6 libice6 \
       libgstreamer1.0-0 libgstreamer-plugins-base1.0-0 libwebkit2gtk-4.1-0 \
  && rm -rf /var/lib/apt/lists/*
 COPY --from=api /usr/local/bin/node /usr/local/bin/node
