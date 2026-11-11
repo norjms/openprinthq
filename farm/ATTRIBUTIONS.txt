@@ -28,8 +28,11 @@ OrcaSlicer — https://github.com/SoftFever/OrcaSlicer
     • BambuStudio  — Copyright (C) Bambu Lab — AGPL-3.0
     • PrusaSlicer  — Copyright (C) Prusa Research — AGPL-3.0
     • Slic3r       — Copyright (C) Alessandro Ranellucci and contributors — AGPL-3.0
+  ArtisanHub Farm runs the official Linux release, unmodified, at the version
+  named in slicer/orcaslicer.env.
 orca-slicer-api — https://github.com/maziggy/orca-slicer-api
-  HTTP wrapper used to run OrcaSlicer as a sidecar service.
+  Copyright (C) AFKFelix, maziggy and contributors. Licensed AGPL-3.0. HTTP
+  wrapper used to run OrcaSlicer as a sidecar service, built by slicer/Dockerfile.
 
 
 FONTS  (bundled in the web app; SIL Open Font License 1.1)
@@ -59,24 +62,12 @@ Print engine (engine)
     three.js, DOMPurify, and others — each under its own license (mostly MIT).
 
 
-IN-BROWSER SLICER WORKSPACES
+OPTIONAL ORCASLICER DESKTOP
 ---------------------------
-Kasm Workspaces — https://kasmweb.com
-  Copyright (C) Kasm Technologies. Proprietary; used under the terms of its
-  Community Edition license. OpenPrintHQ streams containerised slicer sessions
-  through Kasm and provisions them via its Developer API. Kasm is not
-  redistributed with OpenPrintHQ and must be installed separately by the
-  operator.
-KasmVNC — https://github.com/kasmtech/KasmVNC
-  Copyright (C) Kasm Technologies and contributors. Licensed GPL-2.0.
-  Provides the streaming layer inside Kasm workspace images.
-Bambu Studio — https://github.com/bambulab/BambuStudio
-  Copyright (C) Bambu Lab. Licensed AGPL-3.0. Offered as a slicer workspace.
-PrusaSlicer — https://github.com/prusa3d/PrusaSlicer
-  Copyright (C) Prusa Research. Licensed AGPL-3.0. Offered as a slicer workspace.
-rclone — https://rclone.org
-  Copyright (C) Nick Craig-Wood and contributors. Licensed MIT. Used by Kasm's
-  storage mapping to present object storage inside a session. Not bundled.
+linuxserver/orcaslicer: https://github.com/linuxserver/docker-orcaslicer
+  Copyright (C) linuxserver.io. Licensed GPL-3.0. The same OrcaSlicer version
+  as the slicing service, as a desktop in the browser, which the ArtisanHub
+  installer can add. Not part of this repository and not redistributed by it.
 
 
 OBJECT STORAGE

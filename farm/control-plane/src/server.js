@@ -17,19 +17,15 @@ import { migrate, upsertUser, getUserByEmail, getUserById, getInstanceForUser, g
   listUsers, listAllInstances, countUsers,
   getAppSetting, setAppSetting, setSecretSetting, friendlyModelName,
   getUserLogSink, setUserLogSink, listUserLogSinks,
-  getKasmRow, setKasmIdentity, setKasmSession, clearKasmSession,
   createPrintHostToken, resolvePrintHostToken, purgePrintHostTokens,
   listPrintHostTokens, revokePrintHostToken, countPrintHostTokens,
-  purgeExpiredPrintHostTokens, userByKasmId,
+  purgeExpiredPrintHostTokens,
   getTenantStorage, setTenantStorage, setTenantQuota, listTenantStorage } from './db.js';
 import { createAuthentikUser, linkAuthentikUser, authentikUserExists, authentikConfigured, OWNER_GROUP } from './authentik.js';
 import { garageConfigured, ensureTenantStorage, usage as storageUsage,
   setQuota as setBucketQuota, defaultQuotaBytes, clusterHealth as storageHealth,
   s3EndpointPublic, s3EndpointLan, s3EndpointEngine, s3PathPrefix, s3Region, presignTtl } from './garage.js';
 import { presign, signedRequest } from './s3sign.js';
-import { kasmConfigured, kasmEngines, kasmImageFor, ensureKasmUser, ensureSession as ensureKasmSession,
-  findSession as findKasmSession, destroySession as destroyKasmSession, connectUrl as kasmConnectUrl,
-  sessionStatus as kasmSessionStatus } from './kasm.js';
 import { registerConnectorRoutes, connectorOnline, isConnectorOnline, proxyViaConnector, openTcpStream, connectorEvictionCount, connectorHasDuplicateAgents, connectorClientIdentity } from './connector.js';
 import { provisionForUser, ensureEngineBucketMount, ensureVault, vaultScan, vaultBase, vaultEnabled, joinVaultNetwork } from './provisioner.js';
 import { ensureSpoolman, touchSpoolman, spoolmanEnabled } from './spoolman.js';
@@ -160,197 +156,48 @@ async function requireOwner(req, reply) {
   return user;
 }
 
-// ---- in-browser slicer (Kasm) -------------------------------------------
-// The Slice tab embeds a containerised desktop slicer. The control-plane owns
-// the Kasm identity for each user and the lifecycle of their session, so the
-// browser never sees an API key and never picks its own image.
-function slicerEngine(raw) {
-  const engines = kasmEngines();
-  const want = String(raw || '').toLowerCase();
-  return engines.find((e) => e.toLowerCase() === want) || engines[0] || null;
+// ---- OrcaSlicer ------------------------------------------------------------
+// ArtisanHub Farm has one slicer, OrcaSlicer: its command line runs headless in
+// the slicing service (OPHQ_SLICER_URL), and the ArtisanHub installer can add
+// the same version of OrcaSlicer as a desktop in the browser
+// (OPHQ_ORCASLICER_DESKTOP_URL). The Slice tab shows both and how to send plates
+// from the desktop to the farm.
+const SLICER_URL = (process.env.OPHQ_SLICER_URL || 'http://orca-slicer-api:3000').replace(/\/+$/, '');
+const DESKTOP_URL = (process.env.OPHQ_ORCASLICER_DESKTOP_URL || '').replace(/\/+$/, '');
+// Where the desktop sends plates: on the installation's own network, past the proxy, so a
+// certificate the desktop does not trust never matters. Computers use the public address.
+const DESKTOP_PRINTHOST = (process.env.OPHQ_ORCASLICER_PRINTHOST_URL || '').replace(/\/+$/, '');
+
+async function slicerVersion() {
+  try {
+    const r = await fetch(SLICER_URL + '/health', { signal: AbortSignal.timeout(3000) });
+    if (!r.ok) return null;
+    const d = await r.json();
+    return d?.checks?.orcaslicer?.version || null;
+  } catch { return null; }
 }
 
-app.get('/api/slicer/engines', async (req, reply) => {
+app.get('/api/slicer/info', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
-  return { configured: kasmConfigured(), engines: kasmEngines() };
+  return {
+    version: await slicerVersion(),
+    desktop_url: DESKTOP_URL ? DESKTOP_URL + '/' : null,
+    print_host: PUBLIC_URL ? PUBLIC_URL + '/printhost' : null,
+    desktop_print_host: DESKTOP_URL ? (DESKTOP_PRINTHOST || null) : null,
+    print_host_keys: await countPrintHostTokens(user.id, 'slicer').catch(() => 0)
+  };
 });
 
-// Current session without starting anything. Lets the tab render a live iframe
-// on reload instead of cold-starting a second container.
-app.get('/api/slicer/session', async (req, reply) => {
+// A key for OrcaSlicer to send plates here, as an OctoPrint print host. It is
+// shown once and does not expire; making a new one revokes the last, so a key
+// that leaked is one click from useless.
+app.post('/api/slicer/printhost-key', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
-  if (!kasmConfigured()) return { configured: false, running: false };
-  const row = await getKasmRow(user.id);
-  const engine = slicerEngine(req.query?.engine || row?.engine);
-  const imageId = engine && kasmImageFor(engine);
-  if (!row?.kasm_user_id || !row?.kasm_id || !imageId) return { configured: true, running: false, engine };
-  try {
-    const live = await findKasmSession(row.kasm_user_id, imageId);
-    if (!live || String(live.kasm_id).replace(/-/g, '') !== String(row.kasm_id).replace(/-/g, '')) {
-      await clearKasmSession(user.id);
-      return { configured: true, running: false, engine };
-    }
-    const s = await ensureKasmSession(row.kasm_user_id, imageId, { kasmId: row.kasm_id, sessionToken: row.session_token });
-    return { configured: true, running: true, engine, status: s.status, url: s.url };
-  } catch (e) {
-    req.log.error({ err: e.message }, 'slicer session lookup failed');
-    return { configured: true, running: false, engine, error: e.message };
-  }
-});
-
-// Start or reattach. Idempotent from the caller's point of view even though
-// Kasm's own request_kasm is not.
-app.post('/api/slicer/session', async (req, reply) => {
-  const user = await requireUser(req, reply); if (!user) return;
-  if (!kasmConfigured()) { reply.code(503).send({ error: 'slicer not configured' }); return; }
-  const engine = slicerEngine(req.body?.engine);
-  const imageId = engine && kasmImageFor(engine);
-  if (!imageId) { reply.code(400).send({ error: 'unknown slicer engine' }); return; }
-
-  const row = await getKasmRow(user.id);
-  try {
-    const acct = await ensureKasmUser(user.email, { existingId: row?.kasm_user_id || null });
-    if (acct.userId !== row?.kasm_user_id) await setKasmIdentity(user.id, acct.userId, acct.username);
-
-    // Switching engines means a different image, so retire the old session
-    // rather than leaving it parked on the host.
-    if (row?.kasm_id && row.engine && row.engine !== engine) {
-      try { await destroyKasmSession(acct.userId, row.kasm_id); } catch { /* best effort */ }
-      await clearKasmSession(user.id);
-    }
-
-    // Opening a model into a session that is already running needs a restart:
-    // the model reaches the container through its environment, and that is
-    // fixed at creation. The page asks the user first, because a restart throws
-    // away whatever is unsaved on the running plate; this only acts when told.
-    if (req.body?.restart === true) {
-      const cur = await getKasmRow(user.id);
-      if (cur?.kasm_id) {
-        try { await destroyKasmSession(acct.userId, cur.kasm_id); } catch { /* best effort */ }
-        await clearKasmSession(user.id);
-      }
-    }
-
-    // Reattach BEFORE minting anything. Minting purges the user's previous
-    // print-host tokens, and a reused container still holds the old one in its
-    // environment, so minting on a reattach left the running slicer unable to
-    // send plates, and handed back a token no container has.
-    {
-      const cur = await getKasmRow(user.id);
-      if (cur?.kasm_id && cur?.session_token) {
-        const live = await findKasmSession(acct.userId, imageId);
-        if (live && String(live.kasm_id).replace(/-/g, '') === String(cur.kasm_id).replace(/-/g, '')) {
-          await setKasmSession(user.id, engine, cur.kasm_id, cur.session_token);
-          return { engine, status: live.operational_status, url: kasmConnectUrl(cur.kasm_id, acct.userId, cur.session_token),
-                   reused: true, provisioned: acct.created, printHost: null, envInjected: false };
-        }
-      }
-    }
-
-    // Mint the print-host token BEFORE launching, because environment can only
-    // be injected at container creation. Old tokens are dropped first: a session
-    // is the lifetime, so leaving previous ones valid would quietly accumulate
-    // long-lived credentials for a desktop the user controls.
-    let printHost = null;
-    let environment = null;
-    try {
-      await purgePrintHostTokens(user.id);
-      const token = randomBytes(24).toString('base64url');
-      const expires = new Date(Date.now() + 12 * 60 * 60 * 1000);
-      await createPrintHostToken(user.id, token, 'slicer:' + engine, expires);
-      printHost = { url: PUBLIC_URL + '/printhost', apiKey: token, expiresAt: expires.toISOString() };
-      environment = {
-        OPHQ_PRINTHOST_URL: printHost.url,
-        OPHQ_PRINTHOST_KEY: token,
-        OPHQ_URL: PUBLIC_URL
-      };
-      // Opening straight into a model: the session fetches this file into its
-      // Uploads folder at startup, so the user is not hunting through a file
-      // dialog that cannot see their own machine.
-      const openFile = req.body?.fileId ?? req.body?.file_id;
-      if (openFile != null && String(openFile).trim() !== '') {
-        environment.OPHQ_OPEN_FILE_ID = String(openFile);
-      }
-      // The model library indexes the same bucket as the engine but with its
-      // own ids, so a file opened from the Files tab cannot be named by engine
-      // file id. It is named by OBJECT KEY instead, which both indexes agree
-      // on, and the session fetches it with the print-host token it already
-      // holds rather than needing storage credentials of its own.
-      // One key, or several. A session is created once with a fixed
-      // environment, so opening five models means naming all five up front
-      // rather than handing them over one at a time to a running desktop.
-      const keys = []
-        .concat(req.body?.key ?? [], req.body?.keys ?? [])
-        .filter((k) => typeof k === 'string' && k.trim() !== '')
-        .map((k) => k.replace(/^\/+/, ''));
-      if (keys.length === 1) {
-        environment.OPHQ_OPEN_KEY = keys[0];
-      } else if (keys.length > 1) {
-        // Newline separated, because an object key may legitimately contain a
-        // comma and splitting on one would fetch two files that do not exist.
-        environment.OPHQ_OPEN_KEYS = keys.join('\n');
-      }
-
-      // Storage credentials, so the session can mount the tenant's files at
-      // ~/OpenPrintHQ instead of only being able to fetch one model at a time.
-      //
-      // This is the one place a raw S3 key leaves this service, and it is a
-      // deliberate exception rather than a drift back from presigned URLs: a
-      // FUSE mount signs thousands of requests over hours and cannot ask us for
-      // each one. The key is the tenant's own, scoped to their bucket, and the
-      // container it lands in is a desktop that tenant already controls, so it
-      // grants nothing they did not already have.
-      //
-      // The LAN endpoint, not the public one. Sessions run on their own VLAN;
-      // signing the public address sends every read out to the edge and back,
-      // and behind a CDN it does not arrive at all.
-      try {
-        if (garageConfigured()) {
-          const st = await getTenantStorage(user.id);
-          if (st?.bucket && st?.access_key_id && st?.secret_key) {
-            environment.OPHQ_S3_ENDPOINT = s3EndpointLan();
-            environment.OPHQ_S3_BUCKET = st.bucket;
-            environment.OPHQ_S3_KEY = st.access_key_id;
-            environment.OPHQ_S3_SECRET = st.secret_key;
-            environment.OPHQ_S3_REGION = s3Region();
-          }
-        }
-      } catch (e) {
-        // A session without the library folder is still a working slicer.
-        req.log.warn({ err: e.message }, 'no storage credentials for the slicer session');
-      }
-    } catch (e) {
-      // A missing print host makes the slicer read-only, which is worth logging
-      // but not worth failing the launch over.
-      req.log.error({ err: e.message }, 'could not mint print-host token');
-    }
-
-    const fresh = await getKasmRow(user.id);
-    const s = await ensureKasmSession(acct.userId, imageId,
-      fresh?.kasm_id ? { kasmId: fresh.kasm_id, sessionToken: fresh.session_token } : null,
-      environment);
-    await setKasmSession(user.id, engine, s.kasmId, s.sessionToken);
-
-    // A reused session was created before this token existed, so its injected
-    // environment is stale. Say so rather than letting the caller assume the
-    // slicer inside it is configured.
-    return { engine, status: s.status, url: s.url, reused: s.reused, provisioned: acct.created,
-             printHost, envInjected: !!environment && !s.reused };
-  } catch (e) {
-    req.log.error({ err: e.message }, 'slicer session start failed');
-    reply.code(502).send({ error: e.message });
-  }
-});
-
-app.delete('/api/slicer/session', async (req, reply) => {
-  const user = await requireUser(req, reply); if (!user) return;
-  const row = await getKasmRow(user.id);
-  if (!row?.kasm_user_id || !row?.kasm_id) return { ok: true, stopped: false };
-  try { await destroyKasmSession(row.kasm_user_id, row.kasm_id); } catch (e) {
-    req.log.warn({ err: e.message }, 'destroy_kasm failed');
-  }
-  await clearKasmSession(user.id);
-  return { ok: true, stopped: true };
+  if (!PUBLIC_URL) { reply.code(503).send({ error: 'OPHQ_PUBLIC_URL is not set' }); return; }
+  await purgePrintHostTokens(user.id);
+  const token = randomBytes(24).toString('base64url');
+  await createPrintHostToken(user.id, token, 'orcaslicer', null);
+  return { url: PUBLIC_URL + '/printhost', api_key: token, host_type: 'octoprint' };
 });
 
 // ---- print host (OctoPrint-compatible) ----------------------------------
@@ -362,8 +209,7 @@ app.delete('/api/slicer/session', async (req, reply) => {
 // already speaks it: OrcaSlicer, PrusaSlicer and Cura all ship an OctoPrint
 // host type. That buys the whole feature with no plugin and no slicer patch.
 //
-// Auth is a per-user bearer token in X-Api-Key, minted when a slicer session
-// starts and expiring with it. It carries no printer secrets: the worst a stolen
+// Auth is a per-user bearer token in X-Api-Key, made on the Slice tab. It carries no printer secrets: the worst a stolen
 // token can do is add a job to the owner's own queue.
 async function printHostUser(req, reply) {
   const key = req.headers['x-api-key'] ||
@@ -416,45 +262,6 @@ async function printHostPrinters(req, reply) {
   }
 }
 app.get('/printhost/printers', printHostPrinters);
-
-// A containerised slicer bootstraps itself here instead of us pushing a token
-// into the image. The session already knows two things Kasm gave it: its own
-// session id (KASM_ID) and a Kasm-issued JWT. It presents the session id; we
-// look up which OpenPrintHQ user that session belongs to from our own records,
-// then confirm with Kasm that the session is genuinely running before handing
-// anything over.
-//
-// This keeps per-user, per-session credentials out of workspace images entirely,
-// which is the whole point: an image is shared by every tenant.
-app.post('/printhost/bootstrap', async (req, reply) => {
-  const kasmId = String(req.body?.kasm_id || '').trim();
-  if (!kasmId) return reply.code(400).send({ error: 'kasm_id required' });
-
-  const row = await userByKasmId(kasmId);
-  // Deliberately the same answer for "unknown session" and "not running", so
-  // this cannot be used to probe which session ids exist.
-  const deny = () => reply.code(403).send({ error: 'unrecognised session' });
-  if (!row?.user_id || !row?.kasm_user_id) return deny();
-
-  try {
-    const st = await kasmSessionStatus(row.kasm_user_id, kasmId);
-    if (!st || String(st.operational_status || '').toLowerCase() !== 'running') return deny();
-  } catch { return deny(); }
-
-  const token = randomBytes(24).toString('base64url');
-  const expires = new Date(Date.now() + 12 * 60 * 60 * 1000);
-  await purgePrintHostTokens(row.user_id);
-  await createPrintHostToken(row.user_id, token, 'slicer-bootstrap', expires);
-  req.log.info({ userId: row.user_id, kasmId }, 'print-host bootstrap issued');
-  return {
-    url: PUBLIC_URL + '/printhost',
-    api_key: token,
-    host_type: 'octoprint',
-    printer_name: 'OpenPrintHQ',
-    printers_url: PUBLIC_URL + '/printhost/printers',
-    expires_at: expires.toISOString()
-  };
-});
 
 // Slicers probe this to decide whether the host is real before offering Send.
 // Returning OctoPrint's shape is what makes the connection test pass.

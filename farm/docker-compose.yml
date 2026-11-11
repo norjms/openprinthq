@@ -61,11 +61,11 @@ services:
     expose:
       - "8080"
 
-  # OrcaSlicer HTTP API — bundled with the app so slicing works out of the box
-  # (no separate hand-run slicer). Tenant engines reach it by name on the shared
-  # network via OPHQ_SLICER_URL (http://orca-slicer-api:3000).
+  # The slicing service: OrcaSlicer's command line behind an HTTP API, built from
+  # slicer/ for the version in slicer/orcaslicer.env. Engines reach it by name on
+  # the shared network via OPHQ_SLICER_URL (http://orca-slicer-api:3000).
   orca-slicer-api:
-    image: ghcr.io/maziggy/orca-slicer-api:latest
+    image: ${OPHQ_SLICER_IMAGE:-ghcr.io/norjms/artisan-hub-farm-slicer:latest}
     restart: unless-stopped
     environment:
       - PORT=3000

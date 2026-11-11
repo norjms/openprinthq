@@ -140,15 +140,7 @@
       notice = `Could not mark ${f.filename}: ${e.message}`;
     }
   }
-  const sliceable = (f) => ['stl', '3mf', 'step', 'obj', '3ds', 'amf'].includes(f.file_type);
 
-  // A running session cannot be handed a file: the container environment is
-  // fixed at creation, so the slicer page has to start the session itself.
-  function openInSlicer(f) {
-    const key = objectKeyFor(f);
-    if (!key) { notice = 'That file has no object key, so it cannot be opened in the slicer.'; return; }
-    goto(basePath + '/app/slicer?' + new URLSearchParams({ key, name: f.filename }).toString());
-  }
 
   async function removeFile(f) {
     if (!confirm(`Delete ${f.filename} from your storage? This cannot be undone.`)) return;
@@ -340,9 +332,6 @@
                 <option value="failed">Failed</option>
                 <option value="archived">Archived</option>
               </select>
-            {/if}
-            {#if sliceable(f)}
-              <button class="act" onclick={() => openInSlicer(f)}>Open in slicer</button>
             {/if}
             {#if queueable(f)}
               <button class="act" onclick={() => send(f)} disabled={sending === f.id}>

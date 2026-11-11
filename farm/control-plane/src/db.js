@@ -270,17 +270,6 @@ export async function migrate() {
   await pool.query(`UPDATE printhost_tokens SET kind = 'vault' WHERE label = 'vault' AND kind = 'slicer';`);
   // Scoped API keys (kind 'api', see apikeys.js) carry read, submit or control. Other kinds leave it null.
   await pool.query(`ALTER TABLE printhost_tokens ADD COLUMN IF NOT EXISTS scope TEXT;`);
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS kasm_sessions (
-      user_id       INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-      kasm_user_id  TEXT,
-      kasm_username TEXT,
-      engine        TEXT,
-      kasm_id       TEXT,
-      session_token TEXT,
-      updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
-    );
-  `);
 
   // Bootstrap: if no owner exists yet, promote the earliest account (covers DBs
   // created before the is_owner column existed).
@@ -806,38 +795,9 @@ export async function getPlugRoutes(userId) {
   return Object.fromEntries(rows.map((r) => [r.plug_id, r.lan_ip]));
 }
 
-// ---- in-browser slicer (Kasm) -------------------------------------------
-// One row per OpenPrintHQ user: their provisioned Kasm account plus whichever
-// session is currently on record. The session token is persisted deliberately --
-// it outlives the session it belongs to, so re-minting would mean starting a
-// second container rather than reconnecting to the running one.
-export async function getKasmRow(userId) {
-  const { rows } = await pool.query('SELECT * FROM kasm_sessions WHERE user_id = $1', [userId]);
-  return rows[0] || null;
-}
-export async function setKasmIdentity(userId, kasmUserId, kasmUsername) {
-  await pool.query(
-    `INSERT INTO kasm_sessions (user_id, kasm_user_id, kasm_username) VALUES ($1,$2,$3)
-     ON CONFLICT (user_id) DO UPDATE SET kasm_user_id = EXCLUDED.kasm_user_id,
-       kasm_username = EXCLUDED.kasm_username, updated_at = now()`,
-    [userId, kasmUserId, kasmUsername]);
-}
-export async function setKasmSession(userId, engine, kasmId, sessionToken) {
-  await pool.query(
-    `UPDATE kasm_sessions SET engine = $2, kasm_id = $3, session_token = $4, updated_at = now()
-     WHERE user_id = $1`, [userId, engine, kasmId, sessionToken]);
-}
-export async function clearKasmSession(userId) {
-  await pool.query(
-    'UPDATE kasm_sessions SET engine = NULL, kasm_id = NULL, session_token = NULL, updated_at = now() WHERE user_id = $1',
-    [userId]);
-}
-
 // ---- print-host tokens ---------------------------------------------------
-// Bearer credentials handed to a containerised slicer so it can upload back
-// into the queue. Deliberately short-lived and scoped to one user: the slicer
-// runs in a desktop the user controls, so this token is the ONLY thing it gets,
-// never printer credentials.
+// Bearer credentials OrcaSlicer uses to upload back into the queue, scoped to
+// one user: this token is the ONLY thing a slicer gets, never printer credentials.
 export async function createPrintHostToken(userId, token, label, expiresAt, kind = 'slicer', scope = null) {
   // token_id is derived in SQL and read back rather than recomputed in JS, so
   // the handle the caller hands out can never disagree with the stored one.
@@ -882,24 +842,14 @@ export async function countPrintHostTokens(userId, kind) {
   return rows[0]?.n ?? 0;
 }
 /**
- * Clear a user's tokens of one kind. Defaults to 'slicer' because the only
- * caller is the slicer bootstrap, and purging every kind there would revoke the
- * user's browser extension every time they opened a slicer session.
+ * Clear a user's tokens of one kind. Defaults to 'slicer', the OrcaSlicer key,
+ * so making a new one never revokes the browser extension's.
  */
 export async function purgePrintHostTokens(userId, kind = 'slicer') {
   await pool.query('DELETE FROM printhost_tokens WHERE user_id = $1 AND kind = $2', [userId, kind]);
 }
 export async function purgeExpiredPrintHostTokens() {
   await pool.query('DELETE FROM printhost_tokens WHERE expires_at IS NOT NULL AND expires_at < now()');
-}
-
-/** The OpenPrintHQ user who owns a given Kasm session id. */
-export async function userByKasmId(kasmId) {
-  const norm = String(kasmId || '').replace(/-/g, '');
-  const { rows } = await pool.query(
-    `SELECT user_id, kasm_user_id, engine FROM kasm_sessions
-     WHERE replace(kasm_id, '-', '') = $1`, [norm]);
-  return rows[0] || null;
 }
 
 // ---- tenant object storage ------------------------------------------------

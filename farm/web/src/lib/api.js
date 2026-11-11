@@ -424,26 +424,10 @@ export const api = {
   updateEngineSettings: (body) => req('/engine/api/v1/settings', { method: 'PATCH', body: JSON.stringify(body) }),
   slicerModels: () => req('/engine/api/v1/slicer/printer-models'),
   slicerPresets: () => req('/engine/api/v1/slicer/presets'),
-  // In-browser slicer workspace (Kasm). The control-plane owns the session, so
-  // the browser only ever receives a connect URL it can drop into an iframe.
-  slicerWorkspace: (engine) => req('/slicer/session' + (engine ? '?engine=' + encodeURIComponent(engine) : '')),
-  // fileId is optional: when set, the session fetches that library file into its
-  // Uploads folder at startup, so the user opens straight into their model.
-  // Either an engine file id or an object key. The library has its own ids, so
-  // a file opened from the Files tab is named by the key both indexes share.
-  slicerWorkspaceStart: (engine, fileId, key, keys, restart = false) =>
-    req('/slicer/session', {
-      method: 'POST',
-      body: JSON.stringify({
-        engine,
-        ...(fileId != null ? { fileId } : {}),
-        ...(key ? { key } : {}),
-        ...(keys && keys.length ? { keys } : {}),
-        ...(restart ? { restart: true } : {})
-      })
-    }),
-  slicerWorkspaceStop: () => req('/slicer/session', { method: 'DELETE' }),
-  slicerWorkspaceEngines: () => req('/slicer/engines'),
+  // The slicing service's OrcaSlicer version, the optional OrcaSlicer desktop, and
+  // the key OrcaSlicer uses to send plates here as an OctoPrint print host.
+  slicerInfo: () => req('/slicer/info'),
+  slicerPrintHostKey: () => req('/slicer/printhost-key', { method: 'POST' }),
   // Compatible process/filament preset names for a printer (control-plane join).
   compatiblePresets: (printer) => req('/slicer/compatible?printer=' + encodeURIComponent(printer)),
   // Bambu HMS error dictionary (short_code -> description) for decoding alerts.

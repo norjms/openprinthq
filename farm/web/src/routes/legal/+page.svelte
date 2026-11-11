@@ -59,8 +59,11 @@
       <li><a href="https://github.com/maziggy/bambuddy" rel="noopener">Bambuddy</a>
         (© maziggy and contributors, AGPL-3.0) — our print engine is a derivative fork of it.</li>
       <li><a href="https://github.com/SoftFever/OrcaSlicer" rel="noopener">OrcaSlicer</a>
-        (© SoftFever and contributors, AGPL-3.0) — our built-in slicer, itself derived from
-        BambuStudio, PrusaSlicer and Slic3r.</li>
+        (© SoftFever and contributors, AGPL-3.0): our one slicer, used unmodified from its
+        official releases.</li>
+      <li><a href="https://github.com/maziggy/orca-slicer-api" rel="noopener">Orca Slicer API</a>
+        (© AFKFelix, maziggy and contributors, AGPL-3.0): the HTTP service around OrcaSlicer's
+        command line that the farm slices with.</li>
       <li><a href="https://github.com/rsms/inter" rel="noopener">Inter</a> (© Rasmus Andersson) and
         <a href="https://github.com/JetBrains/JetBrainsMono" rel="noopener">JetBrains Mono</a>
         (© JetBrains) — the typefaces, under the SIL Open Font License.</li>
@@ -75,22 +78,14 @@
   </section>
 
   <section id="infrastructure" class="card card-pad">
-    <h2>Streaming &amp; storage</h2>
-    <p>Running a slicer in your browser, and keeping your files, relies on projects we do not
-      ship. An operator installs them separately, and each is used under its own license:</p>
+    <h2>Storage</h2>
+    <p>Keeping your files can rely on projects we do not ship. An operator installs them
+      separately, and each is used under its own license:</p>
     <ul class="credits">
-      <li><a href="https://kasmweb.com" rel="noopener">Kasm Workspaces</a> (© Kasm Technologies) —
-        <strong>proprietary</strong>, used under its Community Edition license. Streams the slicer
-        session to your browser. Not redistributed with OpenPrintHQ.</li>
-      <li><a href="https://github.com/kasmtech/KasmVNC" rel="noopener">KasmVNC</a>
-        (© Kasm Technologies and contributors) — <strong>GPL-2.0</strong>. The streaming layer
-        inside a workspace.</li>
       <li><a href="https://garagehq.deuxfleurs.fr" rel="noopener">Garage</a>
         (© the Deuxfleurs association) — <strong>AGPL-3.0</strong>. S3-compatible object storage
         holding per-account files. Used unmodified as a separate service; its complete
         corresponding source is available from the project.</li>
-      <li><a href="https://rclone.org" rel="noopener">rclone</a> (© Nick Craig-Wood and
-        contributors) — <strong>MIT</strong>. Presents that storage as a folder inside a session.</li>
     </ul>
     <p>OpenPrintHQ also speaks an <a href="https://octoprint.org" rel="noopener">OctoPrint</a>-compatible
       upload API so slicers that already support that protocol can send finished plates. It contains
@@ -98,27 +93,14 @@
   </section>
 
   <section id="slicers" class="card card-pad">
-    <h2>Open-source slicers</h2>
-    <p>OpenPrintHQ's slicing builds on the work of the open-source slicer community. OrcaSlicer,
-      BambuStudio and PrusaSlicer are available today as in-browser workspaces; the rest are
-      planned. Their names and logos are used only to identify each project, and each remains the
-      property and copyright of its authors under its own license:</p>
-    <ul class="credits">
-      <li><a href="https://github.com/SoftFever/OrcaSlicer" rel="noopener">OrcaSlicer</a>
-        (© SoftFever and contributors) — <strong>AGPL-3.0</strong>. Built in and used for slicing today.</li>
-      <li><a href="https://github.com/bambulab/BambuStudio" rel="noopener">BambuStudio</a>
-        (© Bambu Lab and contributors) — <strong>AGPL-3.0</strong>. Available as a workspace.</li>
-      <li><a href="https://github.com/prusa3d/PrusaSlicer" rel="noopener">PrusaSlicer</a>
-        (© Prusa Research and contributors) — <strong>AGPL-3.0</strong>. Available as a workspace.</li>
-      <li><a href="https://github.com/Ultimaker/Cura" rel="noopener">Ultimaker Cura</a>
-        (© Ultimaker and contributors) — <strong>LGPLv3</strong> (with some GPLv3 components).</li>
-      <li><a href="https://github.com/CrealityOfficial/CrealityPrint" rel="noopener">CrealityPrint</a>
-        (© Creality and contributors) — under its own license.</li>
-      <li><a href="https://github.com/ELEGOO-3D/ElegooSlicer" rel="noopener">ElegooSlicer</a>
-        (© ELEGOO and contributors) — under its own license.</li>
-    </ul>
-    <p>OrcaSlicer, BambuStudio and PrusaSlicer share a common lineage with Slic3r; each project's
-      copyright and full license text is retained in our source and in the third-party notices.</p>
+    <h2>OrcaSlicer</h2>
+    <p>ArtisanHub Farm slices with one slicer: <a href="https://github.com/OrcaSlicer/OrcaSlicer"
+      rel="noopener">OrcaSlicer</a> (© SoftFever and contributors), <strong>AGPL-3.0</strong>, the
+      official release, unmodified. Its command line runs on the server; the ArtisanHub installer can
+      also run the same version as a desktop in your browser, using
+      <a href="https://github.com/linuxserver/docker-orcaslicer" rel="noopener">linuxserver.io's
+      image</a> (<strong>GPL-3.0</strong>). Its name and logo are used only to identify the project,
+      which remains the property and copyright of its authors.</p>
   </section>
 
   <section id="source" class="card card-pad">

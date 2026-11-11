@@ -88,7 +88,7 @@ services:
     depends_on: [postgres]
 
   orca-slicer-api:
-    image: ${OPHQ_SLICER_IMAGE:-ghcr.io/maziggy/orca-slicer-api:latest}
+    image: ${OPHQ_SLICER_IMAGE:-ghcr.io/norjms/artisan-hub-farm-slicer:latest}
     restart: unless-stopped
     environment:
       - PORT=3000
