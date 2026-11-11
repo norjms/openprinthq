@@ -1,4 +1,4 @@
-"""Slice a 20 mm cube with a built slicing-service image, as the build workflow does before publishing it.
+"""Slice a 20 mm cube with a built slicing-service image, as is done before publishing it.
 
 Starts nothing itself: point it at a running container. It takes OrcaSlicer's own Bambu Lab X1 Carbon
 profiles from the same OrcaSlicer release, flattened the way the farm's engine sends profiles, and checks the

@@ -71,7 +71,7 @@ jobs:
           git switch -c "$branch"
           git commit -am "Slicer: OrcaSlicer $VERSION"
           git push origin "$branch"
-          body="OrcaSlicer $VERSION is a full release, and linuxserver/orcaslicer has published $VERSION too, so the farm's slicer and the OrcaSlicer desktop stay at one version. Checksums are the release's own. Merging builds and publishes the slicer image; the ArtisanHub installer then pins both images at $VERSION."
+          body="OrcaSlicer $VERSION is a full release, and linuxserver/orcaslicer has published $VERSION too, so the farm's slicer and the OrcaSlicer desktop stay at one version. Checksums are the release's own. Once merged, build and publish the slicer image at $VERSION; the ArtisanHub installer then pins both images at $VERSION."
           # Where this repository does not let workflows open pull requests, an issue points at the branch.
           gh pr create --base main --head "$branch" --title "Slicer: OrcaSlicer $VERSION" --body "$body" ||
             gh issue create --title "Slicer: OrcaSlicer $VERSION is ready" --body \

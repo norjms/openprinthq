@@ -2,7 +2,7 @@
 #
 # OrcaSlicer is the official release, unmodified, taken from its Linux AppImage and
 # checked against the release's SHA-256. The version and checksums come from
-# slicer/orcaslicer.env, passed in as build arguments by the build workflow.
+# slicer/orcaslicer.env, passed in as build arguments.
 # Debian, not Ubuntu, underneath: the same libraries OrcaSlicer's Ubuntu 24.04 build
 # needs, from Debian's own mirrors.
 ARG ORCASLICER_VERSION
