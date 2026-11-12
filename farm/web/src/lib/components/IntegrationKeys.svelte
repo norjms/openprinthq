@@ -59,7 +59,7 @@
   <span class="eyebrow">Integration keys</span>
   <p class="muted">
     For apps that run this farm for you, such as Artisan Hub, n8n or your own scripts. The app sends the key as
-    <code>Authorization: Bearer ophqk_…</code> and can use OpenPrintHQ's API as far as the key's scope allows.
+    <code>Authorization: Bearer ophqk_</code> and can use OpenPrintHQ's API as far as the key's scope allows.
     Sign-in, people, keys and backups always need you, never a key.
   </p>
 
@@ -106,7 +106,7 @@
             <tr>
               <td>{k.label || 'API key'}</td>
               <td>{scopeLabel(k.scope)}</td>
-              <td class="mono">{k.prefix}…</td>
+              <td class="mono">{k.prefix}</td>
               <td>{fmt(k.createdAt)}</td>
               <td>{fmt(k.lastUsedAt)}</td>
               <td>{fmt(k.expiresAt)}</td>

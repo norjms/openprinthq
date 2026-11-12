@@ -1,8 +1,9 @@
 <script>
+  import Icon from '$lib/components/AppIcon.svelte';
   // Edit-mode chrome for one arrangeable section of the printer page.
   //
-  // Outside edit mode this renders its children and NOTHING else — no wrapper
-  // element — so an unarranged page has exactly the DOM and CSS it always had.
+  // Outside edit mode this renders its children and NOTHING else, no wrapper
+  // element, so an unarranged page has exactly the DOM and CSS it always had.
   // Inside edit mode each section gains an outline, its catalogue name, movers
   // and a show/hide toggle. Hidden sections collapse to a stub rather than
   // rendering their (often live, often expensive) content, but stay in the list
@@ -35,13 +36,13 @@
       </label>
       <span class="sf-movers">
         <button class="btn btn-ghost btn-xs" onclick={() => onmove(-1)} disabled={first}
-                aria-label={`Move ${def?.label || def?.key} up`}>↑</button>
+                aria-label={`Move ${def?.label || def?.key} up`}><Icon name="up" size={14} /></button>
         <button class="btn btn-ghost btn-xs" onclick={() => onmove(1)} disabled={last}
-                aria-label={`Move ${def?.label || def?.key} down`}>↓</button>
+                aria-label={`Move ${def?.label || def?.key} down`}><Icon name="down" size={14} /></button>
       </span>
     </div>
     {#if hidden}
-      <p class="sf-stub">Hidden — tick <b>Show</b> to put it back.</p>
+      <p class="sf-stub">Hidden, tick <b>Show</b> to put it back.</p>
     {:else if unavailable}
       <p class="sf-stub">Nothing to show right now. It will appear here when there is.</p>
     {:else}
@@ -82,7 +83,7 @@
   /* Sections are inert while you arrange them: a stray click must not pause a
      print or set a temperature. */
   .sf-body { pointer-events: none; }
-  /* …except the chrome of nested sections (the Bambu dashboard's own blocks),
+  /* except the chrome of nested sections (the Bambu dashboard's own blocks),
      which still has to be clickable to arrange them. */
   .sf-body :global(.sf-bar) { pointer-events: auto; }
 </style>

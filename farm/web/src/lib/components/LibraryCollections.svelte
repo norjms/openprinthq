@@ -108,7 +108,7 @@
   {/if}
 
   {#if loading}
-    <p class="muted">Loading...</p>
+    <p class="muted">Loading</p>
   {:else if collections.length === 0}
     <p class="muted">No collections yet.</p>
   {:else}

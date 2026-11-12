@@ -1,32 +1,24 @@
 <script>
   import { onMount } from 'svelte';
   import PageTitle from '$lib/components/PageTitle.svelte';
+  import PageHead from '$lib/components/PageHead.svelte';
   import { api } from '$lib/api';
 
-  let mode = $state('light');
+  // The app has one theme, and it is dark, so the embedded tool is asked for its dark look.
+  const mode = 'dark';
   let base = $state('');
   let loaded = $state(false);
-  let obs;
   onMount(() => {
-    const read = () => { mode = document.documentElement.getAttribute('data-theme') || 'light'; };
-    read();
-    obs = new MutationObserver(read);
-    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
     api.myInstance().then((i) => { base = (i && i.genfilamentUrl) || ''; loaded = true; }).catch(() => { loaded = true; });
-    return () => obs && obs.disconnect();
   });
   const src = $derived(base ? base + (base.includes('?') ? '&' : '?') + 'embed=1&theme=' + mode : '');
 </script>
 
 <PageTitle page="GenFilament" />
 
-<div class="gf-head">
-  <div>
-    <h1>GenFilament</h1>
-    <p class="muted">AI-generated filament profiles for OrcaSlicer &amp; Bambu Studio — research specs, generate presets, import in one bundle.</p>
-  </div>
-  <span class="chip ok gf-badge">Paid feature</span>
-</div>
+<PageHead title="GenFilament" description="AI-generated filament profiles for OrcaSlicer and Bambu Studio: research the specs, generate presets, import them in one bundle.">
+  {#snippet actions()}<span class="chip ok">Paid feature</span>{/snippet}
+</PageHead>
 
 {#if src}
   <div class="gf-frame">

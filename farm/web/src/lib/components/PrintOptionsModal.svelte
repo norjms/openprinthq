@@ -1,5 +1,5 @@
 <script>
-  // Print Options — the printer's on-board monitoring modules (spaghetti
+  // Print Options, the printer's on-board monitoring modules (spaghetti
   // detection, first-layer inspection, and friends). The engine has had a route
   // for these since forever; nothing ever called it.
   // SPDX-License-Identifier: AGPL-3.0-or-later
@@ -50,7 +50,7 @@
   let busyKey = $state(null);
   let msg = $state(null);
 
-  // Each switch is applied on the spot — the engine takes one module per call,
+  // Each switch is applied on the spot, the engine takes one module per call,
   // so a Save button would just be a loop that can half-fail and leave the
   // dialog lying about what the printer thinks.
   async function apply(m, patch) {
@@ -94,7 +94,7 @@
             <span class="name">{m.label}</span>
             <span class="muted tiny block">{m.hint}</span>
           </span>
-          {#if busyKey === m.key}<span class="muted tiny">saving…</span>{/if}
+          {#if busyKey === m.key}<span class="muted tiny">saving</span>{/if}
         </label>
 
         {#if cfg[m.key].enabled && (m.halt || m.sens)}

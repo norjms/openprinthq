@@ -39,7 +39,7 @@
     running = true; msg = null;
     try {
       await api.calibrate(printerId, Object.fromEntries(chosen.map((r) => [r.key, true])));
-      msg = { ok: true, text: 'Calibration started. Watch the printer — it will move on its own.' };
+      msg = { ok: true, text: 'Calibration started. Watch the printer, it will move on its own.' };
       confirming = false;
     } catch (e) {
       msg = { ok: false, text: e?.message || 'Could not start calibration.' };
@@ -53,7 +53,7 @@
   {#if !isBambu}
     <p class="muted">
       These routines are Bambu-specific. For this printer, use the Klipper tuning
-      panel on the printer page — homing, bed mesh, PID, input shaper and pressure
+      panel on the printer page, homing, bed mesh, PID, input shaper and pressure
       advance all live there.
     </p>
   {:else}
@@ -100,7 +100,7 @@
     {#if isBambu && confirming}
       <button class="btn btn-ghost btn-sm" onclick={() => (confirming = false)} disabled={running}>Cancel</button>
       <button class="btn btn-primary btn-sm" onclick={run} disabled={running}>
-        {running ? 'Starting…' : 'Start calibration'}
+        {running ? 'Starting' : 'Start calibration'}
       </button>
     {:else}
       <button class="btn btn-ghost btn-sm" onclick={() => onclose()}>Close</button>

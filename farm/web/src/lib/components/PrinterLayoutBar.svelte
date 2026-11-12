@@ -18,7 +18,7 @@
     <div class="lb-lead">
       <span class="eyebrow">Arranging sections</span>
       <p class="muted tiny">
-        Use ↑ ↓ to change the order and untick <b>Show</b> to hide a section.
+        Use the up and down buttons to change the order and untick <b>Show</b> to hide a section.
         Nothing is saved until you choose Save.
       </p>
     </div>
@@ -26,7 +26,7 @@
       <button class="btn btn-ghost btn-sm" onclick={onreset} disabled={saving}>Reset layout</button>
       <button class="btn btn-ghost btn-sm" onclick={oncancel} disabled={saving}>Cancel</button>
       <button class="btn btn-primary btn-sm" onclick={onsave} disabled={saving}>
-        {saving ? 'Saving…' : 'Save layout'}
+        {saving ? 'Saving' : 'Save layout'}
       </button>
     </div>
   </div>

@@ -1,10 +1,11 @@
 <script>
+  import Icon from '$lib/components/AppIcon.svelte';
   // Control cluster: temperatures and machine toggles on the left, the XY jog
   // wheel and Z steps in the middle, extruder on the right.
   // SPDX-License-Identifier: AGPL-3.0-or-later
   //
   // One layout for every printer type. Anything the machine can't do simply
-  // isn't rendered — no greyed-out chrome, no vendor-specific variants of the
+  // isn't rendered, no greyed-out chrome, no vendor-specific variants of the
   // whole panel. What survives on a Klipper machine is temps, the wheel, Z,
   // extrude/retract and (if its profile defines a light macro) the lamp.
   import { api } from '$lib/api';
@@ -75,7 +76,7 @@
       rows.push({ key: 'ch', kind: 'chamber', nozzle: 0, badge: '', label: 'Chamber',
                   cur: num(T.chamber), target: num(T.chamber_target) || 0, max: 60 });
     } else if (num(T.chamber) != null) {
-      // Reports a chamber reading but can't heat it — show the number, no control.
+      // Reports a chamber reading but can't heat it, show the number, no control.
       rows.push({ key: 'ch', kind: 'chamber', nozzle: 0, badge: '', label: 'Chamber',
                   cur: num(T.chamber), target: 0, max: 0, readonly: true });
     }
@@ -212,12 +213,12 @@
   {#if printing}
     <p class="note">Manual controls are disabled while a print is running.</p>
   {:else if !connected}
-    <p class="note">The printer is offline — controls are disabled.</p>
+    <p class="note">The printer is offline, controls are disabled.</p>
   {:else if needsHome}
     <p class="note warn">
       Not homed yet, so moves will be refused.
       <button class="btn btn-ghost btn-xs" onclick={home} disabled={acting === 'home'}>
-        {acting === 'home' ? 'Homing…' : '⌂ Home now'}
+        {acting === 'home' ? 'Homing' : 'Home now'}
       </button>
     </p>
   {/if}
@@ -228,10 +229,10 @@
       {#each tempRows as r (r.key)}
         <div class="trow">
           <span class="tico" aria-hidden="true">
-            {#if r.kind === 'bed'}▭{:else if r.kind === 'chamber'}▣{:else}⬇{/if}
+            <Icon name={r.kind === 'bed' ? 'grid' : r.kind === 'chamber' ? 'box' : 'thermometer'} size={16} />
           </span>
           {#if r.badge}<span class="tbadge">{r.badge}</span>{/if}
-          <span class="tcur mono">{r.cur != null ? r.cur.toFixed(0) : '—'}</span>
+          <span class="tcur mono">{r.cur != null ? r.cur.toFixed(0) : ''}</span>
           {#if editing === r.key}
             <!-- svelte-ignore a11y_autofocus -->
             <input class="tinput mono" type="number" min="0" max={r.max} autofocus
@@ -248,14 +249,14 @@
           <span class="tunit">°C</span>
           {#if r.target > 0 && !r.readonly}
             <button class="toff" onclick={() => setTemp(r, 0)} disabled={disabled || acting === 'temp-' + r.key}
-                    data-tip={`Turn the ${r.label.toLowerCase()} off`} aria-label={`Turn the ${r.label} off`}>✕</button>
+                    data-tip={`Turn the ${r.label.toLowerCase()} off`} aria-label={`Turn the ${r.label} off`}><Icon name="x" size={14} /></button>
           {/if}
         </div>
       {/each}
 
       {#if canAirduct}
         <div class="airduct">
-          <span class="alabel"><span aria-hidden="true">❋</span> Air Condition</span>
+          <span class="alabel"><Icon name="fan" size={15} /> Air condition</span>
           <div class="seg">
             <button class:on={st.airduct_mode === 'cooling'} onclick={() => setAirduct('cooling')}
                     disabled={disabled || acting === 'airduct'}
@@ -272,7 +273,7 @@
           {#each fans as f (f.key)}
             <div class="fan">
               <span class="fanhd">
-                <span class="fanlbl"><span aria-hidden="true">✽</span> {f.label}</span>
+                <span class="fanlbl"><Icon name="fan" size={15} /> {f.label}</span>
                 <span class="fanpct mono">{fanVal(f)}%</span>
               </span>
               <input class="fanrange" type="range" min="0" max="100" step="5" value={fanVal(f)}
@@ -286,7 +287,7 @@
 
       {#if canSpeedProfile}
         <div class="speed">
-          <span class="alabel"><span aria-hidden="true">⏱</span> Print speed</span>
+          <span class="alabel"><Icon name="clock" size={15} /> Print speed</span>
           <div class="seg wrap">
             {#each SPEEDS as [mode, label] (mode)}
               <button class:on={Number(st.speed_level) === mode} onclick={() => setSpeed(mode)}
@@ -301,7 +302,7 @@
               disabled={!connected || acting === 'lamp'}
               data-tip={st.chamber_light ? 'Turn the light off' : 'Turn the light on'}
               aria-label="Toggle the chamber light" aria-pressed={!!st.chamber_light}>
-        <span class="lampico" aria-hidden="true">☀</span>
+        <span class="lampico" aria-hidden="true"><Icon name="light" size={18} /></span>
         <span>Lamp</span>
       </button>
     </div>
@@ -311,11 +312,11 @@
       <PrinterJogWheel steps={[1, 10]} disabled={disabled} busy={acting}
                        onjog={jog} onhome={home} homeLabel="Home all axes" />
       <div class="zrow">
-        <button class="zb" onclick={() => zJog(10)} disabled={disabled} aria-label="Move the bed up 10 millimetres"><span aria-hidden="true">↑</span> 10</button>
-        <button class="zb" onclick={() => zJog(1)} disabled={disabled} aria-label="Move the bed up 1 millimetre"><span aria-hidden="true">↑</span> 1</button>
+        <button class="zb" onclick={() => zJog(10)} disabled={disabled} aria-label="Move the bed up 10 millimetres"><Icon name="up" size={14} /> 10</button>
+        <button class="zb" onclick={() => zJog(1)} disabled={disabled} aria-label="Move the bed up 1 millimetre"><Icon name="up" size={14} /> 1</button>
         <span class="zlbl">Bed</span>
-        <button class="zb" onclick={() => zJog(-1)} disabled={disabled} aria-label="Move the bed down 1 millimetre"><span aria-hidden="true">↓</span> 1</button>
-        <button class="zb" onclick={() => zJog(-10)} disabled={disabled} aria-label="Move the bed down 10 millimetres"><span aria-hidden="true">↓</span> 10</button>
+        <button class="zb" onclick={() => zJog(-1)} disabled={disabled} aria-label="Move the bed down 1 millimetre"><Icon name="down" size={14} /> 1</button>
+        <button class="zb" onclick={() => zJog(-10)} disabled={disabled} aria-label="Move the bed down 10 millimetres"><Icon name="down" size={14} /> 10</button>
       </div>
     </div>
 
@@ -332,7 +333,7 @@
 
       <button class="eb up" onclick={() => extrude(-1)} disabled={disabled || acting === 'e-1'}
               data-tip="Retract filament" aria-label="Retract filament">
-        <span aria-hidden="true">⇈</span>
+        <Icon name="up" size={16} />
       </button>
 
       <div class="etube" aria-hidden="true">
@@ -342,7 +343,7 @@
 
       <button class="eb down" onclick={() => extrude(1)} disabled={disabled || acting === 'e1'}
               data-tip="Extrude filament" aria-label="Extrude filament">
-        <span aria-hidden="true">⇊</span>
+        <Icon name="down" size={16} />
       </button>
 
       <label class="emm">
@@ -387,7 +388,7 @@
   .pill {
     border: 1px solid transparent; border-radius: 999px; cursor: pointer;
     padding: 0.28rem 0.85rem; font-size: 0.82rem; font-weight: 600;
-    background: var(--ophq-primary); color: #fff;
+    background: var(--ophq-primary); color: var(--ah-on-accent);
   }
   .pill:hover:not(:disabled) { filter: brightness(1.08); }
   .pill:disabled { opacity: 0.45; cursor: default; }
@@ -432,7 +433,7 @@
     border: 0; background: none; cursor: pointer; padding: 0.22rem 0.7rem;
     font-size: 0.8rem; color: var(--ophq-text-2);
   }
-  .seg button.on { background: var(--ophq-primary); color: #fff; font-weight: 600; }
+  .seg button.on { background: var(--ophq-primary); color: var(--ah-on-accent); font-weight: 600; }
   .seg button:disabled { opacity: 0.45; cursor: default; }
   .seg button:focus-visible { outline: 2px solid var(--ophq-primary); outline-offset: -2px; }
 
@@ -490,11 +491,14 @@
 
   .err { color: var(--ophq-danger); font-size: 0.85rem; margin: 0; padding: 0.5rem 0.8rem; border-top: 1px solid var(--ophq-border-soft); }
 
-  @media (max-width: 900px) {
+  /* The panel sizes to the space it is given (a side column on the printer
+     view), not to the window. */
+  .ctl { container-type: inline-size; }
+  @container (max-width: 640px) {
     .grid { grid-template-columns: 1fr 1fr; }
     .col:nth-child(3) { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--ophq-border-soft); flex-direction: row; flex-wrap: wrap; }
   }
-  @media (max-width: 620px) {
+  @container (max-width: 420px) {
     .grid { grid-template-columns: 1fr; }
     .col + .col { border-left: 0; border-top: 1px solid var(--ophq-border-soft); }
   }
