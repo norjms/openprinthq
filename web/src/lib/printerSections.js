@@ -1,4 +1,4 @@
-// Printer detail page — section catalogue and layout resolution.
+// Printer detail page, section catalogue and layout resolution.
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 // The printer page is a stack of independent sections. Each user can reorder
@@ -19,8 +19,8 @@
 // customised anything renders exactly what they rendered before this existed.
 
 // Every printer type gets the same shell. A section that a given machine can't
-// do simply isn't offered — the availability set the page passes in decides
-// that — so `variant` is 'both' throughout and kept only so a future
+// do simply isn't offered, the availability set the page passes in decides
+// that, so `variant` is 'both' throughout and kept only so a future
 // vendor-specific section has somewhere to declare itself.
 //
 // `scope` is likewise vestigial at one value ('page'); it earned its keep while
@@ -138,7 +138,7 @@ export function normalizePrinterSections(raw) {
 export const EMPTY_LAYOUT = { order: [], hidden: [] };
 
 // Which layout actually applies to this printer, and where it came from.
-// A per-printer override wins outright — it is a complete layout, not a patch
+// A per-printer override wins outright, it is a complete layout, not a patch
 // on top of the default, so switching the default later never silently
 // reshuffles a printer the user has already arranged by hand.
 export function resolveLayout(printerSections, printerId) {
@@ -175,8 +175,8 @@ export function orderedSections(layout, { variant, scope, available }) {
     const def = BY_KEY.get(key);
     if (def && applies(def) && !placed.has(key)) { out.push(def); placed.add(key); }
   }
-  // Sections the user has never arranged — a new one shipped in a later release,
-  // or one that only just became relevant to this printer — slot in directly
+  // Sections the user has never arranged, a new one shipped in a later release,
+  // or one that only just became relevant to this printer, slot in directly
   // after whatever precedes them in the catalogue, so they land beside their
   // natural neighbour instead of always at the bottom. Walking the catalogue
   // forwards means a run of several new sections keeps its own order too.

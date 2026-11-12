@@ -6,4 +6,4 @@
   onMount(() => { goto('/app/cameras?tab=timelapses', { replaceState: true }); });
 </script>
 
-<div class="card card-pad muted">Redirecting to Cameras → Timelapses…</div>
+<div class="card card-pad muted">Opening Cameras, Timelapses</div>

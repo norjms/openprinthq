@@ -133,7 +133,7 @@
     <span class="lb">Filament preset</span>
     <select class="input" bind:value={form.tray_info_idx} disabled={loadingPresets || saving}
             onchange={(e) => pickPreset(e.currentTarget.value)}>
-      {#if loadingPresets}<option>Loading…</option>{/if}
+      {#if loadingPresets}<option>Loading</option>{/if}
       {#each presets as p (p.tray_info_idx)}
         <option value={p.tray_info_idx}>{p.name || p.tray_type}</option>
       {/each}
@@ -179,13 +179,13 @@
     {#if confirmClear}
       <button class="btn btn-ghost btn-sm" onclick={() => (confirmClear = false)} disabled={clearing}>Cancel</button>
       <button class="btn btn-danger btn-sm" onclick={clearSlot} disabled={clearing}>
-        {clearing ? 'Clearing…' : 'Clear slot'}
+        {clearing ? 'Clearing' : 'Clear slot'}
       </button>
     {:else}
       <button class="btn btn-ghost btn-sm clr" onclick={() => (confirmClear = true)} disabled={saving}>Clear slot</button>
       <button class="btn btn-ghost btn-sm" onclick={() => onclose()} disabled={saving}>Cancel</button>
       <button class="btn btn-primary btn-sm" onclick={save} disabled={saving || !tempsSane || !form.tray_type}>
-        {saving ? 'Saving…' : 'Save'}
+        {saving ? 'Saving' : 'Save'}
       </button>
     {/if}
   {/snippet}
@@ -202,6 +202,4 @@
   .cq { margin: 0.4rem 0 0; font-size: 0.9rem; }
   .err { color: var(--ophq-danger); font-size: 0.88rem; margin: 0.6rem 0 0; }
   .clr { margin-right: auto; color: var(--ophq-danger); }
-  .btn-danger { background: var(--ophq-danger); color: #fff; }
-  .btn-danger:hover { background: #ff7280; color: #fff; }
 </style>

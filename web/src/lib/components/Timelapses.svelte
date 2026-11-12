@@ -1,4 +1,5 @@
 <script>
+  import Icon from '$lib/components/AppIcon.svelte';
   // Timelapse gallery. Rendered as a tab under the Cameras page.
   // SPDX-License-Identifier: AGPL-3.0-or-later
   import { onMount } from 'svelte';
@@ -56,7 +57,7 @@
 </div>
 
 {#if loading}
-  <div class="card card-pad muted">Loading…</div>
+  <div class="card card-pad muted">Loading</div>
 {:else if error === 'no-instance'}
   <div class="card card-pad"><p class="muted">Provision your instance from the <a href="/app">overview</a> first.</p></div>
 {:else if error}
@@ -65,7 +66,7 @@
   <label class="filt"><input type="checkbox" bind:checked={onlyTL} /><span>Only prints with a timelapse</span></label>
   {#if shown.length === 0}
     <div class="card card-pad empty">
-      <div class="ic">🎞️</div><h3>No timelapses yet</h3>
+      <div class="ic"><Icon name="film" size={28} /></div><h3>No timelapses yet</h3>
       <p class="muted">Turn on <b>Record on new prints</b> and your completed prints will appear here as timelapses.</p>
     </div>
   {:else}
@@ -74,7 +75,7 @@
         <div class="card tl">
           <button class="poster" onclick={() => a.hasTL && (play = a)} class:playable={a.hasTL}>
             {#if a.thumb}<img src={a.thumb} alt={a.name} loading="lazy" />{:else}<div class="noimg">no preview</div>{/if}
-            {#if a.hasTL}<span class="playic">▶</span>{/if}
+            {#if a.hasTL}<span class="playic"><Icon name="play" size={18} /></span>{/if}
           </button>
           <div class="meta">
             <span class="tn">{a.name}</span>
@@ -89,7 +90,7 @@
 
 {#if play}
   <div class="lightbox" role="presentation" onclick={() => (play = null)}>
-    <button class="lb-close" onclick={() => (play = null)} aria-label="Close">✕</button>
+    <button class="lb-close" onclick={() => (play = null)} aria-label="Close"><Icon name="x" size={16} /></button>
     <!-- svelte-ignore a11y_media_has_caption -->
     <video src={api.archiveTimelapseUrl(play.id)} controls autoplay onclick={(e) => e.stopPropagation()}></video>
     <div class="lb-cap mono">{play.name}</div>

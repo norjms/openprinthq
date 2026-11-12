@@ -3,6 +3,8 @@
   import { replaceState } from '$app/navigation';
   import { api } from '$lib/api';
   import PageTitle from '$lib/components/PageTitle.svelte';
+  import Icon from '$lib/components/AppIcon.svelte';
+  import PageHead from '$lib/components/PageHead.svelte';
 
   let loading = $state(true);
   let error = $state(null);
@@ -18,12 +20,12 @@
   // slicer is a config change and this list never goes stale. Hardcoding it is
   // why Bambu and Prusa stayed unselectable after their images shipped.
   const ENGINES = $state([
-    { key: 'orca', name: 'OrcaSlicer', abbr: 'O', color: '#00a352', ready: false },
-    { key: 'bambu', name: 'BambuStudio', abbr: 'B', color: '#16b978', ready: false },
-    { key: 'prusa', name: 'PrusaSlicer', abbr: 'P', color: '#fa6831', ready: false },
-    { key: 'cura', name: 'Cura', abbr: 'C', color: '#14aaf5', ready: false },
-    { key: 'creality', name: 'CrealityPrint', abbr: 'CP', color: '#059b8f', ready: false },
-    { key: 'elegoo', name: 'ElegooSlicer', abbr: 'E', color: '#2b2b2b', ready: false }
+    { key: 'orca', name: 'OrcaSlicer', abbr: 'O', ready: false },
+    { key: 'bambu', name: 'BambuStudio', abbr: 'B', ready: false },
+    { key: 'prusa', name: 'PrusaSlicer', abbr: 'P', ready: false },
+    { key: 'cura', name: 'Cura', abbr: 'C', ready: false },
+    { key: 'creality', name: 'CrealityPrint', abbr: 'CP', ready: false },
+    { key: 'elegoo', name: 'ElegooSlicer', abbr: 'E', ready: false }
   ]);
 
   async function loadEngines() {
@@ -166,13 +168,14 @@
 
 <PageTitle page="Slicer" />
 
-<div class="head">
-  <div><h1>Slicer</h1><p class="muted">OrcaSlicer, built in — slice server-side, no desktop app.</p></div>
-  <button class="btn btn-ghost btn-sm" onclick={load}>Refresh</button>
-</div>
+<PageHead title="Slicer" description="OrcaSlicer, built in: slice on the server, no desktop app needed.">
+  {#snippet actions()}
+    <button class="btn" onclick={load}><Icon name="refresh" size={16} />Refresh</button>
+  {/snippet}
+</PageHead>
 
 {#if loading}
-  <div class="card card-pad muted">Checking slicer…</div>
+  <div class="card card-pad muted">Checking slicer</div>
 {:else if error === 'no-instance'}
   <div class="card card-pad"><p class="muted">Provision your instance from the <a href="/app">overview</a> first.</p></div>
 {:else if error}
@@ -180,14 +183,13 @@
 {:else}
   <div class="card card-pad engwrap">
     <span class="eyebrow">Slicer engine</span>
-    <p class="muted small">OrcaSlicer is built in and ready. More engines are on the way — <a href="/legal#slicers">credits & licenses</a>.</p>
+    <p class="muted small">OrcaSlicer is built in and ready. More engines are on the way, <a href="/legal#slicers">credits & licenses</a>.</p>
     <div class="engines">
       {#each ENGINES as e}
         <button type="button" class="engine" class:on={e.key === engine} class:soon={!e.ready} disabled={!e.ready}
-                onclick={() => selectEngine(e.key)} title={e.ready ? e.name : e.name + ' — coming soon'}>
-          <span class="ebadge" style="background:{e.color}">{e.abbr}</span>
-          <span class="ename">{e.name}</span>
-          {#if !e.ready}<span class="ribbon">Coming soon</span>{/if}
+                onclick={() => selectEngine(e.key)} title={e.ready ? e.name : e.name + ', coming soon'}>
+          <span class="ebadge">{e.abbr}</span>
+          <span class="ename">{e.name}{#if !e.ready}<span class="chip soonchip">Coming soon</span>{/if}</span>
         </button>
       {/each}
     </div>
@@ -208,13 +210,13 @@
         </div>
         <div class="flex center gap">
           {#if wsUrl && hasPending}
-            <button class="btn btn-sm" onclick={wsRestartWithPending} disabled={wsBusy}>{wsBusy ? 'Restarting...' : 'Restart and open'}</button>
+            <button class="btn btn-sm" onclick={wsRestartWithPending} disabled={wsBusy}>{wsBusy ? 'Restarting' : 'Restart and open'}</button>
           {/if}
           {#if wsUrl}
             <button class="btn btn-ghost btn-sm" onclick={() => (wsFull = !wsFull)}>{wsFull ? 'Exit full screen' : 'Full screen'}</button>
             <button class="btn btn-ghost btn-sm" onclick={wsStop} disabled={wsBusy}>Stop</button>
           {:else}
-            <button class="btn btn-sm" onclick={() => wsStart()} disabled={wsBusy}>{wsBusy ? 'Starting...' : 'Open slicer'}</button>
+            <button class="btn btn-sm" onclick={() => wsStart()} disabled={wsBusy}>{wsBusy ? 'Starting' : 'Open slicer'}</button>
           {/if}
         </div>
       </div>
@@ -260,7 +262,7 @@
         <span class="dot" class:on={connected}></span>
         <div>
           <h3>OrcaSlicer {connected ? 'connected' : 'not reachable'}</h3>
-          <p class="muted">Server-side slicing engine{connected ? ' — ready to slice STL & 3MF' : ''}.</p>
+          <p class="muted">Server-side slicing engine{connected ? ', ready to slice STL & 3MF' : ''}.</p>
         </div>
       </div>
       <span class="chip {connected ? 'ok' : 'accent'}">{connected ? 'ready' : 'offline'}</span>
@@ -273,36 +275,34 @@
       <div class="chips">
         {#each models.slice(0, 24) as m}<span class="chip">{m}</span>{/each}
         {#if models.length > 24}<span class="chip">+{models.length - 24} more</span>{/if}
-        {#if models.length === 0}<p class="muted">—</p>{/if}
+        {#if models.length === 0}<p class="muted"></p>{/if}
       </div>
     </div>
     <div class="card card-pad">
       <span class="eyebrow">Preset sources</span>
       <div class="chips">
         {#each presetCats as c}<span class="chip primary">{c}</span>{/each}
-        {#if presetCats.length === 0}<p class="muted">—</p>{/if}
+        {#if presetCats.length === 0}<p class="muted"></p>{/if}
       </div>
     </div>
   </div>
 
   <div class="card card-pad how">
     <span class="eyebrow">How to slice</span>
-    <p class="muted">Upload a model in <a href="/app/files">Files</a>, then use its <b>Slice</b> action. Pick a printer, process and filament (searchable, and auto-filtered to what's compatible with the printer) — OrcaSlicer runs it server-side and, with "Slice &amp; queue" on, the result drops straight into your <a href="/app/queue">Print queue</a>.</p>
+    <p class="muted">Upload a model in <a href="/app/files">Files</a>, then use its <b>Slice</b> action. Pick a printer, process and filament (searchable, and auto-filtered to what's compatible with the printer), OrcaSlicer runs it server-side and, with "Slice &amp; queue" on, the result drops straight into your <a href="/app/queue">Print queue</a>.</p>
   </div>
 {/if}
 
 <style>
-  .head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 1.4rem; }
-  .head h1 { margin: 0; }
   .engwrap { margin-bottom: 1.2rem; }
   .engwrap .small { margin: 0.3rem 0 0; }
   .engines { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.6rem; margin-top: 0.9rem; }
-  .engine { position: relative; display: flex; align-items: center; gap: 0.6rem; padding: 0.7rem 0.8rem; border: 1px solid var(--ophq-border); border-radius: var(--radius-sm); background: var(--ophq-surface); color: var(--ophq-text); cursor: pointer; overflow: hidden; text-align: left; }
-  .engine.on { border-color: var(--ophq-primary); box-shadow: 0 0 0 1px var(--ophq-primary); }
-  .engine.soon { opacity: 0.62; cursor: default; }
-  .ebadge { width: 30px; height: 30px; border-radius: 7px; display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 0.8rem; flex: none; }
-  .ename { font-weight: 600; font-size: 0.9rem; }
-  .ribbon { position: absolute; top: 7px; right: -26px; transform: rotate(35deg); background: var(--ophq-warn, #f0b429); color: #10131a; font-size: 0.56rem; font-weight: 800; letter-spacing: 0.03em; padding: 2px 26px; text-transform: uppercase; }
+  .engine { position: relative; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--ah-panel-line); border-radius: var(--ah-radius-choice); background: var(--ah-panel); color: var(--ah-text); cursor: pointer; text-align: left; font: inherit; }
+  .engine.on { border-color: var(--ah-accent); box-shadow: 0 0 0 1px var(--ah-accent); }
+  .engine.soon { cursor: default; color: var(--ah-text-2); }
+  .ebadge { width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; background: var(--ah-chip-live-bg); color: var(--ah-accent); font-weight: 700; font-size: 13px; flex: none; }
+  .ename { font-weight: 600; font-size: 14px; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
+  .soonchip { font-weight: 500; }
   .workspace { margin-bottom: 1.2rem; overflow: hidden; }
   .wsbar { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; padding: 0.7rem 1rem; border-bottom: 1px solid var(--ophq-border); }
   .workspace iframe { display: block; width: 100%; height: 72vh; min-height: 460px; border: 0; background: #0b0e13; }
@@ -323,7 +323,7 @@
   .status h3 { margin: 0; font-size: 1.1rem; }
   .status p { margin: 0.2rem 0 0; font-size: 0.9rem; }
   .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--ophq-faint); box-shadow: 0 0 0 4px rgba(127,140,161,0.15); }
-  .dot.on { background: var(--ophq-success); box-shadow: 0 0 0 4px rgba(53,196,107,0.18); }
+  .dot.on { background: var(--ophq-success); box-shadow: 0 0 0 4px rgba(155,226,143,0.18); }
   .two { grid-template-columns: 1fr 1fr; }
   .chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.7rem; }
   .how { margin-top: 1.2rem; }

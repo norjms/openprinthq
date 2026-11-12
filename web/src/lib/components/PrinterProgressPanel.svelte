@@ -1,4 +1,5 @@
 <script>
+  import Icon from '$lib/components/AppIcon.svelte';
   // Printing progress: plate thumbnail, what's running, how far in, and the
   // three job controls (skip objects / pause-resume / stop).
   // SPDX-License-Identifier: AGPL-3.0-or-later
@@ -6,8 +7,7 @@
 
   let {
     printerId, status = null, isBambu = true, acting = null,
-    // Hysteresis-smoothed reachability from the page, NOT status.connected —
-    // the raw flag blips for a second or two on transient MQTT reconnects and
+    // Hysteresis-smoothed reachability from the page, NOT status.connected, // the raw flag blips for a second or two on transient MQTT reconnects and
     // this panel is the most visible thing on the page.
     online = true,
     onpause = () => {}, onresume = () => {}, onstop = () => {},
@@ -30,7 +30,7 @@
   }
   const eta = $derived(fmtEta(st.remaining_time));
 
-  // Idle reads "Ready", never the previous job's outcome — that only lingers
+  // Idle reads "Ready", never the previous job's outcome, that only lingers
   // while the plate still needs clearing.
   const headline = $derived(
     !online ? 'Offline' :
@@ -55,13 +55,13 @@
       {#if st.cover_url && hasJob}
         <img src={st.cover_url} alt="Preview of the current print" />
       {:else}
-        <span class="cube" aria-hidden="true">◲</span>
+        <span class="cube" aria-hidden="true"><Icon name="cube" size={28} /></span>
       {/if}
     </div>
 
     <div class="info">
       <div class="line1">
-        <span class="jobname" title={jobName}>{hasJob ? (jobName || 'Printing') : '—'}</span>
+        <span class="jobname" title={jobName}>{hasJob ? (jobName || 'Printing') : ''}</span>
         {#if hasJob && st.layer_num != null && st.total_layers}
           <span class="mono meta">Layer {st.layer_num}/{st.total_layers}</span>
         {/if}
@@ -90,7 +90,7 @@
       {#if awaitingClear}
         <button class="btn btn-primary btn-sm" onclick={onclearplate} disabled={!online || !!acting}
                 data-tip="Mark the build plate as cleared" aria-label="Mark the build plate as cleared">
-          ✓ Clear plate
+          <Icon name="check" size={15} />Clear plate
         </button>
       {/if}
 
@@ -120,7 +120,7 @@
 
       {#if confirmStop}
         <button class="btn btn-danger btn-sm" onclick={() => { confirmStop = false; onstop(); }} disabled={!!acting}>
-          {acting === 'stop' ? 'Stopping…' : 'Confirm'}
+          {acting === 'stop' ? 'Stopping' : 'Confirm'}
         </button>
         <button class="btn btn-ghost btn-sm" onclick={() => (confirmStop = false)} disabled={!!acting}>Cancel</button>
       {:else}
@@ -178,8 +178,6 @@
   .jc:disabled { opacity: 0.4; cursor: default; }
   .jc:focus-visible { outline: 2px solid var(--ophq-primary); outline-offset: 1px; }
   .jc.danger:hover:not(:disabled) { border-color: var(--ophq-danger); color: var(--ophq-danger); }
-  .btn-danger { background: var(--ophq-danger); color: #fff; }
-  .btn-danger:hover { background: #ff7280; color: #fff; }
   .tiny { font-size: 0.8rem; }
 
   @media (max-width: 640px) {

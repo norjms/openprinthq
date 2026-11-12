@@ -1,4 +1,4 @@
-// OpenPrintHQ — robust printer online/offline state.
+// OpenPrintHQ, robust printer online/offline state.
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 // A printer's `connected` flag can flap for a second or two on transient MQTT

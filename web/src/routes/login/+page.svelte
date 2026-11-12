@@ -1,26 +1,23 @@
 <script>
   import { onMount } from 'svelte';
-  import Logo from '$lib/components/Logo.svelte';
+  import AuthCard from '$lib/components/AuthCard.svelte';
   import PageTitle from '$lib/components/PageTitle.svelte';
-  // SSO (Authentik) is the only sign-in path. Use a FULL page load (not
-  // client-side nav) so the reverse proxy's forward-auth can redirect to the Authentik login.
+  import { branding } from '$lib/stores/appearance';
+  // Single sign-on is the only way in. Use a FULL page load (not client-side
+  // navigation) so the reverse proxy's forward-auth can redirect to the sign-in.
   onMount(() => { const t = setTimeout(() => { window.location.href = '/app'; }, 900); return () => clearTimeout(t); });
 </script>
 
 <PageTitle page="Sign in" />
 
-<div class="auth">
-  <div class="card card-pad box">
-    <div class="lg"><Logo size={34} /></div>
-    <h2>Sign in</h2>
-    <p class="muted">Redirecting you to secure sign-in…</p>
-    <a class="btn btn-primary full" href="/app" data-sveltekit-reload>Continue with SSO</a>
-  </div>
-</div>
+<AuthCard title="Sign in">
+  <p class="ah-secondary">{$branding.tagline}</p>
+  <p class="ah-muted">Taking you to secure sign-in.</p>
+  <a class="btn btn-primary full" href="/app" data-sveltekit-reload>Continue with single sign-on</a>
+  <div class="links"><a href="/signup">Create an account</a></div>
+</AuthCard>
 
 <style>
-  .auth { min-height: 100vh; display: grid; place-items: center; padding: 2rem; }
-  .box { width: 100%; max-width: 380px; text-align: center; }
-  .lg { margin-bottom: 1rem; display: flex; justify-content: center; }
-  .full { width: 100%; justify-content: center; margin-top: 1rem; }
+  .full { width: 100%; }
+  .links { display: flex; justify-content: space-between; font-size: 13px; }
 </style>

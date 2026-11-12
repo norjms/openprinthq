@@ -2,11 +2,11 @@
 // Names tab lists mappings, and the learn endpoint fills-when-empty.
 import { test, expect } from '@playwright/test';
 
-test('Printer Names tab shows the model-name mappings', async ({ page }) => {
+test('Printer names tab shows the model-name mappings', async ({ page }) => {
   await page.goto('/app/settings');
-  await page.getByRole('tab', { name: 'Printer Names' }).click();
+  await page.getByRole('tab', { name: 'Printer names' }).click();
   // The section label renders as an .eyebrow span (not a semantic heading).
-  await expect(page.getByText('Printer names', { exact: true })).toBeVisible();
+  await expect(page.locator('.eyebrow', { hasText: /^Printer names$/ })).toBeVisible();
   // seeded mapping should be visible (O1D -> H2D)
   await expect(page.getByText('H2D', { exact: true }).first()).toBeVisible();
 });

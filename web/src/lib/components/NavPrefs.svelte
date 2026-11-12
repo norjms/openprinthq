@@ -1,15 +1,16 @@
 <script>
-  // Settings → Look & Feel → Navigation. Lets each user reorder / hide the
-  // built-in left-nav items and add their own external links. Persists per-user
-  // into the appearance config under `nav`; the AppShell reads the same store,
-  // so a Save reflects in the sidebar immediately.
+  // Settings, Appearance, Navigation. Lets each user reorder (within a group)
+  // or hide the built-in sidebar items and add their own external links. Kept
+  // per user in the appearance config under `nav`; the AppShell reads the same
+  // store, so a save shows in the sidebar straight away.
   import { get } from 'svelte/store';
+  import Icon from '$lib/components/AppIcon.svelte';
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
   import { appearance, saveAppearance as persist } from '$lib/stores/appearance';
   import { normalizeNav } from '$lib/theme';
   import {
-    NAV_ITEMS, GENFILAMENT_ITEM, NAV_SETTINGS_HREF, NAV_LINK_ICON, isHttpUrl
+    NAV_ITEMS, GENFILAMENT_ITEM, NAV_SETTINGS_HREF, isHttpUrl
   } from '$lib/nav';
 
   let genfilament = $state(false);
@@ -42,9 +43,14 @@
     msg = null;
   }
 
+  // Items move within their own group; groups keep their place in the sidebar.
+  function neighbour(i, dir) {
+    for (let j = i + dir; j >= 0 && j < items.length; j += dir) if (items[j].group === items[i].group) return j;
+    return -1;
+  }
   function move(i, dir) {
-    const j = i + dir;
-    if (j < 0 || j >= items.length) return;
+    const j = neighbour(i, dir);
+    if (j < 0) return;
     const next = [...items];
     [next[i], next[j]] = [next[j], next[i]];
     items = next;
@@ -71,7 +77,7 @@
   async function save() {
     saving = true; msg = null;
     try {
-      // Merge onto the current full config so theme/branding are untouched.
+      // Merge onto the current full config so the other settings are untouched.
       await persist({ ...get(appearance), nav: buildNav() });
       seed(); // re-seed from the (normalized) saved state
       msg = { ok: true, text: 'Navigation saved.' };
@@ -96,11 +102,11 @@
   <div class="np-head">
     <div>
       <span class="eyebrow">Navigation</span>
-      <p class="muted tiny">Reorder or hide the left-nav items and add your own links. Saved to your account; the sidebar updates right away.</p>
+      <p class="muted tiny">Reorder or hide the sidebar items and add your own links. Saved to your account; the sidebar updates straight away.</p>
     </div>
     <div class="np-actions">
       <button class="btn btn-ghost btn-sm" onclick={resetNav} disabled={saving}>Reset to default</button>
-      <button class="btn btn-primary btn-sm" onclick={save} disabled={saving}>{saving ? 'Saving…' : 'Save navigation'}</button>
+      <button class="btn btn-primary btn-sm" onclick={save} disabled={saving}>{saving ? 'Saving' : 'Save navigation'}</button>
     </div>
   </div>
   {#if msg}<p class={msg.ok ? 'ok-msg' : 'err'}>{msg.text}</p>{/if}
@@ -109,16 +115,16 @@
   <ul class="rows">
     {#each items as item, i (item.href)}
       <li class="row" class:off={item.hidden}>
-        <span class="ic" aria-hidden="true">{item.icon}</span>
-        <span class="lbl">{item.label}</span>
+        <span class="ic" aria-hidden="true"><Icon name={item.icon} size={17} /></span>
+        <span class="lbl">{item.label} <span class="ah-muted">{item.group}</span></span>
         <label class="show" title={item.href === NAV_SETTINGS_HREF ? 'Settings is always shown' : 'Show in sidebar'}>
           <input type="checkbox" checked={!item.hidden} disabled={item.href === NAV_SETTINGS_HREF}
                  onchange={() => toggleHidden(i)} aria-label={`Show ${item.label}`} />
           <span>Show</span>
         </label>
         <span class="movers">
-          <button class="btn btn-ghost btn-xs" onclick={() => move(i, -1)} disabled={i === 0} aria-label={`Move ${item.label} up`}>↑</button>
-          <button class="btn btn-ghost btn-xs" onclick={() => move(i, 1)} disabled={i === items.length - 1} aria-label={`Move ${item.label} down`}>↓</button>
+          <button class="btn btn-ghost btn-xs up" onclick={() => move(i, -1)} disabled={neighbour(i, -1) < 0} aria-label={`Move ${item.label} up`}><Icon name="chevron-down" size={14} /></button>
+          <button class="btn btn-ghost btn-xs" onclick={() => move(i, 1)} disabled={neighbour(i, 1) < 0} aria-label={`Move ${item.label} down`}><Icon name="chevron-down" size={14} /></button>
         </span>
       </li>
     {/each}
@@ -131,37 +137,38 @@
       <div class="lrow">
         <input class="li" type="text" placeholder="Label" bind:value={link.label} aria-label="Link label" />
         <input class="li" type="url" placeholder="https://example.com" bind:value={link.url} aria-label="Link URL" />
-        <button class="btn btn-ghost btn-xs" onclick={() => removeLink(i)} aria-label="Remove link">✕</button>
+        <button class="btn btn-ghost btn-sm" onclick={() => removeLink(i)}>Remove</button>
       </div>
     {/each}
-    <button class="btn btn-ghost btn-sm" onclick={addLink}>+ Add link</button>
+    <button class="btn btn-ghost btn-sm" onclick={addLink}><Icon name="plus" size={15} />Add link</button>
   </div>
 </div>
 
 <style>
-  .np { margin-top: 1rem; }
+  .np { margin: 0; }
   .np-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
   .np-head p { margin: 0.3rem 0 0.6rem; max-width: 60ch; }
   .np-actions { display: flex; gap: 0.5rem; flex-shrink: 0; }
   .ok-msg { color: var(--ophq-success); font-size: 0.9rem; }
   .err { color: var(--ophq-danger); font-size: 0.9rem; }
   .tiny { font-size: 0.82rem; }
-  .tglabel { display: block; font-size: 0.78rem; font-weight: 700; color: var(--ophq-text-2); text-transform: uppercase; letter-spacing: 0.08em; margin: 0.9rem 0 0.5rem; }
+  .tglabel { display: block; font-size: 12px; font-weight: 600; color: var(--ah-group-label); text-transform: uppercase; letter-spacing: 0.12em; margin: 0.9rem 0 0.5rem; }
   .links-head { margin-top: 1.2rem; }
 
   .rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
   .row { display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 0.7rem; padding: 0.4rem 0.6rem; border: 1px solid var(--ophq-border); border-radius: var(--radius-sm); background: var(--ophq-bg-2); }
   .row.off { opacity: 0.55; }
-  .row .ic { width: 1.2rem; text-align: center; }
+  .row .ic { display: grid; place-items: center; color: var(--ah-text-2); }
   .lbl { font-size: 0.9rem; color: var(--ophq-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .show { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; color: var(--ophq-text-2); cursor: pointer; }
   .show input { width: 16px; height: 16px; accent-color: var(--ophq-primary); }
   .movers { display: inline-flex; gap: 0.25rem; }
-  .btn-xs { padding: 0.15rem 0.45rem; font-size: 0.85rem; line-height: 1; }
+  .btn-xs { height: 30px; width: 30px; padding: 0; }
+  .btn-xs.up :global(svg) { transform: rotate(180deg); }
 
   .links { display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-start; }
   .lrow { display: grid; grid-template-columns: 1fr 2fr auto; gap: 0.5rem; width: 100%; }
-  .li { font-size: 0.85rem; background: var(--ophq-bg-2); border: 1px solid var(--ophq-border); color: var(--ophq-text); border-radius: 6px; padding: 0.35rem 0.5rem; }
+  .li { height: 36px; font-size: 14px; background: var(--ah-field); border: 1px solid var(--ah-field-line); color: var(--ah-text); border-radius: var(--ah-radius-btn-sm); padding: 0 10px; }
 
   @media (max-width: 900px) {
     .np-head { flex-direction: column; }

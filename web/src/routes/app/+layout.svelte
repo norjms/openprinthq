@@ -30,7 +30,7 @@
         const arr = Array.isArray(d) ? d : (d?.printers || d?.items || []);
         const ids = arr.map((p) => p.id ?? p.printer_id).filter((v) => v != null);
         if (ids.length) await warm(ids, { maxAgeMs: REFRESH_MS });
-      } catch { /* no instance yet, offline, not signed in — nothing to warm */ }
+      } catch { /* no instance yet, offline or not signed in: nothing to warm */ }
       if (!stopped) timer = setTimeout(pass, REFRESH_MS);
     }
 
@@ -57,7 +57,7 @@
 </script>
 
 {#if $sessionExpired}
-  <div class="reauth" role="alert">
+  <div class="reauth ah-banner" role="alert">
     <span>Your sign-in has expired, so live data has stopped updating.</span>
     <button class="btn btn-primary btn-sm" onclick={reauth}>Sign in again</button>
   </div>
@@ -70,9 +70,6 @@
 <style>
   .reauth {
     position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 1000;
-    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-    max-width: calc(100vw - 32px); padding: 10px 14px; border-radius: 10px;
-    background: var(--ophq-surface); color: var(--ophq-text);
-    border: 1px solid var(--ophq-primary); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    flex-wrap: wrap; max-width: calc(100vw - 32px); font-family: var(--ah-font-sans);
   }
 </style>

@@ -3,14 +3,14 @@
   // SPDX-License-Identifier: AGPL-3.0-or-later
   //
   // Drawn as SVG wedges rather than CSS clip-paths so the hit areas are exactly
-  // the shapes you can see — a clipped <div> still swallows clicks in the
+  // the shapes you can see, a clipped <div> still swallows clicks in the
   // corners it only *appears* to have removed.
   //
   // The engine's xy-jog takes a free-form millimetre delta, so the two rings are
   // simply two distances; nothing here is pinned to a fixed step enum.
 
   let {
-    steps = [1, 10],        // inner ring, outer ring — in mm
+    steps = [1, 10],        // inner ring, outer ring, in mm
     disabled = false,
     busy = null,            // label of the move in flight, or null
     onjog = () => {},       // (dx, dy, mm)
@@ -39,7 +39,7 @@
     return `M${x1} ${y1} A${ra} ${ra} 0 0 1 ${x2} ${y2} L${x3} ${y3} A${rb} ${rb} 0 0 0 ${x4} ${y4} Z`;
   }
 
-  // [{ d, dx, dy, mm, label, cx, cy }] — outer ring first so the inner ring
+  // [{ d, dx, dy, mm, label, cx, cy }], outer ring first so the inner ring
   // paints over its edge rather than the other way round.
   const cells = $derived.by(() => {
     const out = [];

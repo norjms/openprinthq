@@ -10,7 +10,7 @@ test.describe('signup', () => {
   test('invite field presence matches signup-info', async ({ page, request }) => {
     const info = await (await request.get('/api/pub/signup-info')).json();
     await page.goto('/signup');
-    const invite = page.getByPlaceholder('ophq-…');
+    const invite = page.getByPlaceholder('ophq-', { exact: true });
     if (info.inviteRequired) {
       await expect(invite).toBeVisible();
     } else {

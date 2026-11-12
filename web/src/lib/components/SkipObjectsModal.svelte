@@ -1,6 +1,6 @@
 <script>
-  // Skip individual objects on the current plate. Irreversible mid-print — the
-  // printer will not come back to a skipped object — so it is confirm-gated and
+  // Skip individual objects on the current plate. Irreversible mid-print, the
+  // printer will not come back to a skipped object, so it is confirm-gated and
   // says so in plain words.
   // SPDX-License-Identifier: AGPL-3.0-or-later
   import { onMount } from 'svelte';
@@ -61,7 +61,7 @@
 <ModalShell title="Skip objects" subtitle="Abandon individual parts on this plate" width="520px"
             busy={busy} {onclose}>
   {#if loading}
-    <p class="muted">Reading the plate…</p>
+    <p class="muted">Reading the plate</p>
   {:else if !objects.length}
     <p class="muted">
       No per-object data for this job. That usually means the plate was sliced
@@ -72,7 +72,7 @@
     </button>
   {:else}
     <p class="muted tiny lead">
-      A skipped object is abandoned for the rest of the print — the printer will
+      A skipped object is abandoned for the rest of the print, the printer will
       not return to it. Everything else carries on.
     </p>
     <ul class="objs">
@@ -104,7 +104,7 @@
     {#if confirming}
       <button class="btn btn-ghost btn-sm" onclick={() => (confirming = false)} disabled={busy}>Cancel</button>
       <button class="btn btn-danger btn-sm" onclick={skip} disabled={busy}>
-        {busy ? 'Skipping…' : 'Confirm skip'}
+        {busy ? 'Skipping' : 'Confirm skip'}
       </button>
     {:else}
       <button class="btn btn-ghost btn-sm" onclick={() => onclose()}>Close</button>
@@ -131,6 +131,4 @@
   .cq { margin: 0.9rem 0 0; font-size: 0.9rem; }
   .tiny { font-size: 0.8rem; }
   .err { color: var(--ophq-danger); font-size: 0.88rem; margin: 0.8rem 0 0; }
-  .btn-danger { background: var(--ophq-danger); color: #fff; }
-  .btn-danger:hover { background: #ff7280; color: #fff; }
 </style>

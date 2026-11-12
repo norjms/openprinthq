@@ -1,5 +1,6 @@
 <script>
-  // Filament / Hotends. The filament tab is the AMS slot grid — pick a slot,
+  import Icon from '$lib/components/AppIcon.svelte';
+  // Filament / Hotends. The filament tab is the AMS slot grid, pick a slot,
   // load it, edit what's in it, dry a unit. The hotends tab reports what nozzle
   // hardware is fitted.
   // SPDX-License-Identifier: AGPL-3.0-or-later
@@ -63,7 +64,7 @@
     })
   );
 
-  // External spools sit alongside the units — same card shape, one slot.
+  // External spools sit alongside the units, same card shape, one slot.
   const externals = $derived.by(() => {
     const arr = Array.isArray(st.vt_tray) ? st.vt_tray : (st.vt_tray ? [st.vt_tray] : []);
     const dual = (st.nozzles?.length || 0) > 1;
@@ -197,16 +198,16 @@
               </span>
               <span class="gmeta">
                 {#if u.humidity != null}
-                  <span class="hum" title="Humidity"><span aria-hidden="true">💧</span> {u.humidity}%</span>
+                  <span class="hum" title="Humidity"><Icon name="droplet" size={12} /> {u.humidity}%</span>
                 {/if}
                 {#if u.temp != null}<span class="hum mono">{u.temp.toFixed(1)}°</span>{/if}
                 {#if u.canDry}
                   {#if u.drying}
                     <button class="dryb on" onclick={() => stopDry(u)} disabled={busy === 'dry' + u.id}
-                            data-tip="Drying now — stop it" aria-label="Stop drying">☀ Drying</button>
+                            data-tip="Drying now, stop it" aria-label="Stop drying">Drying</button>
                   {:else}
                     <button class="dryb" onclick={() => (dryOpen = dryOpen === u.id ? null : u.id)}
-                            disabled={!connected} data-tip="Dry this unit" aria-label="Dry this unit">☀</button>
+                            disabled={!connected} data-tip="Dry this unit" aria-label="Dry this unit">Dry</button>
                   {/if}
                 {/if}
               </span>
@@ -224,7 +225,7 @@
                   <input class="input xs mono" type="number" min="1" max="24" value={dryForm[u.id]?.duration ?? 4}
                          oninput={(e) => setDry(u.id, 'duration', e.currentTarget.value)} /></label>
                 <button class="btn btn-primary btn-sm" onclick={() => startDry(u)} disabled={busy === 'dry' + u.id}>
-                  {busy === 'dry' + u.id ? 'Starting…' : 'Dry'}
+                  {busy === 'dry' + u.id ? 'Starting' : 'Dry'}
                 </button>
               </div>
             {/if}
@@ -235,7 +236,7 @@
                   <div class="sbar">
                     <span class="scode">{s.code}</span>
                     <button class="sic" onclick={() => reread(s)} disabled={!connected || busy === 'rfid' + s.code}
-                            data-tip="Re-read the RFID tag" aria-label={`Re-read the tag in ${s.code}`}>↻</button>
+                            data-tip="Re-read the RFID tag" aria-label={`Re-read the tag in ${s.code}`}><Icon name="refresh" size={13} /></button>
                   </div>
                   <button class="slot" class:empty={s.empty} class:active={s.active} class:picked={picked === s.trayId}
                           style={s.color ? `--sc:${s.color}` : ''}
@@ -245,11 +246,11 @@
                           aria-label={`${s.code}: ${s.empty ? 'empty' : s.type}${s.remain != null ? `, ${s.remain}% left` : ''}`}>
                     <span class="stype">{s.empty ? 'Empty' : s.type}</span>
                     {#if s.remain != null && !s.empty}<span class="srem mono">{s.remain}%</span>{/if}
-                    {#if s.active}<span class="sactive" aria-hidden="true">◉</span>{/if}
+                    {#if s.active}<span class="sactive" aria-hidden="true"></span>{/if}
                   </button>
                   <button class="sedit" onclick={() => (editing = { amsId: s.amsId, trayIdx: s.trayIdx, label: s.code, current: { ...s.raw, tray_type: s.type } })}
                           disabled={!connected}
-                          data-tip="Set what's in this slot" aria-label={`Edit ${s.code}`}>✎</button>
+                          data-tip="Set what's in this slot" aria-label={`Edit ${s.code}`}><Icon name="edit" size={13} /></button>
                 </div>
               {/each}
             </div>
@@ -270,7 +271,7 @@
                           aria-label={`${e.code}: ${e.empty ? 'empty' : e.type}`}>
                     <span class="stype">{e.empty ? 'Empty' : e.type}</span>
                     {#if e.remain != null && !e.empty}<span class="srem mono">{e.remain}%</span>{/if}
-                    {#if e.active}<span class="sactive" aria-hidden="true">◉</span>{/if}
+                    {#if e.active}<span class="sactive" aria-hidden="true"></span>{/if}
                   </button>
                 </div>
               {/each}
@@ -292,13 +293,13 @@
           <span class="cq">Unload the filament in the hotend?</span>
           <button class="btn btn-ghost btn-sm" onclick={() => (confirm = null)} disabled={!!busy}>Cancel</button>
           <button class="btn btn-danger btn-sm" onclick={doUnload} disabled={!!busy}>
-            {busy === 'unload' ? 'Unloading…' : 'Confirm'}
+            {busy === 'unload' ? 'Unloading' : 'Confirm'}
           </button>
         {:else if confirm === 'load'}
           <span class="cq">Load {pickedLabel}?</span>
           <button class="btn btn-ghost btn-sm" onclick={() => (confirm = null)} disabled={!!busy}>Cancel</button>
           <button class="btn btn-primary btn-sm" onclick={doLoad} disabled={!!busy}>
-            {busy === 'load' ? 'Loading…' : 'Confirm'}
+            {busy === 'load' ? 'Loading' : 'Confirm'}
           </button>
         {:else}
           <button class="btn btn-ghost btn-sm" onclick={() => (confirm = 'unload')} disabled={!connected || !!busy}>
@@ -325,7 +326,7 @@
               <span class="hcard">
                 {#if n.side}<span class="hside">{n.side}</span>{/if}
                 <b class="mono">{n.nozzle_diameter} mm</b>
-                <span class="hmat">{nozzleType(n.nozzle_type).full || n.nozzle_type || '—'}</span>
+                <span class="hmat">{nozzleType(n.nozzle_type).full || n.nozzle_type || ''}</span>
               </span>
             {:else}
               <span class="muted">No nozzle installed.</span>
@@ -347,8 +348,7 @@
           </div>
         {/if}
         <p class="muted tiny hnote">
-          Nozzle hardware is reported by the printer and can't be changed from here —
-          swap it on the machine and it'll update.
+          Nozzle hardware is reported by the printer and can't be changed from here, swap it on the machine and it'll update.
         </p>
       </div>
     {/if}
@@ -373,7 +373,7 @@
   }
   .tabs button:first-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
   .tabs button:last-child { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; border-left: 0; }
-  .tabs button.on { background: var(--ophq-primary); border-color: var(--ophq-primary); color: #fff; font-weight: 600; }
+  .tabs button.on { background: var(--ophq-primary); border-color: var(--ophq-primary); color: var(--ah-on-accent); font-weight: 600; }
   .tabs button:focus-visible { outline: 2px solid var(--ophq-primary); outline-offset: 1px; }
 
   .empty { margin: 0; padding: 1.2rem 0.9rem; color: var(--ophq-muted); font-size: 0.9rem; }
@@ -383,7 +383,7 @@
   .ghead { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; margin-bottom: 0.55rem; }
   .gname { font-weight: 600; font-size: 0.9rem; display: inline-flex; align-items: center; gap: 0.4rem; }
   .side { font-size: 0.66rem; font-weight: 700; padding: 0.05rem 0.35rem; border-radius: 4px; background: var(--ophq-success); color: #06210f; }
-  .side.l { background: var(--ophq-primary); color: #fff; }
+  .side.l { background: var(--ophq-primary); color: var(--ah-on-accent); }
   .gmeta { display: inline-flex; align-items: center; gap: 0.5rem; }
   .hum { font-size: 0.78rem; color: var(--ophq-text-2); white-space: nowrap; }
   .dryb { border: 1px solid var(--ophq-border); background: var(--ophq-surface); color: var(--ophq-text-2); border-radius: 999px; padding: 0.1rem 0.5rem; font-size: 0.76rem; cursor: pointer; }
@@ -444,7 +444,7 @@
   .hlist { display: flex; gap: 0.4rem; flex-wrap: wrap; }
   .hcard { display: inline-flex; align-items: baseline; gap: 0.4rem; padding: 0.3rem 0.6rem; border-radius: var(--radius-sm); background: var(--ophq-primary-dim); border: 1px solid var(--ophq-primary); color: var(--ophq-primary-2); font-size: 0.85rem; }
   .hcard b { color: var(--ophq-text); }
-  .hside { font-size: 0.6rem; font-weight: 800; text-transform: uppercase; padding: 0.08rem 0.34rem; border-radius: 4px; background: var(--ophq-primary); color: #fff; align-self: center; }
+  .hside { font-size: 0.6rem; font-weight: 800; text-transform: uppercase; padding: 0.08rem 0.34rem; border-radius: 4px; background: var(--ophq-primary); color: var(--ah-on-accent); align-self: center; }
   .hmat { color: var(--ophq-primary-2); }
   .hslot { display: inline-flex; flex-direction: column; align-items: center; min-width: 3rem; padding: 0.35rem 0.45rem; border-radius: var(--radius-sm); background: var(--ophq-surface); border: 1px solid var(--ophq-border); }
   .hpos { font-size: 0.62rem; font-weight: 700; color: var(--ophq-muted); }
@@ -455,6 +455,4 @@
   .tiny { font-size: 0.78rem; }
   .ok-msg { color: var(--ophq-success); font-size: 0.84rem; margin: 0; padding: 0.5rem 0.85rem; }
   .err { color: var(--ophq-danger); font-size: 0.84rem; margin: 0; padding: 0.5rem 0.85rem; }
-  .btn-danger { background: var(--ophq-danger); color: #fff; }
-  .btn-danger:hover { background: #ff7280; color: #fff; }
 </style>

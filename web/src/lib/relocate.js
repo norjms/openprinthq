@@ -1,4 +1,4 @@
-// OpenPrintHQ — offline printer relocate + relink.
+// OpenPrintHQ, offline printer relocate + relink.
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 // When a printer shows offline, rescan the network for it. Identity is matched
@@ -9,7 +9,7 @@
 //     is backfilled onto the record whenever a printer is seen at its known IP,
 //     so once a printer has been online under this build it can be re-identified
 //     across an IP change.
-// If a matching device is found at a NEW IP we don't just "edit the IP" — we
+// If a matching device is found at a NEW IP we don't just "edit the IP", we
 // RELINK the existing printer record to the device at its new address (and
 // reconnect). If nothing matches, the printer is truly offline.
 
@@ -38,7 +38,7 @@ async function runScan(api, connectionType, subnet) {
 }
 
 // Record a device's MAC onto any stored Klipper printer that is currently at the
-// device's IP but has no MAC yet — so identity is known before it ever moves.
+// device's IP but has no MAC yet, so identity is known before it ever moves.
 async function backfillMacs(api, printers, discovered) {
   const changed = [];
   for (const d of discovered) {
@@ -78,7 +78,7 @@ export async function relocate(target, api) {
       if (device) return { status: 'found', device, newIp: device.ip_address, changed: device.ip_address !== me.ip_address };
       return { status: 'offline' };
     }
-    // MAC not yet recorded — offer the Klipper devices not already claimed by
+    // MAC not yet recorded, offer the Klipper devices not already claimed by
     // another printer as candidates for the user to confirm.
     const claimed = new Set(printers.filter((p) => p.id !== me.id && p.mac_address).map((p) => norm(p.mac_address)));
     const devices = discovered.filter((d) => d.mac && !claimed.has(norm(d.mac)));
@@ -102,7 +102,7 @@ export async function relink(target, device, api) {
   if (isKlipper(target) && device.mac) body.mac_address = norm(device.mac);
   await api.updatePrinter(target.id, body); // engine reconnects on ip change
   if (!body.ip_address || body.ip_address === target.ip_address) {
-    // Same IP (or none) — just re-establish the connection.
+    // Same IP (or none), just re-establish the connection.
     try { await api.printerAction(target.id, 'connect'); } catch { /* */ }
   }
   return body.ip_address;

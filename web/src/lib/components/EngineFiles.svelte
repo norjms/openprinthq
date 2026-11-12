@@ -1,4 +1,6 @@
 <script>
+  import Icon from '$lib/components/AppIcon.svelte';
+  import PageHead from '$lib/components/PageHead.svelte';
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
   import EngineError from '$lib/components/EngineError.svelte';
@@ -18,7 +20,7 @@
       const name = f.name ?? f.filename ?? f.display_name ?? 'file';
       const lower = name.toLowerCase();
       const kind = (name.split('.').pop() || '').toUpperCase();
-      // Already-sliced output ends in .gcode or .gcode.3mf — printable, not sliceable.
+      // Already-sliced output ends in .gcode or .gcode.3mf, printable, not sliceable.
       const queueable = /\.gcode(\.3mf)?$/.test(lower);
       const sliceable = SLICEABLE.has(kind) && !lower.includes('.gcode.') && !queueable;
       const is3mf = lower.endsWith('.3mf');
@@ -158,7 +160,7 @@
         max_preheat: Math.max(1, Number(batchMaxPreheat) || 1)
       });
       showToast('ok', batchStagger
-        ? `Batch started on ${chosen.length} printer${chosen.length > 1 ? 's' : ''} — heat-up is staggered per circuit.`
+        ? `Batch started on ${chosen.length} printer${chosen.length > 1 ? 's' : ''}, heat-up is staggered per circuit.`
         : `Batch sent to ${chosen.length} printer${chosen.length > 1 ? 's' : ''}.`);
       closeBatch();
     } catch (e) {
@@ -273,7 +275,7 @@
       printerPresets = flatten(cats, 'printer');
       processPresets = flatten(cats, 'process');
       filamentPresets = flatten(cats, 'filament');
-      // Concrete machines (e.g. "… 0.4 nozzle") are the sliceable ones; bare
+      // Concrete machines (e.g. " 0.4 nozzle") are the sliceable ones; bare
       // model presets are inherited bases the slicer rejects. Default to 0.4mm,
       // chosen from the user's connected-printer profiles.
       const pool = filterPresetsForConnected(printerPresets, connectedPrinters);
@@ -306,13 +308,13 @@
       const jobId = started?.job_id;
       if (!addQueueWhenDone || !jobId) {
         // fire-and-forget: G-code just lands in the library
-        sliceMsg = 'Slicing started — the G-code will appear in your library shortly.';
+        sliceMsg = 'Slicing started, the G-code will appear in your library shortly.';
         setTimeout(load, 4000); setTimeout(load, 12000);
         setTimeout(() => { if (sliceFile) closeSlice(); }, 1500);
         return;
       }
       // One-click: poll the slice job to completion, then queue the output.
-      sliceMsg = 'Slicing…';
+      sliceMsg = 'Slicing';
       let result = null;
       for (let i = 0; i < 150; i++) { // ~5 min ceiling at 2s
         await sleep(2000);
@@ -324,9 +326,9 @@
           throw new Error(job.error_detail || job.error_status || 'slicing failed');
         }
       }
-      if (!result) throw new Error('slicing timed out — check the library shortly');
+      if (!result) throw new Error('slicing timed out, check the library shortly');
       const newId = result.library_file_id;
-      sliceMsg = 'Sliced — adding to the print queue…';
+      sliceMsg = 'Sliced, adding to the print queue';
       const q = await api.addToQueue([newId]);
       if (q?.errors?.length) {
         sliceErr = q.errors[0].error || 'sliced, but could not add to queue';
@@ -345,35 +347,34 @@
 </script>
 
 
-<div class="head">
-  <div><h1>Files</h1><p class="muted">Your private 3MF / STL / G-code library.</p></div>
-  <div class="flex gap">
-    <button class="btn btn-ghost btn-sm" onclick={load}>Refresh</button>
+<PageHead title="Files" description="Your private 3MF, STL and G-code library.">
+  {#snippet actions()}
+    <button class="btn" onclick={load}><Icon name="refresh" size={16} />Refresh</button>
     <input type="file" bind:this={fileInput} onchange={onUpload} hidden accept=".3mf,.stl,.gcode,.gco,.obj" />
-    <button class="btn btn-primary btn-sm" onclick={() => fileInput.click()} disabled={uploading}>
-      {uploading ? (upPct > 0 && upPct < 100 ? `Uploading ${upPct}%` : 'Uploading…') : '+ Upload'}
+    <button class="btn btn-primary" onclick={() => fileInput.click()} disabled={uploading}>
+      <Icon name="upload" size={16} />{uploading ? (upPct > 0 && upPct < 100 ? `Uploading ${upPct}%` : 'Uploading') : 'Upload'}
     </button>
-  </div>
-</div>
+  {/snippet}
+</PageHead>
 {#if upErr}<p class="uperr">{upErr}</p>{/if}
 {#if toast}
-  <div class="toast {toast.kind}">
+  <div class="ah-banner {toast.kind === 'ok' ? 'ah-banner--live' : 'ah-banner--bad'}" role="status">
     <span>{toast.text}</span>
-    {#if toast.kind === 'ok'}<a href="/app/queue" class="tlink">View queue →</a>{/if}
+    {#if toast.kind === 'ok'}<a href="/app/queue" class="tlink">View queue</a>{/if}
   </div>
 {/if}
 
 {#if loading}
-  <div class="card card-pad muted">Loading library…</div>
+  <div class="card card-pad muted">Loading library</div>
 {:else if error === 'no-instance'}
   <div class="card card-pad"><p class="muted">Provision your instance from the <a href="/app">overview</a> first.</p></div>
 {:else if error}
   <EngineError {error} onretry={load} />
 {:else if files.length === 0}
   <div class="card card-pad empty">
-    <div class="ic">🗀</div>
+    <div class="ic"><Icon name="folder" size={28} /></div>
     <h3>No files yet</h3>
-    <p class="muted">Upload 3MF, STL or G-code to your private library — they'll be sliceable and printable across your fleet.</p>
+    <p class="muted">Upload 3MF, STL or G-code to your private library, they'll be sliceable and printable across your fleet.</p>
   </div>
 {:else}
   <div class="grid files">
@@ -388,16 +389,16 @@
         <div class="foot">
           {#if f.size}<span class="muted mono sz">{human(f.size)}</span>{/if}
           {#if f.sliceable}
-            <button class="btn btn-ghost btn-sm slicebtn" onclick={() => openSlice(f)}>◈ Slice</button>
+            <button class="btn btn-ghost btn-sm slicebtn" onclick={() => openSlice(f)}><Icon name="layers" size={15} />Slice</button>
             <!-- The slicer runs in a container, so its file dialog cannot see the
                  user's machine. Hand the session the file id and it fetches the
                  model itself before the app opens. -->
             <button class="btn btn-ghost btn-sm slicebtn" onclick={() => openInSlicer(f)}
-                    title="Open this model in the in-browser slicer">◱ Open in slicer</button>
+                    title="Open this model in the in-browser slicer"><Icon name="external" size={15} />Open in slicer</button>
           {:else if f.queueable}
             <div class="qacts">
               <button class="btn btn-ghost btn-sm slicebtn" onclick={() => addToQueue(f)} disabled={queuingId === f.id}>
-                {queuingId === f.id ? 'Queuing…' : '↳ Add to queue'}
+                {queuingId === f.id ? 'Queuing' : 'Add to queue'}
               </button>
               <button class="btn btn-ghost btn-sm slicebtn" onclick={() => openBatch(f)} title="Print on multiple printers with staggered heat-up">⧉ Batch</button>
             </div>
@@ -413,7 +414,7 @@
     <div class="dialog card preview-dialog" role="dialog" onclick={(e) => e.stopPropagation()}>
       <div class="dhead">
         <div><span class="eyebrow">Preview</span><h3>{preview.name}</h3></div>
-        <button class="btn btn-ghost btn-sm" onclick={closePreview} aria-label="Close">✕</button>
+        <button class="btn btn-ghost btn-sm" onclick={closePreview} aria-label="Close"><Icon name="x" size={16} /></button>
       </div>
 
       {#if preview.queueable}
@@ -436,7 +437,7 @@
         </div>
 
         {#if platesLoading}
-          <p class="muted hint">Reading plates…</p>
+          <p class="muted hint">Reading plates</p>
         {:else if plates && plates.length > 1}
           <div class="plates">
             {#each plates as pl, i (pl.index)}
@@ -462,9 +463,9 @@
 
       <div class="flex gap dactions">
         {#if preview.sliceable}
-          <button class="btn btn-primary" onclick={() => { const f = preview; closePreview(); openSlice(f); }}>◈ Slice</button>
+          <button class="btn btn-primary" onclick={() => { const f = preview; closePreview(); openSlice(f); }}><Icon name="layers" size={15} />Slice</button>
         {:else if preview.queueable}
-          <button class="btn btn-primary" onclick={() => { const f = preview; addToQueue(f); }} disabled={queuingId === preview.id}>{queuingId === preview.id ? 'Queuing…' : '↳ Add to queue'}</button>
+          <button class="btn btn-primary" onclick={() => { const f = preview; addToQueue(f); }} disabled={queuingId === preview.id}>{queuingId === preview.id ? 'Queuing' : 'Add to queue'}</button>
           <button class="btn btn-ghost" onclick={() => { const f = preview; closePreview(); openBatch(f); }}>⧉ Batch</button>
         {/if}
         <a class="btn btn-ghost" href={api.fileDownloadUrl(preview.id)} download>Download</a>
@@ -479,10 +480,10 @@
     <div class="dialog card" role="dialog" onclick={(e) => e.stopPropagation()}>
       <div class="dhead">
         <div><span class="eyebrow">Batch print</span><h3>Print “{batchFile.name}” on multiple printers</h3></div>
-        <button class="btn btn-ghost btn-sm" onclick={closeBatch} aria-label="Close">✕</button>
+        <button class="btn btn-ghost btn-sm" onclick={closeBatch} aria-label="Close"><Icon name="x" size={16} /></button>
       </div>
       {#if batchLoading}
-        <p class="muted">Loading printers…</p>
+        <p class="muted">Loading printers</p>
       {:else if batchPrinters.length === 0}
         <p class="muted">No printers found. <a href="/app/printers/add">Add a printer</a> first.</p>
       {:else}
@@ -499,7 +500,7 @@
 
         <label class="q-opt tog">
           <input type="checkbox" bind:checked={batchStagger} disabled={batchBusy} />
-          <span><b>Temperature-staggered start</b> — wait for each printer's bed &amp; chamber to reach target before starting the next on the same circuit.</span>
+          <span><b>Temperature-staggered start</b>, wait for each printer's bed &amp; chamber to reach target before starting the next on the same circuit.</span>
         </label>
 
         {#if batchStagger}
@@ -507,7 +508,7 @@
             <label for="mp">Max printers preheating at once <span class="muted">(per circuit)</span></label>
             <input id="mp" class="input mp-in" type="number" min="1" max="20" bind:value={batchMaxPreheat} disabled={batchBusy} />
           </div>
-          <p class="muted hint">Printers on different circuits preheat in parallel. Set circuits in <a href="/app/settings">Settings → Power circuits</a>. You can override the wait any time from the <a href="/app/queue">queue</a>.</p>
+          <p class="muted hint">Printers on different circuits preheat in parallel. Set circuits in <a href="/app/settings">Settings, Power circuits</a>. You can override the wait any time from the <a href="/app/queue">queue</a>.</p>
         {:else}
           <p class="muted hint">All selected printers will start at once (no heat-up staggering).</p>
         {/if}
@@ -515,7 +516,7 @@
         {#if batchErr}<p class="err">{batchErr}</p>{/if}
         <div class="flex gap dactions">
           <button class="btn btn-primary" onclick={doBatch} disabled={batchBusy || batchSelCount === 0}>
-            {batchBusy ? 'Starting…' : `Start batch (${batchSelCount})`}
+            {batchBusy ? 'Starting' : `Start batch (${batchSelCount})`}
           </button>
           <button class="btn btn-ghost" onclick={closeBatch} disabled={batchBusy}>Cancel</button>
         </div>
@@ -529,14 +530,14 @@
     <div class="dialog card" role="dialog" onclick={(e) => e.stopPropagation()}>
       <div class="dhead">
         <div><span class="eyebrow">OrcaSlicer</span><h3>Slice “{sliceFile.name}”</h3></div>
-        <button class="btn btn-ghost btn-sm" onclick={closeSlice} aria-label="Close">✕</button>
+        <button class="btn btn-ghost btn-sm" onclick={closeSlice} aria-label="Close"><Icon name="x" size={16} /></button>
       </div>
       {#if presetsLoading}
-        <p class="muted">Loading presets…</p>
+        <p class="muted">Loading presets</p>
       {:else}
         <div class="field">
           <label for="pr">Printer</label>
-          <PresetSelect id="pr" options={printerOpts} bind:value={selPrinter} placeholder="Search printers…" />
+          <PresetSelect id="pr" options={printerOpts} bind:value={selPrinter} placeholder="Search printers" />
           {#if connectedPrinters.length > 0}
             <p class="muted hint">
               {#if isPrinterFiltered}Showing profiles for your connected printers.{:else}Your connected printers.{/if}
@@ -548,14 +549,14 @@
         </div>
         <div class="field">
           <label for="pc">Process / quality</label>
-          <PresetSelect id="pc" options={processOpts} bind:value={selProcess} placeholder="Search processes…" />
+          <PresetSelect id="pc" options={processOpts} bind:value={selProcess} placeholder="Search processes" />
         </div>
         <div class="field">
           <label for="fl">Filament</label>
-          <PresetSelect id="fl" options={filamentOpts} bind:value={selFilament} placeholder="Search filaments…" />
+          <PresetSelect id="fl" options={filamentOpts} bind:value={selFilament} placeholder="Search filaments" />
         </div>
         <p class="muted hint">
-          {#if compatLoading}Checking compatible presets…
+          {#if compatLoading}Checking compatible presets
           {:else if compatCount}Showing {compatCount.proc} process &amp; {compatCount.fil} filament presets compatible with this printer.
           {:else}Presets must match the printer's model &amp; nozzle.{/if}
         </p>
@@ -574,7 +575,7 @@
         {#if sliceMsg}<p class="ok-msg">{sliceMsg}{#if slicing && sliceProgress != null} {sliceProgress}%{/if}</p>{/if}
         <div class="flex gap dactions">
           <button class="btn btn-primary" onclick={doSlice} disabled={slicing}>
-            {slicing ? 'Slicing…' : (addQueueWhenDone ? 'Slice & queue' : 'Slice')}
+            {slicing ? 'Slicing' : (addQueueWhenDone ? 'Slice & queue' : 'Slice')}
           </button>
           <button class="btn btn-ghost" onclick={closeSlice} disabled={slicing}>Cancel</button>
         </div>
@@ -657,8 +658,8 @@
 
   .toast { display: flex; align-items: center; gap: 1rem; justify-content: space-between;
     padding: 0.7rem 1rem; border-radius: var(--radius-sm); margin: -0.6rem 0 1.1rem; font-size: 0.9rem; border: 1px solid; }
-  .toast.ok { color: var(--ophq-success); border-color: rgba(53,196,107,0.3); background: rgba(53,196,107,0.08); }
-  .toast.err { color: var(--ophq-danger); border-color: rgba(255,92,108,0.3); background: rgba(255,92,108,0.08); }
+  .toast.ok { color: var(--ophq-success); border-color: rgba(155,226,143,0.3); background: rgba(155,226,143,0.08); }
+  .toast.err { color: var(--ophq-danger); border-color: rgba(230,103,103,0.3); background: rgba(230,103,103,0.08); }
   .toast .tlink { color: inherit; font-weight: 600; white-space: nowrap; }
   .q-opt { display: flex; align-items: center; gap: 0.5rem; margin: 0.6rem 0 0.2rem; font-size: 0.9rem; color: var(--ophq-text-2); cursor: pointer; }
   .q-opt input { width: auto; accent-color: var(--ophq-primary); }

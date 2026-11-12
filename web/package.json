@@ -18,8 +18,8 @@
     "vite": "^6.0.7"
   },
   "dependencies": {
-    "@fontsource/inter": "^5.1.0",
     "@fontsource/jetbrains-mono": "^5.1.1",
+    "artisanhub-ui": "github:norjms/artisanhub-ui#v0.1.0",
     "fflate": "^0.8.3",
     "three": "^0.180.0"
   }

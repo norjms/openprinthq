@@ -1,6 +1,5 @@
 <script>
   import Logo from './Logo.svelte';
-  import ThemeSwitcher from './ThemeSwitcher.svelte';
 </script>
 
 <header class="site-header">
@@ -13,7 +12,6 @@
       <a href="/#open">Open source</a>
     </nav>
     <div class="actions">
-      <ThemeSwitcher />
       <a href="/app" class="btn btn-ghost btn-sm" data-sveltekit-reload>Sign in</a>
       <a href="/signup" class="btn btn-primary btn-sm">Launch your HQ</a>
     </div>
