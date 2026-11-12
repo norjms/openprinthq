@@ -10,7 +10,8 @@ const NO_HUB = `http://127.0.0.1:${port}${BASE}`;
 const WITH_HUB = `http://127.0.0.1:${port + 1}${BASE}`;
 
 const GROUPS = {
-  Print: ['Farm overview', 'Printers', 'Cameras', 'Print queue', 'Filament', 'Timelapses', 'Slicing'],
+  Print: ['Farm overview', 'Printers', 'Cameras', 'Print queue', 'Filament', 'Slicing'],
+  Farm: ['Files', 'Slicer', 'Projects', 'Statistics', 'Print reports', 'Timelapses', 'Farm settings'],
   Library: ['Models', 'Add model', 'Find models', 'Licenses'],
   Shop: ['Orders', 'Quotes', 'Inventory', 'Shopping list', 'Reports'],
   Admin: ['Sync health', 'People', 'Connections', 'Devices', 'Settings']
@@ -33,7 +34,7 @@ async function sidebar(page) {
 
 for (const [name, origin] of [['the hub unreachable', NO_HUB], ['the hub answering', WITH_HUB]]) {
   test.describe(`with ${name}`, () => {
-    test('the sidebar is the hub\'s, with Timelapses after Filament', async ({ page }) => {
+    test('the sidebar is the hub\'s, with the Farm group after Print', async ({ page }) => {
       await page.goto(origin + '/app/printers', { waitUntil: 'networkidle' });
       const groups = await sidebar(page);
       expect(groups.map((g) => g.label)).toEqual(Object.keys(GROUPS));
@@ -49,6 +50,12 @@ for (const [name, origin] of [['the hub unreachable', NO_HUB], ['the hub answeri
       expect(href('Print queue')).toBe(BASE + '/app/queue');
       expect(href('Filament')).toBe(BASE + '/app/filament');
       expect(href('Timelapses')).toBe(BASE + '/app/timelapses');
+      expect(href('Files')).toBe(BASE + '/app/files');
+      expect(href('Slicer')).toBe(BASE + '/app/slicer');
+      expect(href('Projects')).toBe(BASE + '/app/projects');
+      expect(href('Statistics')).toBe(BASE + '/app/statistics');
+      expect(href('Print reports')).toBe(BASE + '/app/reports');
+      expect(href('Farm settings')).toBe(BASE + '/app/settings');
       expect(href('Farm overview')).toBe('/farm');
       expect(href('Orders')).toBe('/orders');
       expect(href('Settings')).toBe('/settings');
@@ -77,6 +84,21 @@ test('without the hub the header falls back to ArtisanHub', async ({ page }) => 
   await page.goto(NO_HUB + '/app/printers', { waitUntil: 'networkidle' });
   await expect(page.locator('.inst')).toHaveText('ArtisanHub');
   await expect(page.locator('a.ah-nav', { hasText: 'Orders' }).locator('.ah-badge')).toHaveCount(0);
+});
+
+test('the hub\'s fallback copy matches the hub\'s list, and Timelapses is listed once', async ({ page }) => {
+  await page.goto(NO_HUB + '/app/timelapses', { waitUntil: 'networkidle' });
+  const items = (await sidebar(page)).flatMap((g) => g.items.map((i) => i.label));
+  expect(items.filter((l) => l === 'Timelapses')).toHaveLength(1);
+  await expect(page.locator('.ah-header__crumbs')).toHaveText(/Farm\s*\/\s*Timelapses/);
+});
+
+test('a farm page in the Farm group is current there', async ({ page }) => {
+  await page.goto(NO_HUB + '/app/files', { waitUntil: 'networkidle' });
+  await expect(page.locator('a.ah-nav[aria-current="page"]')).toHaveText(/Files/);
+  await page.keyboard.press('Control+k');
+  await page.locator('#jt-q').fill('Files');
+  await expect(page.locator('.jt-list .jt-label').filter({ hasText: /^Files$/ }), 'the palette lists Files once').toHaveCount(1);
 });
 
 test('farm pages outside the sidebar are in the jump-to palette', async ({ page }) => {

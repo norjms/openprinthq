@@ -9,11 +9,9 @@
 import { base } from '$app/paths';
 import FALLBACK from './hub-nav.json';
 
-// The farm's own item in the hub's Print group (the farm canvas): after Filament.
-export const TIMELAPSES = { id: 'timelapses', label: 'Timelapses', icon: 'film', farm_path: '/app/timelapses', href: '/farm' };
-
-// Farm pages the hub's list does not name. They are reached from the farm's
-// overview, the jump-to palette and the account menu, and get a breadcrumb.
+// The farm's own pages. The hub's list names most of them in its Farm group
+// (Files to Farm settings, Timelapses among them); these give every farm page
+// a breadcrumb and a place in the jump-to palette whether or not the list does.
 export const FARM_PAGES = [
   { path: '/app', label: 'Farm', icon: 'grid', exact: true },
   { path: '/app/files', label: 'Files', icon: 'cube' },
@@ -54,26 +52,18 @@ export async function loadHubNav(fetchFn = fetch) {
 /**
  * Sidebar groups for the farm: each item gets `href` (where it goes from here),
  * `farm` (a page of this farm, routed in the app) and `reload` (a hub page).
- * Timelapses joins the Print group after Filament when the hub's list lacks it.
- * Items needing a permission the hub did not grant are already left out by it.
+ * The list is the hub's as it is, the Farm group included (pages only the farm
+ * has, after Print); items needing a permission the hub did not grant are
+ * already left out by it, and so is a group left empty.
  */
 export function farmGroups(doc) {
-  const groups = (doc?.groups || []).map((g) => ({ label: g.label, items: [...(g.items || [])] }));
-  const all = groups.flatMap((g) => g.items);
-  if (!all.some((i) => i.id === TIMELAPSES.id || i.farm_path === TIMELAPSES.farm_path)) {
-    const print = groups.find((g) => g.items.some((i) => i.farm_path)) || groups[0];
-    if (print) {
-      const at = print.items.findIndex((i) => i.id === 'filament' || i.farm_path === '/app/filament');
-      print.items.splice(at >= 0 ? at + 1 : print.items.length, 0, TIMELAPSES);
-    }
-  }
-  return groups.map((g) => ({
+  return (doc?.groups || []).map((g) => ({
     label: g.label,
-    items: g.items.filter((i) => i && i.label && (i.href || i.farm_path)).map((i) => {
+    items: (g.items || []).filter((i) => i && i.label && (i.href || i.farm_path)).map((i) => {
       if (i.farm_path) return { ...i, href: base + i.farm_path, path: i.farm_path, farm: true, reload: false };
       return { ...i, href: i.href, farm: false, reload: true, external: false, abs: isUrl(i.href) };
     })
-  }));
+  })).filter((g) => g.items.length);
 }
 
 /** The farm page a path (without the base) belongs to: a sidebar item or one of FARM_PAGES. */

@@ -49,6 +49,60 @@
       ]
     },
     {
+      "label": "Farm",
+      "items": [
+        {
+          "id": "files",
+          "label": "Files",
+          "icon": "cube",
+          "app": "farm",
+          "farm_path": "/app/files"
+        },
+        {
+          "id": "slicer",
+          "label": "Slicer",
+          "icon": "layers",
+          "app": "farm",
+          "farm_path": "/app/slicer"
+        },
+        {
+          "id": "projects",
+          "label": "Projects",
+          "icon": "box",
+          "app": "farm",
+          "farm_path": "/app/projects"
+        },
+        {
+          "id": "statistics",
+          "label": "Statistics",
+          "icon": "chart",
+          "app": "farm",
+          "farm_path": "/app/statistics"
+        },
+        {
+          "id": "print-reports",
+          "label": "Print reports",
+          "icon": "file-text",
+          "app": "farm",
+          "farm_path": "/app/reports"
+        },
+        {
+          "id": "timelapses",
+          "label": "Timelapses",
+          "icon": "film",
+          "app": "farm",
+          "farm_path": "/app/timelapses"
+        },
+        {
+          "id": "farm-settings",
+          "label": "Farm settings",
+          "icon": "cog",
+          "app": "farm",
+          "farm_path": "/app/settings"
+        }
+      ]
+    },
+    {
       "label": "Library",
       "items": [
         {

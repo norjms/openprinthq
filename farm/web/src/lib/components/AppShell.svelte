@@ -106,7 +106,8 @@
   // Everything the palette can jump to: the sidebar, then the farm's own pages.
   const jumpItems = $derived([
     ...groups.flatMap((g) => g.items.map((i) => ({ href: i.href, label: i.label, icon: i.icon, group: g.label, reload: i.reload }))),
-    ...[...FARM_PAGES, ...extraPages].filter((p) => !p.hidden).map((p) => ({ href: basePath + p.path, label: p.label, icon: p.icon, group: 'Farm' }))
+    ...[...FARM_PAGES, ...extraPages].filter((p) => !p.hidden && !groups.some((g) => g.items.some((i) => i.farm && i.path === p.path)))
+      .map((p) => ({ href: basePath + p.path, label: p.label, icon: p.icon, group: 'Farm' }))
   ]);
 
   const initials = $derived.by(() => {
