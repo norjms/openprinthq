@@ -1,11 +1,12 @@
 <script>
-  // ArtisanHub Farm — searchable preset combobox.
+  import Icon from '$lib/components/AppIcon.svelte';
+  // ArtisanHub Farm, searchable preset combobox.
   // SPDX-License-Identifier: AGPL-3.0-or-later
   // Native <select> is unusable for OrcaSlicer's preset lists (the filament
   // list alone is ~1000 entries). This is a type-to-filter dropdown; options
   // whose label contains `priority` (e.g. the chosen printer's model+nozzle)
   // are floated to the top so the compatible ones surface first.
-  let { options = [], value = $bindable(), placeholder = 'Search…', priority = '', id = undefined } = $props();
+  let { options = [], value = $bindable(), placeholder = 'Search', priority = '', id = undefined } = $props();
 
   let open = $state(false);
   let filter = $state('');
@@ -45,7 +46,7 @@
     onfocus={openMenu}
     oninput={(e) => { open = true; filter = e.target.value; }}
   />
-  <span class="caret" aria-hidden="true">▾</span>
+  <span class="caret" aria-hidden="true"><Icon name="down" size={14} /></span>
   {#if open}
     <div class="menu">
       {#if shown.length === 0}
@@ -55,7 +56,7 @@
           <button type="button" class="opt" class:sel={o.value === value} onmousedown={() => pick(o)}>{o.label}</button>
         {/each}
         {#if !filter && options.length > shown.length}
-          <div class="more">Type to search all {options.length}…</div>
+          <div class="more">Type to search all {options.length}</div>
         {/if}
       {/if}
     </div>

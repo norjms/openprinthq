@@ -1,5 +1,5 @@
 <script>
-  // ArtisanHub Farm — in-app G-code toolpath preview (#17).
+  // ArtisanHub Farm, in-app G-code toolpath preview (#17).
   // Fetches a library file's raw g-code (engine `/library/files/{id}/gcode`,
   // which unwraps .gcode.3mf), parses G0/G1 moves into layers, and renders a
   // top-down canvas with a layer slider. Self-contained (no WebGL / deps).
@@ -12,7 +12,7 @@
   // which is the only part that is hard to get right.
   let { fileId = null, url = null, name = '' } = $props();
 
-  // Guards — real prints can be tens of MB / millions of moves. Keep the UI
+  // Guards, real prints can be tens of MB / millions of moves. Keep the UI
   // responsive and never hang the tab.
   const MAX_BYTES = 26 * 1024 * 1024;    // ~26 MB of g-code text
   const MAX_SEGMENTS = 900_000;
@@ -95,7 +95,7 @@
       if (++segCount >= MAX_SEGMENTS) { cutoff = true; break; }
     }
 
-    // Keep only layers that actually extrude — travel-only Z levels (probe at
+    // Keep only layers that actually extrude, travel-only Z levels (probe at
     // Z-1, end-of-print park at Z100+) would otherwise pad the slider with
     // empty "layers".
     let out = [...byZ.values()].sort((a, b) => a.z - b.z).filter((l) => l.print.length > 0);
@@ -204,7 +204,7 @@
 
 <div class="gv">
   {#if loading}
-    <div class="gv-state muted">Parsing g-code…</div>
+    <div class="gv-state muted">Parsing g-code</div>
   {:else if error}
     <div class="gv-state"><p class="muted">{error}</p></div>
   {:else}
@@ -215,7 +215,7 @@
         <span class="mono lyr">Layer {cur + 1}/{layers.length} · Z {curZ.toFixed(2)} mm</span>
         <label class="tv"><input type="checkbox" bind:checked={showTravel} /><span>travel</span></label>
       </div>
-      {#if truncated}<p class="trunc muted">Large file — preview truncated for performance.</p>{/if}
+      {#if truncated}<p class="trunc muted">Large file, preview truncated for performance.</p>{/if}
     </div>
   {/if}
 </div>

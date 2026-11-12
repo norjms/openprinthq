@@ -2,6 +2,7 @@
   import { base as basePath } from '$app/paths';
   import Header from '$lib/components/Header.svelte';
   import Footer from '$lib/components/Footer.svelte';
+  import Icon from '$lib/components/AppIcon.svelte';
   import { branding } from '$lib/stores/appearance';
 
   const printers = [
@@ -17,35 +18,36 @@
   ];
 
   const features = [
-    { icon: '🏢', title: 'Your own private instance', body: 'Every account gets an isolated ArtisanHub Farm — its own database, printers and storage. No shared tenancy, no noisy neighbors.' },
-    { icon: '🖨️', title: 'Multi-brand, one HQ', body: 'Built around OrcaSlicer, so it targets what OrcaSlicer targets — Bambu Lab today, with Prusa, Creality, Klipper/Voron and more in active validation. One queue, one dashboard, every machine.' },
-    { icon: '🧩', title: 'OrcaSlicer, built in', body: 'Slice STL and 3MF right in the browser with a bundled OrcaSlicer — no desktop install. Send straight to any printer in your fleet.' },
-    { icon: '🎥', title: 'Live monitoring', body: 'Peer-to-peer WebRTC camera streams, temperatures, progress and health in real time. Catch failures before they waste a spool.' },
-    { icon: '🔐', title: 'SSO, invites & roles', body: 'Secure Authentik single sign-on with invite-gated onboarding. An owner admin console with per-instance controls and owner/user roles — provision teammates in a click.' },
-    { icon: '⚡', title: 'Staggered batch printing', body: 'Fire the same job across many printers at once. Heat-up is serialized per breaker circuit and runs in parallel across circuits — no tripped breakers.' },
-    { icon: '🛰️', title: 'Reach printers anywhere', body: 'Secure outbound connectors bridge LAN printers behind NAT or CGNAT — remote monitoring and control with no port-forwarding.' },
-    { icon: '≣', title: 'Fleet queue & scheduling', body: 'One print queue across the whole farm. Assign jobs, reorder, and keep every machine busy from a single command center.' },
-    { icon: '🎞️', title: 'Timelapses & projects', body: 'Automatic per-print timelapses and project organisation — capture, group and revisit every build.' },
-    { icon: '🧵', title: 'Filament & spool tracking', body: 'Track spools, usage and cost automatically. Know what you have on hand and what a print really costs.' },
-    { icon: '📈', title: 'Statistics & reports', body: 'Success rates, throughput and usage across the fleet, with printable reports for your records or clients.' },
-    { icon: '🔌', title: 'Integrations', body: 'Per-user read-only tokens expose fleet status to Home Assistant, Homepage and Prometheus — plug ArtisanHub Farm into your dashboards.' },
-    { icon: '🎨', title: 'Themes & accessibility', body: 'Dark, light and WCAG-tuned accessible modes — accessible mode ships high-contrast colours and larger text by default. Custom colours, text scaling and your own branding — make it yours.' },
-    { icon: '🔓', title: 'Social sign-in', body: 'Sign in with Google, Facebook or Microsoft as well as email. Onboarding stays invite-gated, so you keep control of who joins.' },
-    { icon: '🧪', title: 'GenFilament — AI profiles', body: 'Generate tuned filament profiles for new or unusual materials with AI, ready to slice. Available as an optional paid add-on.' },
-    { icon: '🔒', title: 'Yours to host', body: 'Self-hostable and fully open source under AGPL-3.0. Your data never has to leave your network.' }
+    { icon: 'home', title: 'Your own private instance', body: 'Every account gets an isolated ArtisanHub Farm: its own database, printers and storage. No shared tenancy, no noisy neighbors.' },
+    { icon: 'printer', title: 'Multi-brand, one HQ', body: 'Built around OrcaSlicer, so it targets what OrcaSlicer targets: Bambu Lab today, with Prusa, Creality, Klipper/Voron and more in active validation. One queue, one dashboard, every machine.' },
+    { icon: 'layers', title: 'OrcaSlicer, built in', body: 'Slice STL and 3MF right in the browser with a bundled OrcaSlicer. No desktop install. Send straight to any printer in your fleet.' },
+    { icon: 'camera', title: 'Live monitoring', body: 'Peer-to-peer WebRTC camera streams, temperatures, progress and health in real time. Catch failures before they waste a spool.' },
+    { icon: 'shield', title: 'Single sign-on, invites and roles', body: 'Secure Authentik single sign-on with invite-gated onboarding. An owner admin console with per-instance controls and owner and user roles: add teammates in a click.' },
+    { icon: 'bolt', title: 'Staggered batch printing', body: 'Fire the same job across many printers at once. Heat-up is serialized per breaker circuit and runs in parallel across circuits, so no breaker trips.' },
+    { icon: 'plug', title: 'Reach printers anywhere', body: 'Secure outbound connectors bridge LAN printers behind NAT or CGNAT: remote monitoring and control with no port forwarding.' },
+    { icon: 'list-queue', title: 'Fleet queue and scheduling', body: 'One print queue across the whole farm. Assign jobs, reorder, and keep every machine busy from a single command center.' },
+    { icon: 'film', title: 'Timelapses and projects', body: 'Automatic per-print timelapses and project organisation: capture, group and revisit every build.' },
+    { icon: 'spool', title: 'Filament and spool tracking', body: 'Track spools, usage and cost automatically. Know what you have on hand and what a print really costs.' },
+    { icon: 'chart', title: 'Statistics and reports', body: 'Success rates, throughput and usage across the fleet, with printable reports for your records or clients.' },
+    { icon: 'puzzle', title: 'Integrations', body: 'Per-user read-only tokens expose fleet status to Home Assistant, Homepage and Prometheus, so ArtisanHub Farm plugs into your dashboards.' },
+    { icon: 'users', title: 'Accessible by design', body: 'Glass that turns to solid panels on request, text scaling, larger targets, underlined links and a legible font. Add your own name, logo and favicon.' },
+    { icon: 'key', title: 'Social sign-in', body: 'Sign in with Google, Facebook or Microsoft as well as email. Onboarding stays invite-gated, so you keep control of who joins.' },
+    { icon: 'scan', title: 'GenFilament, AI profiles', body: 'Generate tuned filament profiles for new or unusual materials with AI, ready to slice. Available as an optional paid add-on.' },
+    { icon: 'lock', title: 'Yours to host', body: 'Self-hostable and fully open source under AGPL-3.0. Your data never has to leave your network.' }
   ];
 
   const steps = [
     { n: '01', t: 'Create your account', d: 'Sign in and we provision a dedicated instance just for you in seconds.' },
-    { n: '02', t: 'Add your printers', d: 'Point ArtisanHub Farm at your machines — Bambu Lab, Prusa, Creality, Klipper/Voron, OctoPrint and more.' },
+    { n: '02', t: 'Add your printers', d: 'Point ArtisanHub Farm at your machines: Bambu Lab, Prusa, Creality, Klipper/Voron, OctoPrint and more.' },
     { n: '03', t: 'Run your farm', d: 'Queue, slice, monitor and manage everything from one command center.' }
   ];
 </script>
 
-<svelte:head><title>{$branding.siteName} — One HQ for every printer</title></svelte:head>
+<svelte:head><title>{$branding.siteName}: one HQ for every printer</title></svelte:head>
 
 <Header />
 
+<div class="ah-root landing">
 <!-- HERO -->
 <section class="hero">
   <div class="container">
@@ -53,12 +55,12 @@
     <h1>One command center for<br /><span class="grad">every 3D printer.</span></h1>
     <p class="lead">
       {$branding.siteName} brings Bambu Lab, Prusa, Creality, Klipper/Voron and more OrcaSlicer-compatible
-      printers into a single private HQ — queue, slice, monitor and manage your whole farm from one place.
+      printers into a single private HQ: queue, slice, monitor and manage your whole farm from one place.
       Every user gets their own isolated instance.
     </p>
     <div class="cta">
-      <a href="{basePath}/signup" class="btn btn-primary">Launch your HQ →</a>
-      <a href="{basePath}/#how" class="btn btn-ghost">See how it works</a>
+      <a href="{basePath}/signup" class="btn btn-primary">Launch your HQ</a>
+      <a href="/#how" class="btn btn-ghost">See how it works</a>
     </div>
     <div class="stat-row">
       <div><b>9</b><span>printer brands supported &amp; in validation</span></div>
@@ -83,7 +85,7 @@
       {/each}
     </div>
     <p class="small note-validating">
-      ArtisanHub Farm targets every printer OrcaSlicer can talk to — Bambu Lab, Prusa, Creality,
+      ArtisanHub Farm targets every printer OrcaSlicer can talk to: Bambu Lab, Prusa, Creality,
       Voron/Klipper (Moonraker), OctoPrint, Snapmaker, FlashForge, MKS and Duet/RepRapFirmware.
       Support beyond Bambu Lab is <strong>actively being tested and validated</strong>, so brands
       roll out as they pass our hardware checks.
@@ -99,7 +101,7 @@
     <div class="feature-grid">
       {#each features as f}
         <div class="card card-pad feature">
-          <div class="ficon">{f.icon}</div>
+          <div class="ficon"><Icon name={f.icon} size={20} /></div>
           <h3>{f.title}</h3>
           <p>{f.body}</p>
         </div>
@@ -133,7 +135,7 @@
       <h2>Free software. Forever.</h2>
       <p>
         ArtisanHub Farm is licensed under the GNU AGPL-3.0. You can read the source, self-host it, audit it and
-        improve it. Built on the shoulders of the open 3D-printing community — with full attribution to the
+        improve it. Built on the shoulders of the open 3D-printing community, with full attribution to the
         projects that made it possible.
       </p>
       <div class="cta">
@@ -145,16 +147,18 @@
 </section>
 
 <Footer />
+</div>
 
 <style>
+  .landing { background: transparent; }
   .hero { padding: 5.5rem 0 3rem; text-align: center; }
   .hero .chip { margin-bottom: 1.4rem; }
-  .grad { background: linear-gradient(100deg, var(--ophq-primary-2), var(--ophq-accent)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .grad { color: var(--ah-accent); }
   .lead { font-size: 1.2rem; max-width: 60ch; margin: 1.2rem auto 2rem; color: var(--ophq-text-2); }
   .cta { display: flex; gap: 0.8rem; justify-content: center; flex-wrap: wrap; }
   .stat-row { display: flex; gap: 2.5rem; justify-content: center; margin-top: 3rem; flex-wrap: wrap; }
   .stat-row div { display: flex; flex-direction: column; }
-  .stat-row b { font-size: 2rem; color: var(--ophq-text); font-family: var(--font-mono); }
+  .stat-row b { font-size: 2rem; color: var(--ophq-text); font-family: var(--ah-font-display); font-weight: 500; letter-spacing: -0.03em; }
   .stat-row span { color: var(--ophq-muted); font-size: 0.9rem; }
 
   .section { padding: 3.5rem 0; }
@@ -173,7 +177,7 @@
   .printer .models { color: var(--ophq-primary-2); font-size: 0.85rem; margin-bottom: 0.8rem; }
 
   .feature-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.2rem; }
-  .feature .ficon { font-size: 1.8rem; margin-bottom: 0.6rem; }
+  .feature .ficon { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: var(--ah-chip-live-bg); color: var(--ah-accent); margin-bottom: 10px; }
   .feature h3 { font-size: 1.1rem; }
   .feature p { font-size: 0.95rem; margin: 0; }
 

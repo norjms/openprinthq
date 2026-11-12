@@ -1,9 +1,11 @@
 <script>
   import { base as basePath } from '$app/paths';
+  import Icon from '$lib/components/AppIcon.svelte';
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
   import EngineError from '$lib/components/EngineError.svelte';
   import PageTitle from '$lib/components/PageTitle.svelte';
+  import PageHead from '$lib/components/PageHead.svelte';
 
   let loading = $state(true);
   let error = $state(null);
@@ -43,7 +45,7 @@
   async function cancelBatch() {
     if (!batch) return;
     batchActing = true;
-    try { await api.batchCancel(batch.id); await loadBatch(); await load(); showToast('ok', 'Batch cancelled — held jobs removed.'); }
+    try { await api.batchCancel(batch.id); await loadBatch(); await load(); showToast('ok', 'Batch cancelled, held jobs removed.'); }
     catch (e) { showToast('err', e.message || 'could not cancel'); }
     finally { batchActing = false; }
   }
@@ -226,27 +228,27 @@
 
 <PageTitle page="Print queue" />
 
-<div class="head">
-  <div><h1>Print queue</h1><p class="muted">One queue across your whole fleet.</p></div>
-  <div class="flex gap center">
+<PageHead title="Print queue" description="One queue across your whole fleet.">
+  {#snippet actions()}
     {#if !loading && !error && items.length > 0}
-      <select class="input filt" bind:value={filterPrinter} aria-label="Filter by printer">
+      <label class="sr-only" for="q-filter">Show jobs for</label>
+      <select id="q-filter" class="input filt" bind:value={filterPrinter}>
         <option value="all">All printers</option>
         <option value="unassigned">Unassigned</option>
         {#each printers as p}<option value={String(p.id)}>{p.name}</option>{/each}
       </select>
     {/if}
+    <button class="btn" onclick={load}><Icon name="refresh" size={16} />Refresh</button>
     {#if !loading && !error && unassignedCount > 0}
-      <button class="btn btn-primary btn-sm" onclick={smartRoute} disabled={routing} title="Assign unassigned jobs to the best-matched printer (material, model, load)">
-        {routing ? 'Routing…' : `⚡ Auto-assign (${unassignedCount})`}
+      <button class="btn btn-primary" onclick={smartRoute} disabled={routing} title="Assign unassigned jobs to the best-matched printer (material, model, load)">
+        <Icon name="bolt" size={16} />{routing ? 'Routing' : `Auto-assign (${unassignedCount})`}
       </button>
     {/if}
-    <button class="btn btn-ghost btn-sm" onclick={load}>Refresh</button>
-  </div>
-</div>
+  {/snippet}
+</PageHead>
 
 {#if toast}
-  <div class="toast {toast.kind}">{toast.text}</div>
+  <div class="ah-banner {toast.kind === 'ok' ? 'ah-banner--live' : 'ah-banner--bad'}" role="status">{toast.text}</div>
 {/if}
 
 {#if batch}
@@ -275,7 +277,7 @@
           </span>
           <span class="sinfo">
             {#if ss.key === 'preheating' && tm}
-              <span class="mono ttemp">bed {Math.round(tm.bed)}/{Math.round(tm.bedTarget) || '—'}°{#if tm.chamberTarget > 0} · chamber {Math.round(tm.chamber)}/{Math.round(tm.chamberTarget)}°{/if}</span>
+              <span class="mono ttemp">bed {Math.round(tm.bed)}/{Math.round(tm.bedTarget) || ''}°{#if tm.chamberTarget > 0} · chamber {Math.round(tm.chamber)}/{Math.round(tm.chamberTarget)}°{/if}</span>
             {/if}
           </span>
           <span class="schip {ss.key}">{ss.label}</span>
@@ -286,16 +288,16 @@
 {/if}
 
 {#if loading}
-  <div class="card card-pad muted">Loading queue…</div>
+  <div class="card card-pad muted">Loading queue</div>
 {:else if error === 'no-instance'}
   <div class="card card-pad"><p class="muted">Provision your instance from the <a href="{basePath}/app">overview</a> first.</p></div>
 {:else if error}
   <EngineError {error} onretry={load} />
 {:else if items.length === 0}
   <div class="card card-pad empty">
-    <div class="ic">≣</div>
+    <div class="ic"><Icon name="list-queue" size={28} /></div>
     <h3>Queue is empty</h3>
-    <p class="muted">Slice a model or add a G-code file to the queue — jobs across your whole fleet show up here.</p>
+    <p class="muted">Slice a model or add a G-code file to the queue, jobs across your whole fleet show up here.</p>
     <a class="btn btn-primary" href="{basePath}/app/files">Go to files</a>
   </div>
 {:else if shownItems.length === 0}
@@ -305,21 +307,17 @@
   </div>
 {:else}
   <div class="card list">
-    <div class="row head-row muted mono"><span>#</span><span>Job</span><span>Printer</span><span>Status</span><span class="ar">Actions</span></div>
+    <div class="row head-row"><span>#</span><span>Job</span><span>Printer</span><span>Status</span><span class="ar">Actions</span></div>
     {#each shownItems as q, i (q.id)}
       <div class="row" class:busy={busyId === q.id}>
-        <span class="mono muted pos">{i + 1}</span>
+        <span class="muted pos num">{i + 1}</span>
         <span class="name">
           {q.name}
-          <span class="sub mono">
-            {#if q.qty > 1}×{q.qty}{/if}
-            {#if q.filament}· {q.filament}{/if}
-            {#if fmtTime(q.timeSec)}· ~{fmtTime(q.timeSec)}{/if}
-          </span>
+          <span class="sub">{[q.qty > 1 ? `${q.qty} copies` : '', q.filament, fmtTime(q.timeSec) ? `about ${fmtTime(q.timeSec)}` : ''].filter(Boolean).join(' · ')}</span>
         </span>
         <span>
           {#if isActive(q.status)}
-            <span class="mono">{q.printer || '—'}</span>
+            <span>{q.printer || ''}</span>
           {:else}
             <select class="input sel" value={q.printerId ?? ''} onchange={(e) => assign(q, e)} disabled={busyId === q.id}>
               <option value="">Unassigned (auto)</option>
@@ -327,11 +325,11 @@
             </select>
           {/if}
         </span>
-        <span><span class="chip {tone(q.status)}">{q.status}</span></span>
+        <span><span class="chip {tone(q.status)}">{String(q.status || '').replace(/^./, (c) => c.toUpperCase())}</span></span>
         <span class="acts">
           {#if isPending(q.status)}
-            <button class="ib" title={filtered ? 'Clear filter to reorder' : 'Move up'} onclick={() => move(i, -1)} disabled={busyId === q.id || i === 0 || filtered} aria-label="Move up">↑</button>
-            <button class="ib" title={filtered ? 'Clear filter to reorder' : 'Move down'} onclick={() => move(i, 1)} disabled={busyId === q.id || i === shownItems.length - 1 || filtered} aria-label="Move down">↓</button>
+            <button class="ib" title={filtered ? 'Clear filter to reorder' : 'Move up'} onclick={() => move(i, -1)} disabled={busyId === q.id || i === 0 || filtered} aria-label="Move up"><Icon name="up" size={14} /></button>
+            <button class="ib" title={filtered ? 'Clear filter to reorder' : 'Move down'} onclick={() => move(i, 1)} disabled={busyId === q.id || i === shownItems.length - 1 || filtered} aria-label="Move down"><Icon name="down" size={14} /></button>
             <button class="btn btn-ghost btn-sm" onclick={() => act(q.id, () => api.queueStart(q.id), 'Print started.')} disabled={busyId === q.id}>Start</button>
           {/if}
           {#if isActive(q.status)}
@@ -341,44 +339,39 @@
             <button class="btn btn-danger btn-sm" onclick={() => act(q.id, () => api.queueDelete(q.id), 'Removed from queue.')} disabled={busyId === q.id}>Confirm</button>
             <button class="btn btn-ghost btn-sm" onclick={() => (confirmDel = null)}>Keep</button>
           {:else}
-            <button class="ib" title="Remove" onclick={() => (confirmDel = q.id)} disabled={busyId === q.id} aria-label="Remove">✕</button>
+            <button class="ib" title="Remove" onclick={() => (confirmDel = q.id)} disabled={busyId === q.id} aria-label="Remove"><Icon name="x" size={14} /></button>
           {/if}
         </span>
       </div>
     {/each}
   </div>
   {#if printers.length === 0}
-    <p class="muted hint">No printers yet — items stay unassigned until you <a href="{basePath}/app/printers/add">add a printer</a>. The scheduler dispatches unassigned jobs to any compatible machine.</p>
+    <p class="muted hint">No printers yet, items stay unassigned until you <a href="{basePath}/app/printers/add">add a printer</a>. The scheduler dispatches unassigned jobs to any compatible machine.</p>
   {/if}
 {/if}
 
 <style>
-  .head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 1.4rem; gap: 1rem; }
-  .head h1 { margin: 0; }
-  .filt { width: auto; padding: 0.45rem 0.7rem; font-size: 0.85rem; }
+    .filt { width: auto; }
   .flt-empty { display: flex; align-items: center; gap: 0.8rem; }
-  .empty { text-align: center; padding: 2.6rem; }
-  .empty .ic { font-size: 1.8rem; margin-bottom: 0.3rem; }
+  .empty { text-align: center; padding: 40px; display: flex; flex-direction: column; align-items: center; }
+  .empty .ic { width: 56px; height: 56px; border-radius: 16px; background: var(--ah-chip-live-bg); color: var(--ah-accent); display: grid; place-items: center; margin-bottom: 10px; }
   .empty p { max-width: 46ch; margin: 0.6rem auto 1.4rem; }
-  .list { overflow: visible; }
-  .row { display: grid; grid-template-columns: 34px 1fr 190px 110px 200px; gap: 1rem; align-items: center; padding: 0.7rem 1.2rem; border-bottom: 1px solid var(--ophq-border); }
+  .list { overflow: auto; min-height: 0; flex: 0 1 auto; padding: 4px 6px; }
+  .row { display: grid; grid-template-columns: 34px minmax(0, 1fr) 210px 110px 230px; gap: 14px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--ah-row-line); }
   .row:last-child { border-bottom: none; }
   .row.busy { opacity: 0.55; }
-  .head-row { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .head-row { position: sticky; top: 0; z-index: 1; background: var(--ah-table-head); font-size: 12px; font-weight: 600; color: var(--ah-text-2); border-radius: 12px 12px 0 0; }
   .ar { text-align: right; }
   .name { font-weight: 500; display: flex; flex-direction: column; gap: 0.15rem; }
-  .name .sub { font-size: 0.78rem; color: var(--ophq-muted); font-weight: 400; }
-  .sel { padding: 0.4rem 0.5rem; font-size: 0.85rem; }
+  .name .sub { font-size: 12px; color: var(--ah-text-3); font-weight: 400; }
+  .sel { min-height: 34px; font-size: 13px; }
   .acts { display: flex; gap: 0.35rem; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
-  .ib { background: transparent; border: 1px solid var(--ophq-border); color: var(--ophq-text-2); border-radius: var(--radius-sm); width: 28px; height: 28px; cursor: pointer; font-size: 0.9rem; line-height: 1; }
+  .ib { background: var(--ah-glass); border: 1px solid var(--ah-field-line); color: var(--ah-text); border-radius: var(--ah-radius-btn-sm); width: 32px; height: 32px; cursor: pointer; display: inline-grid; place-items: center; }
   .ib:hover:not(:disabled) { border-color: var(--ophq-primary); color: var(--ophq-text); }
   .ib:disabled { opacity: 0.35; cursor: default; }
-  .btn-danger { background: var(--ophq-danger); color: #fff; }
   .danger-text { color: var(--ophq-danger); }
-  .chip.danger { color: var(--ophq-danger); border-color: rgba(255,92,108,0.3); background: rgba(255,92,108,0.08); }
-  .chip.primary { color: var(--ophq-primary-2); border-color: rgba(124,108,255,0.35); background: var(--ophq-primary-dim); }
-  .hint { margin-top: 1rem; font-size: 0.88rem; }
-  .batch { padding: 1.1rem 1.2rem; margin-bottom: 1.2rem; border-color: rgba(124,108,255,0.35); }
+  .hint { margin: 0; font-size: 13px; }
+  .batch { padding: 16px 18px; border-color: var(--ah-chip-live-line); flex: none; }
   .bhead { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 0.9rem; }
   .bhead h3 { margin: 0.2rem 0 0.2rem; font-size: 1.05rem; }
   .bhead .tiny { font-size: 0.78rem; margin: 0; max-width: 60ch; }
@@ -389,14 +382,14 @@
   .cchip { font-size: 0.7rem; padding: 0.08rem 0.4rem; border-radius: 999px; border: 1px solid var(--ophq-border); color: var(--ophq-text-2); background: var(--ophq-bg-2); }
   .ttemp { font-size: 0.76rem; color: var(--ophq-text-2); }
   .schip { font-size: 0.72rem; padding: 0.12rem 0.5rem; border-radius: 999px; border: 1px solid var(--ophq-border); color: var(--ophq-text-2); white-space: nowrap; }
-  .schip.preheating { color: var(--ophq-accent); border-color: rgba(255,176,32,0.35); background: rgba(255,176,32,0.08); }
-  .schip.ready { color: var(--ophq-success); border-color: rgba(53,196,107,0.3); background: rgba(53,196,107,0.08); }
+  .schip.preheating { color: var(--ophq-accent); border-color: rgba(255,179,138,0.35); background: rgba(255,179,138,0.08); }
+  .schip.ready { color: var(--ophq-success); border-color: rgba(155,226,143,0.3); background: rgba(155,226,143,0.08); }
   .schip.waiting { color: var(--ophq-muted); }
-  .schip.timeout { color: var(--ophq-danger); border-color: rgba(255,92,108,0.3); background: rgba(255,92,108,0.08); }
-  .bstep.preheating { border-color: rgba(255,176,32,0.28); }
+  .schip.timeout { color: var(--ophq-danger); border-color: rgba(230,103,103,0.3); background: rgba(230,103,103,0.08); }
+  .bstep.preheating { border-color: rgba(255,179,138,0.28); }
   .toast { padding: 0.7rem 1rem; border-radius: var(--radius-sm); margin-bottom: 1.1rem; font-size: 0.9rem; border: 1px solid; }
-  .toast.ok { color: var(--ophq-success); border-color: rgba(53,196,107,0.3); background: rgba(53,196,107,0.08); }
-  .toast.err { color: var(--ophq-danger); border-color: rgba(255,92,108,0.3); background: rgba(255,92,108,0.08); }
+  .toast.ok { color: var(--ophq-success); border-color: rgba(155,226,143,0.3); background: rgba(155,226,143,0.08); }
+  .toast.err { color: var(--ophq-danger); border-color: rgba(230,103,103,0.3); background: rgba(230,103,103,0.08); }
   @media (max-width: 780px) {
     .row { grid-template-columns: 24px 1fr 120px; row-gap: 0.5rem; }
     .row > :nth-child(4), .head-row > :nth-child(4) { display: none; }

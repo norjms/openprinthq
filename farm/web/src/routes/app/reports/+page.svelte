@@ -1,16 +1,18 @@
 <script>
   import { base as basePath } from '$app/paths';
-  // ArtisanHub Farm — print-cost & billing reports (#25).
+  import Icon from '$lib/components/AppIcon.svelte';
+  // ArtisanHub Farm, print-cost & billing reports (#25).
   // Pulls the print log for a chosen period + printer, computes filament/energy
   // cost per job (falling back to grams × default filament cost when a job has
   // no stored cost), and renders a print-optimised report. "Download PDF" uses
   // the browser's native print-to-PDF (window.print) with @media print CSS that
-  // strips the app chrome — zero extra dependencies, reliable output.
+  // strips the app chrome, zero extra dependencies, reliable output.
   // SPDX-License-Identifier: AGPL-3.0-or-later
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
   import EngineError from '$lib/components/EngineError.svelte';
   import PageTitle from '$lib/components/PageTitle.svelte';
+  import PageHead from '$lib/components/PageHead.svelte';
   import { branding } from '$lib/stores/appearance';
 
   const CUR_SYM = { USD: '$', EUR: '€', GBP: '£', CAD: 'C$', AUD: 'A$', JPY: '¥', CNY: '¥', INR: '₹', BRL: 'R$', MXN: 'MX$', CHF: 'CHF ', SEK: 'kr ', NOK: 'kr ', DKK: 'kr ', PLN: 'zł ', NZD: 'NZ$', ZAR: 'R ' };
@@ -129,10 +131,11 @@
 <PageTitle page="Reports" />
 
 <div class="controls no-print">
-  <div class="head">
-    <div><h1>Reports</h1><p class="muted">Print-cost &amp; billing summary for any period.</p></div>
-    <button class="btn btn-primary" onclick={() => window.print()} disabled={loading || !!error}>⭳ Download PDF</button>
-  </div>
+  <PageHead title="Reports" description="Print cost and billing summary for any period.">
+    {#snippet actions()}
+      <button class="btn btn-primary" onclick={() => window.print()} disabled={loading || !!error}><Icon name="download" size={16} />Download PDF</button>
+    {/snippet}
+  </PageHead>
   <div class="filters card card-pad">
     <div class="fld">
       <label for="pd">Period</label>
@@ -142,7 +145,7 @@
         <option value="last_30">Last 30 days</option>
         <option value="last_90">Last 90 days</option>
         <option value="ytd">Year to date</option>
-        <option value="custom">Custom range…</option>
+        <option value="custom">Custom range</option>
       </select>
     </div>
     {#if period === 'custom'}
@@ -156,7 +159,7 @@
         {#each printers as p (p.id)}<option value={p.id}>{p.name}</option>{/each}
       </select>
     </div>
-    <button class="btn btn-ghost" onclick={run} disabled={loading}>{loading ? 'Loading…' : 'Refresh'}</button>
+    <button class="btn btn-ghost" onclick={run} disabled={loading}>{loading ? 'Loading' : 'Refresh'}</button>
   </div>
 </div>
 
@@ -175,7 +178,7 @@
     </div>
 
     {#if loading}
-      <div class="card card-pad muted">Building report…</div>
+      <div class="card card-pad muted">Building report</div>
     {:else}
       <div class="cards">
         <div class="stat"><span class="k">Total prints</span><span class="v">{summary.total}</span></div>
@@ -190,10 +193,10 @@
           <thead><tr><th>Printer</th><th class="r">Prints</th><th class="r">Filament</th><th class="r">Energy</th><th class="r">Cost</th></tr></thead>
           <tbody>
             {#each byPrinter as p (p.name)}
-              <tr><td>{p.name}</td><td class="r">{p.prints}</td><td class="r">{(p.grams / 1000).toFixed(2)} kg</td><td class="r">{p.kwh ? p.kwh.toFixed(2) + ' kWh' : '—'}</td><td class="r">{money(p.cost)}</td></tr>
+              <tr><td>{p.name}</td><td class="r">{p.prints}</td><td class="r">{(p.grams / 1000).toFixed(2)} kg</td><td class="r">{p.kwh ? p.kwh.toFixed(2) + ' kWh' : ''}</td><td class="r">{money(p.cost)}</td></tr>
             {/each}
           </tbody>
-          <tfoot><tr><td>Total</td><td class="r">{summary.total}</td><td class="r">{(summary.grams / 1000).toFixed(2)} kg</td><td class="r">{summary.kwh ? summary.kwh.toFixed(2) + ' kWh' : '—'}</td><td class="r">{money(summary.cost)}</td></tr></tfoot>
+          <tfoot><tr><td>Total</td><td class="r">{summary.total}</td><td class="r">{(summary.grams / 1000).toFixed(2)} kg</td><td class="r">{summary.kwh ? summary.kwh.toFixed(2) + ' kWh' : ''}</td><td class="r">{money(summary.cost)}</td></tr></tfoot>
         </table>
       {/if}
 
@@ -207,11 +210,11 @@
             {#each rows as r (r.id ?? (r.created_at + r.print_name))}
               <tr>
                 <td class="nowrap">{fmtDate(r.created_at)}</td>
-                <td class="fn">{r.print_name || '—'}</td>
-                <td>{r.printer_name || '—'}</td>
+                <td class="fn">{r.print_name || ''}</td>
+                <td>{r.printer_name || ''}</td>
                 <td><span class="badge {isDone(r.status) ? 'ok' : isFail(r.status) ? 'bad' : ''}">{r.status}</span></td>
                 <td class="r nowrap">{fmtDur(r.duration_seconds)}</td>
-                <td class="r nowrap">{r._c.grams ? r._c.grams.toFixed(0) + ' g' : '—'}</td>
+                <td class="r nowrap">{r._c.grams ? r._c.grams.toFixed(0) + ' g' : ''}</td>
                 <td class="r nowrap">{money(r._c.total)}{#if r._c.estimated}<span class="est" title="Estimated from filament weight">*</span>{/if}</td>
               </tr>
             {/each}
@@ -264,8 +267,8 @@
   .jobs .fn { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .nowrap { white-space: nowrap; }
   .badge { font-size: 0.72rem; padding: 0.1rem 0.45rem; border-radius: 999px; border: 1px solid var(--ophq-border); color: var(--ophq-text-2); }
-  .badge.ok { color: var(--ophq-success); border-color: rgba(53,196,107,0.3); background: rgba(53,196,107,0.08); }
-  .badge.bad { color: var(--ophq-danger); border-color: rgba(255,92,108,0.3); background: rgba(255,92,108,0.08); }
+  .badge.ok { color: var(--ophq-success); border-color: rgba(155,226,143,0.3); background: rgba(155,226,143,0.08); }
+  .badge.bad { color: var(--ophq-danger); border-color: rgba(230,103,103,0.3); background: rgba(230,103,103,0.08); }
   .est { color: var(--ophq-muted); }
   .foot { font-size: 0.76rem; margin-top: 0.8rem; }
 

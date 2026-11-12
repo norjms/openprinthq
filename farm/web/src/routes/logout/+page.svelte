@@ -8,4 +8,4 @@
     window.location.href = basePath + '/outpost.goauthentik.io/sign_out?rd=' + encodeURIComponent(location.origin + '/');
   });
 </script>
-<div style="min-height:100vh;display:grid;place-items:center" class="muted">Signing out…</div>
+<div style="min-height:100vh;display:grid;place-items:center" class="muted">Signing out</div>

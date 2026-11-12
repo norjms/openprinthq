@@ -1,29 +1,27 @@
 <!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="glass-dark">
   <head>
     <meta charset="utf-8" />
     <link rel="icon" href="%sveltekit.assets%/favicon.svg" type="image/svg+xml" id="ophq-favicon" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#1e1e1e" />
+    <meta name="theme-color" content="#172028" />
     <meta name="description" content="ArtisanHub Farm: the print farm part of ArtisanHub. Based on OpenPrintHQ. Open source, AGPL-3.0." />
     <meta property="og:title" content="ArtisanHub Farm" />
     <meta property="og:description" content="Multi-brand 3D print farm management. Your printers, your data, your rules." />
     <meta property="og:type" content="website" />
     <script>
-      /* No-FOUC appearance bootstrap. Reads the `ophq_appearance` cookie (a small
-         JSON cache of the user's saved Look & Feel settings) and applies theme,
-         custom colour overrides, text scale, and accessibility attributes to
-         <html> synchronously, before the first paint. The app re-applies from the
-         server on load and refreshes this cookie. Fails safe to the default theme. */
+      /* No-flash appearance bootstrap. Reads the `ophq_appearance` cookie (a small
+         JSON cache of the user's saved appearance) and applies transparency, text
+         scale and accessibility attributes to <html> before the first paint. The
+         theme is always glass-dark. The app re-applies from the server on load and
+         refreshes this cookie. Fails safe to the defaults. */
       (function () {
         try {
           var m = document.cookie.match(/(?:^|;\s*)ophq_appearance=([^;]+)/);
           if (!m) return;
           var cfg = JSON.parse(decodeURIComponent(m[1]));
           var el = document.documentElement;
-          if (cfg.mode) el.setAttribute('data-theme', cfg.mode);
-          var ov = cfg.overrides || {};
-          for (var k in ov) { if (ov.hasOwnProperty(k)) el.style.setProperty(k, ov[k]); }
+          if (cfg.transparency === 'on' || cfg.transparency === 'off') el.setAttribute('data-transparency', cfg.transparency);
           if (cfg.textScale) el.style.setProperty('--ophq-text-scale', cfg.textScale);
           var a = cfg.a11y || {};
           if (a.underline) el.setAttribute('data-a11y-underline', 'on');
@@ -35,7 +33,7 @@
             var f = document.getElementById('ophq-favicon');
             if (f) { f.setAttribute('href', cfg.favicon); f.removeAttribute('type'); }
           }
-        } catch (e) { /* fail safe: keep default theme */ }
+        } catch (e) { /* fail safe: keep the defaults */ }
       })();
     </script>
     %sveltekit.head%

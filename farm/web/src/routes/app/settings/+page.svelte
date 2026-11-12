@@ -13,6 +13,7 @@
   import PrinterNames from '$lib/components/PrinterNames.svelte';
   import InstanceLogging from '$lib/components/InstanceLogging.svelte';
   import PageTitle from '$lib/components/PageTitle.svelte';
+  import PageHead from '$lib/components/PageHead.svelte';
 
   // Top-level settings tab (General account/instance settings vs Look & Feel).
   let tab = $state('general');
@@ -164,7 +165,7 @@ scrape_configs:
   }
 
   function fmtDate(s) {
-    if (!s) return '—';
+    if (!s) return '';
     const d = new Date(s);
     return isNaN(d) ? s : d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
   }
@@ -172,18 +173,19 @@ scrape_configs:
 
 <PageTitle page="Settings" />
 
-<h1>Settings</h1>
-<p class="muted lead">Your account and instance.</p>
-
-<div class="pagetabs" role="tablist" aria-label="Settings sections">
-  <button role="tab" aria-selected={tab === 'general'} class:on={tab === 'general'} onclick={() => (tab = 'general')}>General</button>
-  <button role="tab" aria-selected={tab === 'printers'} class:on={tab === 'printers'} onclick={() => (tab = 'printers')}>Printers</button>
-  <button role="tab" aria-selected={tab === 'look'} class:on={tab === 'look'} onclick={() => (tab = 'look')}>Look &amp; Feel</button>
-  {#if isOwner}
-    <button role="tab" aria-selected={tab === 'admin'} class:on={tab === 'admin'} onclick={() => (tab = 'admin')}>Global Admin</button>
-    <button role="tab" aria-selected={tab === 'names'} class:on={tab === 'names'} onclick={() => (tab = 'names')}>Printer Names</button>
-  {/if}
-</div>
+<PageHead title="Settings" description="Your account and instance.">
+  {#snippet actions()}
+    <div class="ah-seg" role="tablist" aria-label="Settings sections">
+      <button type="button" role="tab" aria-selected={tab === 'general'} onclick={() => (tab = 'general')}>General</button>
+      <button type="button" role="tab" aria-selected={tab === 'printers'} onclick={() => (tab = 'printers')}>Printers</button>
+      <button type="button" role="tab" aria-selected={tab === 'look'} onclick={() => (tab = 'look')}>Appearance</button>
+      {#if isOwner}
+        <button type="button" role="tab" aria-selected={tab === 'admin'} onclick={() => (tab = 'admin')}>Global admin</button>
+        <button type="button" role="tab" aria-selected={tab === 'names'} onclick={() => (tab = 'names')}>Printer names</button>
+      {/if}
+    </div>
+  {/snippet}
+</PageHead>
 
 {#if tab === 'printers'}
   <Connectors />
@@ -199,8 +201,8 @@ scrape_configs:
   <div class="card card-pad">
     <span class="eyebrow">Account</span>
     <div class="kv mono">
-      <div><span>email</span>{me?.email ?? '…'}</div>
-      <div><span>name</span>{me?.displayName ?? '—'}</div>
+      <div><span>email</span>{me?.email ?? ''}</div>
+      <div><span>name</span>{me?.displayName ?? ''}</div>
       <div><span>auth</span>Authentik SSO</div>
     </div>
     <a href="{basePath}/logout" class="btn btn-ghost btn-sm">Sign out</a>
@@ -216,7 +218,7 @@ scrape_configs:
         <div><span>created</span>{fmtDate(inst.createdAt)}</div>
       </div>
     {:else}
-      <p class="muted">No instance yet — provision one from the <a href="{basePath}/app">overview</a>.</p>
+      <p class="muted">No instance yet, provision one from the <a href="{basePath}/app">overview</a>.</p>
     {/if}
   </div>
 </div>
@@ -234,16 +236,16 @@ scrape_configs:
     <span class="cur mono">{currencySymbol}</span>
     <input class="input rate-in" type="number" step="0.01" min="0" bind:value={rate} placeholder="0.15" />
     <span class="muted per">per kWh</span>
-    <button class="btn btn-primary btn-sm" onclick={saveRate} disabled={rateSaving}>{rateSaving ? 'Saving…' : 'Save'}</button>
+    <button class="btn btn-primary btn-sm" onclick={saveRate} disabled={rateSaving}>{rateSaving ? 'Saving' : 'Save'}</button>
   </div>
   {#if rateMsg}<p class={rateMsg.kind === 'ok' ? 'ok-msg' : 'err'}>{rateMsg.text}</p>{/if}
 </div>
 
 <div class="card card-pad circ-card">
   <span class="eyebrow">Power circuits</span>
-  <p class="muted">Group printers by the breaker circuit they're plugged into. <a href="{basePath}/app/queue">Temperature-staggered batch printing</a> serialises heat-up within a circuit so machines on the same breaker never surge together — printers on different circuits preheat in parallel. Leave blank for a printer that shares no circuit.</p>
+  <p class="muted">Group printers by the breaker circuit they're plugged into. <a href="{basePath}/app/queue">Temperature-staggered batch printing</a> serialises heat-up within a circuit so machines on the same breaker never surge together, printers on different circuits preheat in parallel. Leave blank for a printer that shares no circuit.</p>
   {#if circPrinters.length === 0}
-    <p class="muted">No printers yet — add printers to assign circuits.</p>
+    <p class="muted">No printers yet, add printers to assign circuits.</p>
   {:else}
     <div class="circ-list">
       {#each circPrinters as p (p.id)}
@@ -257,7 +259,7 @@ scrape_configs:
       {#each [...new Set(circPrinters.map((p) => p.circuit).filter(Boolean))] as c}<option value={c}></option>{/each}
     </datalist>
     <div class="flex gap center circ-actions">
-      <button class="btn btn-primary btn-sm" onclick={saveCircuits} disabled={circSaving}>{circSaving ? 'Saving…' : 'Save circuits'}</button>
+      <button class="btn btn-primary btn-sm" onclick={saveCircuits} disabled={circSaving}>{circSaving ? 'Saving' : 'Save circuits'}</button>
       {#if circMsg}<span class={circMsg.kind === 'ok' ? 'ok-msg' : 'err'}>{circMsg.text}</span>{/if}
     </div>
   {/if}
@@ -270,8 +272,8 @@ scrape_configs:
     <div class="kv mono">
       <div><span>status</span><span class="chip {cloud.is_authenticated ? 'ok' : 'accent'}">{cloud.is_authenticated ? 'connected' : 'not connected'}</span></div>
       {#if cloud.is_authenticated}
-        <div><span>account</span>{cloud.email ?? '—'}</div>
-        <div><span>region</span>{cloud.region ?? '—'}</div>
+        <div><span>account</span>{cloud.email ?? ''}</div>
+        <div><span>region</span>{cloud.region ?? ''}</div>
       {/if}
     </div>
     {#if !cloud.is_authenticated}<p class="muted tiny">Sign in from the slicer's preset picker to enable cloud presets.</p>{/if}
@@ -283,8 +285,8 @@ scrape_configs:
 <ObicoSettings />
 
 <div class="card card-pad int-card">
-  <span class="eyebrow">Integrations — Home Assistant · Homepage · Prometheus</span>
-  <p class="muted">A read-only access token lets external dashboards pull your fleet status without signing in. Keep it private — anyone with it can read your fleet summary.</p>
+  <span class="eyebrow">Integrations, Home Assistant · Homepage · Prometheus</span>
+  <p class="muted">A read-only access token lets external dashboards pull your fleet status without signing in. Keep it private, anyone with it can read your fleet summary.</p>
   <div class="tokrow">
     <input class="input mono tok" type={intReveal ? 'text' : 'password'} readonly value={intToken ?? ''} />
     <button class="btn btn-ghost btn-sm" onclick={() => (intReveal = !intReveal)}>{intReveal ? 'Hide' : 'Show'}</button>
@@ -306,7 +308,7 @@ scrape_configs:
     <p class="muted tiny">Add to your Homepage <code>services.yaml</code> as a custom-API widget.</p>
   {:else if intTab === 'ha'}
     <div class="snip"><button class="cbtn" onclick={() => copy(haSnippet, 'ha')}>{copied === 'ha' ? 'Copied' : 'Copy'}</button><pre>{haSnippet}</pre></div>
-    <p class="muted tiny">Add to Home Assistant <code>configuration.yaml</code> — a REST sensor with fleet attributes for cards &amp; automations.</p>
+    <p class="muted tiny">Add to Home Assistant <code>configuration.yaml</code>, a REST sensor with fleet attributes for cards &amp; automations.</p>
   {:else}
     <div class="snip"><button class="cbtn" onclick={() => copy(promSnippet, 'pr')}>{copied === 'pr' ? 'Copied' : 'Copy'}</button><pre>{promSnippet}</pre></div>
     <p class="muted tiny">Add to <code>prometheus.yml</code>; the metrics feed Grafana dashboards.</p>

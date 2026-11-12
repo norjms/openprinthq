@@ -64,7 +64,7 @@
 
 {#if src}
   <img class={mode} {src} {alt} {title} class:stale onclick={onclick} />
-  {#if stale}<span class="recon" aria-hidden="true">reconnecting…</span>{/if}
+  {#if stale}<span class="recon" aria-hidden="true">reconnecting</span>{/if}
 {:else}
   <div class="skel {mode}" aria-label={alt}></div>
 {/if}

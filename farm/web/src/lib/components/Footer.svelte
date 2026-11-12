@@ -5,7 +5,7 @@
   // AGPL-3.0 §13: the running instance must offer its source to EVERY user,
   // without login. These point at the public /legal page (served ungated),
   // not the Authentik-gated git host. Hosts can add their own trademark line and
-  // contact info via Settings → Look & Feel; the source-offer link stays for
+  // contact info via Settings, Look & Feel; the source-offer link stays for
   // license compliance.
   const contact = $derived(($branding.contact || '').trim());
   const isEmail = $derived(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact));
@@ -21,11 +21,9 @@
         <span class="chip ok">AGPL-3.0 · Open source</span>
       </div>
       <div class="col">
-        <h4>Product</h4>
-        <a href="{basePath}/#features">Features</a>
-        <a href="{basePath}/#printers">Supported printers</a>
-        <a href="{basePath}/#how">How it works</a>
-        <a href="{basePath}/app" data-sveltekit-reload>Launch your HQ</a>
+        <h4>ArtisanHub</h4>
+        <a href="/" data-sveltekit-reload>The hub</a>
+        <a href="{basePath}/app">The farm</a>
       </div>
       <div class="col">
         <h4>Open</h4>
@@ -47,7 +45,7 @@
             {:else}{contact}{/if}
           </span>
         {/if}
-        <!-- AGPL §13 source offer — kept for license compliance -->
+        <!-- AGPL §13 source offer, kept for license compliance -->
         <span class="muted">Source available (<a href="{basePath}/legal">AGPL-3.0</a>) to every user of this instance.</span>
       </span>
     </div>

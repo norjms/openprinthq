@@ -1,5 +1,5 @@
 <script>
-  // ArtisanHub Farm — bed ejection & continuous printing (#20).
+  // ArtisanHub Farm, bed ejection & continuous printing (#20).
   // Stores a per-printer "eject" g-code macro (engine settings) and can run it
   // on demand or automatically when a print finishes. Continuous printing
   // itself is handled by the engine queue scheduler (it auto-starts the next
@@ -68,7 +68,7 @@
 
 <div class="card card-pad eject">
   <div class="eh"><span class="eyebrow">Bed ejection &amp; continuous printing</span></div>
-  <p class="muted intro">Store a macro that clears the finished part off the plate. Run it on demand, or let it fire automatically when a print finishes so the queue can roll straight into the next job. Continuous printing itself is automatic — the queue starts the next un-held job on an idle printer.</p>
+  <p class="muted intro">Store a macro that clears the finished part off the plate. Run it on demand, or let it fire automatically when a print finishes so the queue can roll straight into the next job. Continuous printing itself is automatic, the queue starts the next un-held job on an idle printer.</p>
 
   <label class="fld"><span>Eject macro</span>
     <textarea class="input mac" rows="3" bind:value={macro} placeholder={PLACEHOLDER} spellcheck="false"></textarea>
@@ -77,10 +77,10 @@
   <label class="opt"><input type="checkbox" bind:checked={auto} /><span>Auto-eject when a print finishes <span class="muted">(while this dashboard is open)</span></span></label>
 
   <div class="flex gap acts">
-    <button class="btn btn-primary btn-sm" onclick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+    <button class="btn btn-primary btn-sm" onclick={save} disabled={saving}>{saving ? 'Saving' : 'Save'}</button>
     {#if confirmEject}
       <span class="cfm">Run eject on the printer now?
-        <button class="btn btn-primary btn-sm" onclick={ejectNow} disabled={busy}>{busy ? 'Sending…' : 'Confirm'}</button>
+        <button class="btn btn-primary btn-sm" onclick={ejectNow} disabled={busy}>{busy ? 'Sending' : 'Confirm'}</button>
         <button class="btn btn-ghost btn-sm" onclick={() => (confirmEject = false)}>Cancel</button>
       </span>
     {:else}

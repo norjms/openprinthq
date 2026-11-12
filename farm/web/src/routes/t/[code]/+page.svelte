@@ -68,9 +68,10 @@
   <meta name="robots" content="noindex, nofollow" />
 </svelte:head>
 
-<main>
+<div class="ah-root ah-page tagpage">
+<main class="ah-glass">
   {#if state === 'loading'}
-    <p class="quiet">Reading tag…</p>
+    <p class="quiet">Reading tag</p>
   {:else if state === 'unknown'}
     <h1>Nothing linked to this tag</h1>
     <p class="quiet">Code <code>{code}</code> does not match a spool. If you just wrote this tag, link it to a
@@ -124,41 +125,29 @@
     </footer>
   {/if}
 </main>
+</div>
 
 <style>
-  :global(body) { margin: 0; background: #0f1115; color: #e8eaed; }
-  main {
-    font: 16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-    max-width: 30rem; margin: 0 auto; padding: 1.5rem 1.25rem 3rem;
-    padding-top: max(1.5rem, env(safe-area-inset-top));
-  }
-  h1 { font-size: 1.6rem; line-height: 1.15; margin: 0.35rem 0 0; }
-  .chip {
-    display: inline-block; background: #e8eaed; color: #0f1115; font-weight: 700;
-    letter-spacing: 0.04em; padding: 0.15rem 0.5rem; border-radius: 0.25rem; font-size: 0.95rem;
-  }
-  .product { margin: 0.25rem 0 0; color: #a8adb6; }
-  .quiet { color: #a8adb6; }
-  .headline { display: flex; align-items: center; gap: 0.85rem; margin: 1.5rem 0; }
-  .headline strong { display: block; font-size: 2rem; line-height: 1; }
-  .headline .quiet { font-size: 0.9rem; }
-  .swatch {
-    width: 3rem; height: 3rem; border-radius: 0.5rem; flex: none;
-    border: 1px solid rgba(255, 255, 255, 0.25);
-  }
-  .values { border-top: 1px solid #262a33; }
-  .row { display: flex; justify-content: space-between; padding: 0.6rem 0; border-bottom: 1px solid #262a33; }
-  .row span { color: #a8adb6; }
+  .tagpage { min-height: 100vh; padding: 16px; padding-top: max(16px, env(safe-area-inset-top)); display: grid; place-items: start center; }
+  main { width: min(30rem, 100%); padding: 22px 20px 24px; font-size: 16px; line-height: 1.45; }
+  h1 { font-family: var(--ah-font-display); font-weight: 500; letter-spacing: -0.03em; font-size: 28px; line-height: 1.15; margin: 6px 0 0; }
+  .chip { font-size: 13px; font-weight: 600; letter-spacing: 0.04em; }
+  .product { margin: 4px 0 0; color: var(--ah-text-2); }
+  .quiet { color: var(--ah-text-3); }
+  .headline { display: flex; align-items: center; gap: 14px; margin: 20px 0; }
+  .headline strong { display: block; font-family: var(--ah-font-display); font-weight: 500; letter-spacing: -0.03em; font-size: 34px; line-height: 1; font-variant-numeric: tabular-nums; }
+  .headline .quiet { font-size: 14px; }
+  .swatch { width: 48px; height: 48px; border-radius: 14px; flex: none; border: 1px solid var(--ah-field-line); }
+  .values { border-top: 1px solid var(--ah-row-line); }
+  .row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--ah-row-line); }
+  .row span { color: var(--ah-text-2); }
   .row strong { font-variant-numeric: tabular-nums; }
-  .notes p { color: #a8adb6; font-size: 0.9rem; margin: 1rem 0 0; }
-  footer { margin-top: 1.75rem; }
-  dl { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem 1rem; margin: 0 0 1.5rem; }
+  .notes p { color: var(--ah-text-2); font-size: 14px; margin: 14px 0 0; }
+  footer { margin-top: 24px; }
+  dl { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; margin: 0 0 20px; }
   dl .wide { grid-column: 1 / -1; }
-  dt { color: #a8adb6; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; }
-  dd { margin: 0.15rem 0 0; }
-  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85em; }
-  .open {
-    display: block; text-align: center; padding: 0.8rem; border-radius: 0.5rem;
-    background: #2f6df6; color: #fff; text-decoration: none; font-weight: 600;
-  }
+  dt { color: var(--ah-group-label); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.12em; }
+  dd { margin: 2px 0 0; }
+  .open { display: flex; align-items: center; justify-content: center; height: 44px; border-radius: var(--ah-radius-btn); background: var(--ah-accent); color: var(--ah-on-accent); text-decoration: none; font-weight: 600; }
+  .tagpage a.open:hover { color: var(--ah-on-accent); }
 </style>

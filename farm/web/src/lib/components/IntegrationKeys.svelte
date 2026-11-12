@@ -1,6 +1,6 @@
 <script>
   // Integration keys (control-plane /api/api-keys): one key per app that drives this farm, such as
-  // Artisan Hub, n8n or a script. A key works on the whole engine API through ArtisanHub Farm, limited by its
+  // ArtisanHub, n8n or a script. A key works on the whole engine API through ArtisanHub Farm, limited by its
   // scope; account settings never take one. The secret is shown once, at creation.
   // SPDX-License-Identifier: AGPL-3.0-or-later
   import { onMount } from 'svelte';
@@ -9,11 +9,11 @@
   const SCOPES = [
     { key: 'read', label: 'Read', help: 'See printers, the queue, files, spools and history. Changes nothing.' },
     { key: 'submit', label: 'Submit', help: 'Read, plus upload files and add or reprint jobs.' },
-    { key: 'control', label: 'Control', help: 'Submit, plus printer commands, queue changes and settings. What Artisan Hub needs.' }
+    { key: 'control', label: 'Control', help: 'Submit, plus printer commands, queue changes and settings. What ArtisanHub needs.' }
   ];
 
   let keys = $state([]);
-  let label = $state('Artisan Hub');
+  let label = $state('ArtisanHub');
   let scope = $state('control');
   let expiresInDays = $state(0);
   let busy = $state(false);
@@ -58,8 +58,8 @@
 <div class="card card-pad">
   <span class="eyebrow">Integration keys</span>
   <p class="muted">
-    For apps that run this farm for you, such as Artisan Hub, n8n or your own scripts. The app sends the key as
-    <code>Authorization: Bearer ophqk_…</code> and can use ArtisanHub Farm's API as far as the key's scope allows.
+    For apps that run this farm for you, such as ArtisanHub, n8n or your own scripts. The app sends the key as
+    <code>Authorization: Bearer ophqk_</code> and can use OpenPrintHQ's API as far as the key's scope allows.
     Sign-in, people, keys and backups always need you, never a key.
   </p>
 
@@ -106,7 +106,7 @@
             <tr>
               <td>{k.label || 'API key'}</td>
               <td>{scopeLabel(k.scope)}</td>
-              <td class="mono">{k.prefix}…</td>
+              <td class="mono">{k.prefix}</td>
               <td>{fmt(k.createdAt)}</td>
               <td>{fmt(k.lastUsedAt)}</td>
               <td>{fmt(k.expiresAt)}</td>

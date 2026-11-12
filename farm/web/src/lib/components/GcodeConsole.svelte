@@ -1,5 +1,5 @@
 <script>
-  // ArtisanHub Farm — g-code console & macros (#23).
+  // ArtisanHub Farm, g-code console & macros (#23).
   // Free-form g-code entry + curated macro chips, sent through the engine's
   // raw-gcode route (POST /printers/{id}/gcode). Send-only: the printer's
   // response isn't streamed back, so the log records what was sent and whether
@@ -75,15 +75,15 @@
 
   <div class="logwrap" bind:this={logEl}>
     {#if log.length === 0}
-      <p class="muted empty">Sent commands appear here. Responses aren't streamed — watch the printer's live status for the effect.</p>
+      <p class="muted empty">Sent commands appear here. Responses aren't streamed, watch the printer's live status for the effect.</p>
     {:else}
       {#each log as l (l.t + l.cmd)}
         <div class="line">
           <span class="arrow">›</span>
           <span class="cmd mono">{l.cmd}</span>
-          {#if l.ok === true}<span class="ok mono">✓ {l.note}</span>
-          {:else if l.ok === false}<span class="bad mono">✗ {l.note}</span>
-          {:else}<span class="muted mono">…</span>{/if}
+          {#if l.ok === true}<span class="ok mono">OK {l.note}</span>
+          {:else if l.ok === false}<span class="bad mono">Failed {l.note}</span>
+          {:else}<span class="muted mono"></span>{/if}
         </div>
       {/each}
     {/if}
@@ -91,9 +91,9 @@
 
   <div class="entry">
     <input class="input mono" placeholder={printing ? 'Console disabled while printing' : 'Type a G-code command and press Enter'} bind:value={input} onkeydown={onKey} disabled={busy || printing} spellcheck="false" autocapitalize="off" autocomplete="off" />
-    <button class="btn btn-primary btn-sm" onclick={() => send()} disabled={busy || printing || !input.trim()}>{busy ? 'Sending…' : 'Send'}</button>
+    <button class="btn btn-primary btn-sm" onclick={() => send()} disabled={busy || printing || !input.trim()}>{busy ? 'Sending' : 'Send'}</button>
   </div>
-  <p class="muted note">Commands run directly on the printer. Use with care — a bad move or temperature can damage hardware.</p>
+  <p class="muted note">Commands run directly on the printer. Use with care, a bad move or temperature can damage hardware.</p>
 </div>
 
 <style>

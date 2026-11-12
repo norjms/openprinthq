@@ -1,4 +1,5 @@
 <script>
+  import Icon from '$lib/components/AppIcon.svelte';
   // Shared popup chrome: overlay, card, header, scrolling body, footer slot.
   // Extracted so the printer page's four dialogs don't each carry their own
   // copy of the same overlay CSS and Escape handling.
@@ -18,7 +19,7 @@
         <h3>{title}</h3>
         {#if subtitle}<span class="muted tiny">{subtitle}</span>{/if}
       </div>
-      <button class="btn btn-ghost btn-sm" onclick={() => onclose()} disabled={busy} aria-label="Close">✕</button>
+      <button class="btn btn-ghost btn-sm" onclick={() => onclose()} disabled={busy} aria-label="Close"><Icon name="x" size={16} /></button>
     </div>
     <div class="mbody">{@render children?.()}</div>
     {#if footer}<div class="mfoot">{@render footer()}</div>{/if}

@@ -1,9 +1,11 @@
 <script>
   import { base as basePath } from '$app/paths';
+  import Icon from '$lib/components/AppIcon.svelte';
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
   import EngineError from '$lib/components/EngineError.svelte';
   import PageTitle from '$lib/components/PageTitle.svelte';
+  import PageHead from '$lib/components/PageHead.svelte';
 
   let loading = $state(true);
   let error = $state(null);
@@ -126,34 +128,35 @@
 
 <PageTitle page="Projects" />
 
-<div class="head">
-  <div><h1>Projects</h1><p class="muted">Group prints into jobs — track parts, progress and cost per project.</p></div>
-  <button class="btn btn-primary btn-sm" onclick={() => (creating = !creating)}>{creating ? 'Close' : '+ New project'}</button>
-</div>
+<PageHead title="Projects" description="Group prints into jobs. Track parts, progress and cost per project.">
+  {#snippet actions()}
+    <button class="btn btn-primary" onclick={() => (creating = !creating)}>{creating ? 'Close' : 'New project'}</button>
+  {/snippet}
+</PageHead>
 
 {#if creating}
   <div class="card card-pad form">
     <div class="frow">
       <div class="fld grow"><label for="pn">Name</label><input id="pn" class="input" bind:value={nf.name} placeholder="Client order #1024" /></div>
-      <div class="fld"><label for="pt">Target parts</label><input id="pt" class="input sm" type="number" min="0" bind:value={nf.target_count} placeholder="—" /></div>
+      <div class="fld"><label for="pt">Target parts</label><input id="pt" class="input sm" type="number" min="0" bind:value={nf.target_count} placeholder="" /></div>
       <div class="fld"><label for="pc">Colour</label><input id="pc" class="input color" type="color" bind:value={nf.color} /></div>
     </div>
     <div class="fld"><label for="pd">Description</label><input id="pd" class="input" bind:value={nf.description} placeholder="Optional" /></div>
     {#if cErr}<p class="err">{cErr}</p>{/if}
-    <div class="flex gap"><button class="btn btn-primary btn-sm" onclick={create} disabled={saving}>{saving ? 'Creating…' : 'Create project'}</button></div>
+    <div class="flex gap"><button class="btn btn-primary btn-sm" onclick={create} disabled={saving}>{saving ? 'Creating' : 'Create project'}</button></div>
   </div>
 {/if}
 
 {#if loading}
-  <div class="card card-pad muted">Loading projects…</div>
+  <div class="card card-pad muted">Loading projects</div>
 {:else if error === 'no-instance'}
   <div class="card card-pad"><p class="muted">Provision your instance from the <a href="{basePath}/app">overview</a> first.</p></div>
 {:else if error}
   <EngineError {error} onretry={load} />
 {:else if projects.length === 0}
   <div class="card card-pad empty">
-    <div class="ic">📁</div><h3>No projects yet</h3>
-    <p class="muted">Create a project to group related prints — a client order, a multi-part assembly, a production run — and track its parts and progress.</p>
+    <div class="ic"><Icon name="folder" size={28} /></div><h3>No projects yet</h3>
+    <p class="muted">Create a project to group related prints, a client order, a multi-part assembly, a production run, and track its parts and progress.</p>
   </div>
 {:else}
   <div class="plist">
@@ -177,7 +180,7 @@
         {#if openId === p.id}
           <div class="pdetail">
             {#if detailLoading}
-              <p class="muted tiny">Loading…</p>
+              <p class="muted tiny">Loading</p>
             {:else if detail}
               <div class="dcol">
                 <span class="dh">Prints ({detail.archives.length})</span>
@@ -192,20 +195,20 @@
           {#if !detailLoading}
             <div class="bom">
               <div class="bomh">
-                <span class="dh">Bill of materials{#if bomRollup.total} — {bomRollup.done}/{bomRollup.total} complete{#if bomRollup.cost > 0} · {money(bomRollup.cost)}{/if}{/if}</span>
+                <span class="dh">Bill of materials{#if bomRollup.total}, {bomRollup.done}/{bomRollup.total} complete{#if bomRollup.cost > 0} · {money(bomRollup.cost)}{/if}{/if}</span>
               </div>
               {#if bom.length}
                 <div class="bomlist">
                   {#each bom as b (b.id)}
                     <div class="bomrow" class:done={b.complete || b.acquired >= b.needed}>
-                      <span class="bn">{b.name}{#if b.url} <a href={b.url} target="_blank" rel="noopener" class="src" aria-label="Open source link">↗</a>{/if}</span>
+                      <span class="bn">{b.name}{#if b.url} <a href={b.url} target="_blank" rel="noopener" class="src" aria-label="Open source link"><Icon name="external" size={13} /></a>{/if}</span>
                       <span class="qty">
                         <button class="stp" onclick={() => setAcquired(b, -1)} disabled={b.acquired <= 0} aria-label="decrease">−</button>
                         <span class="qn mono">{b.acquired}/{b.needed}</span>
                         <button class="stp" onclick={() => setAcquired(b, 1)} aria-label="increase">+</button>
                       </span>
                       {#if b.unitPrice != null}<span class="up muted mono">{money(b.unitPrice)}</span>{:else}<span class="up"></span>{/if}
-                      <button class="del" onclick={() => delBom(b)} aria-label="remove">✕</button>
+                      <button class="del" onclick={() => delBom(b)} aria-label="Remove"><Icon name="x" size={14} /></button>
                     </div>
                   {/each}
                 </div>
@@ -227,8 +230,6 @@
 {/if}
 
 <style>
-  .head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 1.4rem; gap: 1rem; }
-  .head h1 { margin: 0; }
   .form { margin-bottom: 1.2rem; display: flex; flex-direction: column; gap: 0.7rem; }
   .frow { display: flex; gap: 0.8rem; flex-wrap: wrap; }
   .fld { display: flex; flex-direction: column; gap: 0.3rem; }
@@ -253,16 +254,13 @@
   .dh { display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ophq-muted); margin-bottom: 0.4rem; }
   .drow { display: flex; justify-content: space-between; gap: 0.6rem; padding: 0.3rem 0; border-bottom: 1px solid var(--ophq-border-soft); font-size: 0.86rem; }
   .tiny { font-size: 0.8rem; }
-  .chip.primary { color: var(--ophq-primary-2); border-color: rgba(124,108,255,0.35); background: var(--ophq-primary-dim); }
-  .chip.accent { color: var(--ophq-accent); border-color: rgba(255,176,32,0.3); background: rgba(255,176,32,0.08); }
-  .chip.ok { color: var(--ophq-success); border-color: rgba(53,196,107,0.3); background: rgba(53,196,107,0.08); }
   @media (max-width: 720px) { .pdetail { grid-template-columns: 1fr; } .pstats { display: none; } }
 
   .bom { padding: 0.4rem 1.1rem 1.1rem; border-top: 1px solid var(--ophq-border); }
   .bomh { margin: 0.6rem 0 0.5rem; }
   .bomlist { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.7rem; }
   .bomrow { display: grid; grid-template-columns: 1fr auto auto auto; align-items: center; gap: 0.7rem; padding: 0.35rem 0.5rem; border: 1px solid var(--ophq-border-soft); border-radius: var(--radius-sm); background: var(--ophq-surface); font-size: 0.86rem; }
-  .bomrow.done { border-color: rgba(53,196,107,0.35); background: rgba(53,196,107,0.06); }
+  .bomrow.done { border-color: rgba(155,226,143,0.35); background: rgba(155,226,143,0.06); }
   .bn { font-weight: 500; }
   .src { color: var(--ophq-primary-2); text-decoration: none; }
   .qty { display: flex; align-items: center; gap: 0.35rem; }

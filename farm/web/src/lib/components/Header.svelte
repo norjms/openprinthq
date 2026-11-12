@@ -1,22 +1,14 @@
 <script>
   import { base as basePath } from '$app/paths';
   import Logo from './Logo.svelte';
-  import ThemeSwitcher from './ThemeSwitcher.svelte';
 </script>
 
 <header class="site-header">
   <div class="container inner">
-    <a href="{basePath}/" class="brand"><Logo size={30} /></a>
-    <nav class="nav">
-      <a href="{basePath}/#features">Features</a>
-      <a href="{basePath}/#printers">Printers</a>
-      <a href="{basePath}/#how">How it works</a>
-      <a href="{basePath}/#open">Open source</a>
-    </nav>
+    <a href="{basePath}/app" class="brand"><Logo size={30} /></a>
     <div class="actions">
-      <ThemeSwitcher />
-      <a href="{basePath}/app" class="btn btn-ghost btn-sm" data-sveltekit-reload>Sign in</a>
-      <a href="{basePath}/signup" class="btn btn-primary btn-sm">Launch your HQ</a>
+      <a href="/" class="btn btn-ghost btn-sm" data-sveltekit-reload>ArtisanHub</a>
+      <a href="{basePath}/app" class="btn btn-primary btn-sm">Open the farm</a>
     </div>
   </div>
 </header>

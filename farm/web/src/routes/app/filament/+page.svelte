@@ -1,9 +1,11 @@
 <script>
   import { base as basePath } from '$app/paths';
+  import Icon from '$lib/components/AppIcon.svelte';
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
   import EngineError from '$lib/components/EngineError.svelte';
   import PageTitle from '$lib/components/PageTitle.svelte';
+  import PageHead from '$lib/components/PageHead.svelte';
   import { branding } from '$lib/stores/appearance';
 
   let loading = $state(true);
@@ -155,7 +157,7 @@
     finally { busyId = null; confirmArch = null; setTimeout(() => (toast = null), 5000); }
   }
 
-  // ---- add spool (#16 — manual add; only `material` is required) ----
+  // ---- add spool (#16, manual add; only `material` is required) ----
   const MATERIALS = ['PLA', 'PLA Matte', 'PLA Silk', 'PETG', 'ABS', 'ASA', 'TPU', 'PC', 'Nylon (PA)', 'PVA', 'HIPS', 'PLA-CF', 'PETG-CF', 'PA-CF', 'PA-GF'];
   let locations = $state([]);
   let showAdd = $state(false);
@@ -256,28 +258,28 @@
 
 <PageTitle page="Filament" />
 
-<div class="head">
-  <div><h1>Filament</h1><p class="muted">Spool inventory, usage and cost.{#if backend?.mode === 'spoolman'} <span class="pill" title="Inventory is stored in your own Spoolman">Spoolman</span>{/if}</p></div>
-  <div class="flex gap">
-    <button class="btn btn-ghost btn-sm" onclick={load}>Refresh</button>
-    <button class="btn btn-primary btn-sm" onclick={openAdd}>+ Add spool</button>
-  </div>
-</div>
+<PageHead title="Filament">
+  {#snippet actions()}
+    <button class="btn" onclick={load}><Icon name="refresh" size={16} />Refresh</button>
+    <button class="btn btn-primary" onclick={openAdd}><Icon name="plus" size={16} />Add spool</button>
+  {/snippet}
+  Spool inventory, usage and cost.{#if backend?.mode === 'spoolman'} <span class="chip live" title="Inventory is stored in your own Spoolman">Spoolman</span>{/if}
+</PageHead>
 
 {#if toast}<div class="toast {toast.kind}">{toast.text}</div>{/if}
 
 {#if loading}
-  <div class="card card-pad muted">{backend ? 'Loading spools...' : 'Setting up your filament inventory...'}</div>
+  <div class="card card-pad muted">{backend ? 'Loading spools' : 'Setting up your filament inventory'}</div>
 {:else if error === 'no-instance'}
   <div class="card card-pad"><p class="muted">Provision your instance from the <a href="{basePath}/app">overview</a> first.</p></div>
 {:else if error}
   <EngineError {error} onretry={load} />
 {:else if spools.length === 0}
   <div class="card card-pad empty">
-    <div class="ic">🧵</div>
+    <div class="ic"><Icon name="spool" size={28} /></div>
     <h3>No spools yet</h3>
-    <p class="muted">Track your filament here — remaining weight is deducted automatically as you print, with per-print cost.</p>
-    <button class="btn btn-primary btn-sm" onclick={openAdd}>+ Add your first spool</button>
+    <p class="muted">Track your filament here, remaining weight is deducted automatically as you print, with per-print cost.</p>
+    <button class="btn btn-primary btn-sm" onclick={openAdd}>Add your first spool</button>
   </div>
 {:else}
   <div class="sumrow">
@@ -305,7 +307,7 @@
           <div class="muted mono tiny preset" title="Slicer preset {s.presetId}">GenFilament preset</div>
         {/if}
         {#each bindingsFor(s) as a}
-          <div class="bind muted mono tiny">On {printerName(a.printer_id)}, {slotLabel(a.printer_id, a.ams_id, a.tray_id)} <button class="btn btn-ghost btn-xs" onclick={() => removeBinding(a)} title="Unassign from this slot" aria-label="Unassign">&times;</button></div>
+          <div class="bind muted mono tiny">On {printerName(a.printer_id)}, {slotLabel(a.printer_id, a.ams_id, a.tray_id)} <button class="btn btn-ghost btn-xs" onclick={() => removeBinding(a)} title="Unassign from this slot" aria-label="Unassign"><Icon name="x" size={14} /></button></div>
         {/each}
         <div class="sfoot">
           <span class="muted mono tiny">{s.brand}{#if s.location} · {s.location}{/if}{#if s.costPerKg != null} · {sym}{s.costPerKg}/kg{/if}</span>
@@ -315,7 +317,7 @@
             <button class="btn btn-ghost btn-xs" onclick={() => openAdjust(s)} disabled={busyId === s.id} title="Adjust remaining weight / log waste">Adjust</button>
             <button class="btn btn-ghost btn-xs" onclick={() => printLabel(s)} title="Print a spool label">Label</button>
             {#if confirmArch === s.id}
-              <button class="btn btn-danger btn-xs" onclick={() => archive(s)} disabled={busyId === s.id}>Confirm</button><button class="btn btn-ghost btn-xs" onclick={() => (confirmArch = null)} aria-label="Cancel archive">✕</button>
+              <button class="btn btn-danger btn-xs" onclick={() => archive(s)} disabled={busyId === s.id}>Confirm</button><button class="btn btn-ghost btn-xs" onclick={() => (confirmArch = null)} aria-label="Cancel archive"><Icon name="x" size={14} /></button>
             {:else}
               <button class="btn btn-ghost btn-xs" onclick={() => (confirmArch = s.id)} disabled={busyId === s.id} title="Archive (used up / removed)">Archive</button>
             {/if}
@@ -329,14 +331,14 @@
 {#if showAdd}
   <div class="overlay no-print" role="presentation" onclick={() => (showAdd = false)}>
     <div class="dialog card" role="dialog" onclick={(e) => e.stopPropagation()}>
-      <div class="dhead"><div><span class="eyebrow">Inventory</span><h3>Add spool</h3></div><button class="btn btn-ghost btn-sm" onclick={() => (showAdd = false)} aria-label="Close">✕</button></div>
+      <div class="dhead"><div><span class="eyebrow">Inventory</span><h3>Add spool</h3></div><button class="btn btn-ghost btn-sm" onclick={() => (showAdd = false)} aria-label="Close"><Icon name="x" size={14} /></button></div>
       {#if gfBase}
         <div class="gfpick">
           <label for="gfq">GenFilament preset</label>
           {#if form.preset}
-            <div class="chosen"><span class="mono">{form.preset.name}</span><button class="btn btn-ghost btn-xs" onclick={() => (form.preset = null)} aria-label="Clear preset">&times;</button></div>
+            <div class="chosen"><span class="mono">{form.preset.name}</span><button class="btn btn-ghost btn-xs" onclick={() => (form.preset = null)} aria-label="Clear preset"><Icon name="x" size={14} /></button></div>
           {:else}
-            <input id="gfq" class="input" bind:value={presetQ} placeholder={gfLoading ? 'Loading presets...' : 'Search generated presets, e.g. polylite pla'} autocomplete="off" />
+            <input id="gfq" class="input" bind:value={presetQ} placeholder={gfLoading ? 'Loading presets' : 'Search generated presets, e.g. polylite pla'} autocomplete="off" />
             {#if gfErr}<p class="err">{gfErr}</p>{/if}
             {#if presetQ.trim()}
               <div class="plist">
@@ -357,15 +359,15 @@
           <input id="mat" class="input" list="mats" bind:value={form.material} placeholder="PLA" />
           <datalist id="mats">{#each MATERIALS as m}<option value={m}></option>{/each}</datalist>
         </div>
-        <div class="fld"><label for="sub">Sub-type</label><input id="sub" class="input" bind:value={form.subtype} placeholder="Matte, Silk, CF…" /></div>
-        <div class="fld"><label for="brd">Brand</label><input id="brd" class="input" bind:value={form.brand} placeholder="Bambu, Polymaker…" /></div>
+        <div class="fld"><label for="sub">Sub-type</label><input id="sub" class="input" bind:value={form.subtype} placeholder="Matte, Silk, CF" /></div>
+        <div class="fld"><label for="brd">Brand</label><input id="brd" class="input" bind:value={form.brand} placeholder="Bambu, Polymaker" /></div>
         <div class="fld"><label for="cn">Colour name</label><input id="cn" class="input" bind:value={form.color_name} placeholder="Galaxy Black" /></div>
         <div class="fld"><label for="col">Colour</label><input id="col" class="input color" type="color" bind:value={form.color} /></div>
         <div class="fld"><label for="wt">Net weight (g)</label><input id="wt" class="input" type="number" min="1" step="50" bind:value={form.label_weight} /></div>
         <div class="fld"><label for="cpk">Cost /kg ({sym.trim()})</label><input id="cpk" class="input" type="number" min="0" step="0.5" bind:value={form.cost_per_kg} placeholder="optional" /></div>
         <div class="fld">
           <label for="loc">Location</label>
-          <input id="loc" class="input" list="locs" bind:value={form.storage_location} placeholder="Dry box A…" />
+          <input id="loc" class="input" list="locs" bind:value={form.storage_location} placeholder="Dry box A" />
           <datalist id="locs">{#each locations as l}<option value={l.name || l.location_name || l}></option>{/each}</datalist>
         </div>
         <div class="fld"><label for="tmin">Nozzle °C min</label><input id="tmin" class="input" type="number" bind:value={form.nozzle_temp_min} placeholder="optional" /></div>
@@ -375,7 +377,7 @@
       <div class="fld"><label for="nt">Note</label><input id="nt" class="input" bind:value={form.note} placeholder="optional" /></div>
       {#if addErr}<p class="err">{addErr}</p>{/if}
       <div class="flex gap dactions">
-        <button class="btn btn-primary" onclick={saveAdd} disabled={saving}>{saving ? 'Saving…' : (Number(form.quantity) > 1 ? `Add ${form.quantity} spools` : 'Add spool')}</button>
+        <button class="btn btn-primary" onclick={saveAdd} disabled={saving}>{saving ? 'Saving' : (Number(form.quantity) > 1 ? `Add ${form.quantity} spools` : 'Add spool')}</button>
         <button class="btn btn-ghost" onclick={() => (showAdd = false)} disabled={saving}>Cancel</button>
       </div>
     </div>
@@ -385,11 +387,11 @@
 {#if adjust}
   <div class="overlay no-print" role="presentation" onclick={() => (adjust = null)}>
     <div class="dialog card sm" role="dialog" onclick={(e) => e.stopPropagation()}>
-      <div class="dhead"><div><span class="eyebrow">Adjust / log waste</span><h3>{adjust.name}</h3></div><button class="btn btn-ghost btn-sm" onclick={() => (adjust = null)} aria-label="Close">✕</button></div>
+      <div class="dhead"><div><span class="eyebrow">Adjust / log waste</span><h3>{adjust.name}</h3></div><button class="btn btn-ghost btn-sm" onclick={() => (adjust = null)} aria-label="Close"><Icon name="x" size={14} /></button></div>
       <div class="fld"><label for="rem">Remaining weight (g){#if adjust.total} of {adjust.total}{/if}</label><input id="rem" class="input" type="number" min="0" max={adjust.total || undefined} bind:value={adjust.remaining} /></div>
-      <p class="muted hint">Set the true remaining weight — e.g. after weighing the spool, or to write off wasted filament. Used weight is recalculated so cost stays accurate.</p>
+      <p class="muted hint">Set the true remaining weight, e.g. after weighing the spool, or to write off wasted filament. Used weight is recalculated so cost stays accurate.</p>
       <div class="flex gap dactions">
-        <button class="btn btn-primary" onclick={saveAdjust} disabled={adjBusy}>{adjBusy ? 'Saving…' : 'Save'}</button>
+        <button class="btn btn-primary" onclick={saveAdjust} disabled={adjBusy}>{adjBusy ? 'Saving' : 'Save'}</button>
         <button class="btn btn-ghost" onclick={() => (adjust = null)} disabled={adjBusy}>Cancel</button>
       </div>
     </div>
@@ -399,9 +401,9 @@
 {#if link}
   <div class="overlay no-print" role="presentation" onclick={() => (link = null)}>
     <div class="dialog card" role="dialog" onclick={(e) => e.stopPropagation()}>
-      <div class="dhead"><div><span class="eyebrow">GenFilament preset</span><h3>{link.spool.name}</h3></div><button class="btn btn-ghost btn-sm" onclick={() => (link = null)} aria-label="Close">&times;</button></div>
+      <div class="dhead"><div><span class="eyebrow">GenFilament preset</span><h3>{link.spool.name}</h3></div><button class="btn btn-ghost btn-sm" onclick={() => (link = null)} aria-label="Close"><Icon name="x" size={14} /></button></div>
       {#if link.spool.presetId}<p class="muted tiny">Currently: <span class="mono">{link.spool.presetName || link.spool.presetId}</span></p>{/if}
-      <input class="input" bind:value={link.q} placeholder={gfLoading ? 'Loading presets...' : 'Search generated presets'} autocomplete="off" />
+      <input class="input" bind:value={link.q} placeholder={gfLoading ? 'Loading presets' : 'Search generated presets'} autocomplete="off" />
       {#if gfErr}<p class="err">{gfErr}</p>{/if}
       <div class="plist tall">
         {#each matchPresets(link.q, 40) as p (p.filament_id)}
@@ -422,7 +424,7 @@
 {#if assign}
   <div class="overlay no-print" role="presentation" onclick={() => (assign = null)}>
     <div class="dialog card sm" role="dialog" onclick={(e) => e.stopPropagation()}>
-      <div class="dhead"><div><span class="eyebrow">Load on a printer</span><h3>{assign.spool.name}</h3></div><button class="btn btn-ghost btn-sm" onclick={() => (assign = null)} aria-label="Close">&times;</button></div>
+      <div class="dhead"><div><span class="eyebrow">Load on a printer</span><h3>{assign.spool.name}</h3></div><button class="btn btn-ghost btn-sm" onclick={() => (assign = null)} aria-label="Close"><Icon name="x" size={14} /></button></div>
       <div class="fld">
         <label for="asp">Printer</label>
         <select id="asp" class="input" bind:value={assign.printerId} onchange={onPrinterChange}>
@@ -437,7 +439,7 @@
       </div>
       <p class="muted hint">Filament used by prints on this slot is deducted from this spool. Bambu spools with an RFID tag are bound automatically when loaded.</p>
       <div class="flex gap dactions">
-        <button class="btn btn-primary" onclick={saveAssign} disabled={asBusy || !assign.slot}>{asBusy ? 'Saving...' : 'Assign'}</button>
+        <button class="btn btn-primary" onclick={saveAssign} disabled={asBusy || !assign.slot}>{asBusy ? 'Saving' : 'Assign'}</button>
         <button class="btn btn-ghost" onclick={() => (assign = null)} disabled={asBusy}>Cancel</button>
       </div>
     </div>
@@ -449,16 +451,14 @@
     <div class="label-card">
       <div class="lc-top"><span class="lc-dot" style="background:{labelSpool.color || '#ccc'}"></span><span class="lc-name">{labelSpool.name}</span></div>
       <div class="lc-mat">{labelSpool.material}{#if labelSpool.colorName} · {labelSpool.colorName}{/if}</div>
-      <div class="lc-row"><span>{labelSpool.brand || '—'}</span><span>{labelSpool.total ? labelSpool.total + ' g' : ''}</span></div>
-      {#if labelSpool.location}<div class="lc-loc">📍 {labelSpool.location}</div>{/if}
+      <div class="lc-row"><span>{labelSpool.brand || ''}</span><span>{labelSpool.total ? labelSpool.total + ' g' : ''}</span></div>
+      {#if labelSpool.location}<div class="lc-loc">{labelSpool.location}</div>{/if}
       <div class="lc-foot">{$branding.siteName}</div>
     </div>
   </div>
 {/if}
 
 <style>
-  .head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 1.4rem; }
-  .head h1 { margin: 0; }
   .empty { text-align: center; padding: 2.6rem; }
   .empty .ic { font-size: 1.8rem; margin-bottom: 0.3rem; }
   .empty p { max-width: 48ch; margin: 0.6rem auto 0; }
@@ -472,14 +472,13 @@
   .grow { flex: 1; }
   .sumrow { display: flex; gap: 1rem; margin-bottom: 1.2rem; flex-wrap: wrap; }
   .st { display: flex; flex-direction: column; gap: 0.2rem; min-width: 130px; }
-  .st b { font-family: var(--font-mono); font-size: 1.4rem; }
-  .sfoot { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; margin-top: 0.7rem; padding-top: 0.6rem; border-top: 1px solid var(--ophq-border-soft); }
+  .st b { font-family: var(--ah-font-display); font-weight: 500; letter-spacing: -0.03em; font-size: 26px; font-variant-numeric: tabular-nums; }
+  .sfoot { display: flex; flex-direction: column; align-items: stretch; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--ah-row-line); }
   .tiny { font-size: 0.74rem; }
   .btn-xs { padding: 0.12rem 0.5rem; font-size: 0.72rem; }
-  .btn-danger { background: var(--ophq-danger); color: #fff; }
   .toast { padding: 0.7rem 1rem; border-radius: var(--radius-sm); margin-bottom: 1.1rem; font-size: 0.9rem; border: 1px solid; }
-  .toast.ok { color: var(--ophq-success); border-color: rgba(53,196,107,0.3); background: rgba(53,196,107,0.08); }
-  .toast.err { color: var(--ophq-danger); border-color: rgba(255,92,108,0.3); background: rgba(255,92,108,0.08); }
+  .toast.ok { color: var(--ophq-success); border-color: rgba(155,226,143,0.3); background: rgba(155,226,143,0.08); }
+  .toast.err { color: var(--ophq-danger); border-color: rgba(230,103,103,0.3); background: rgba(230,103,103,0.08); }
   .empty .btn { margin-top: 1rem; }
   .acts { display: flex; align-items: center; gap: 0.3rem; flex-wrap: wrap; }
   .bind { margin-top: 0.4rem; display: flex; align-items: center; gap: 0.3rem; }
@@ -509,7 +508,7 @@
   .hint { font-size: 0.8rem; margin: 0.5rem 0 0; }
   .err { color: var(--ophq-danger); font-size: 0.88rem; margin: 0.7rem 0 0; }
 
-  /* printable label — hidden on screen, shown alone when printing */
+  /* printable label, hidden on screen, shown alone when printing */
   .printonly { display: none; }
   @media print {
     :global(.side) { display: none !important; }

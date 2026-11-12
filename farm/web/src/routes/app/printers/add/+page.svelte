@@ -1,16 +1,18 @@
 <script>
   import { base as basePath } from '$app/paths';
+  import Icon from '$lib/components/AppIcon.svelte';
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { api } from '$lib/api';
   import PageTitle from '$lib/components/PageTitle.svelte';
+  import PageHead from '$lib/components/PageHead.svelte';
   import { prettyModel } from '$lib/models.js';
 
   // Connection-type field sets (engine printer_capabilities.py is authoritative).
   const F = {
     name: { key: 'name', label: 'Display name', type: 'text', required: true, ph: 'Voron 2.4 #1' },
     ip: { key: 'ip_address', label: 'IP address', type: 'text', required: true, ph: '192.0.2.50' },
-    serial: { key: 'serial_number', label: 'Serial number', type: 'text', required: true, ph: '01P00A...' },
+    serial: { key: 'serial_number', label: 'Serial number', type: 'text', required: true, ph: '01P00A' },
     access: { key: 'access_code', label: 'Access code', type: 'text', required: true, ph: 'LAN access code' },
     port: { key: 'moonraker_port', label: 'Moonraker port', type: 'number', def: 7125 },
     apikey: { key: 'moonraker_api_key', label: 'API key', type: 'text', ph: 'optional' },
@@ -97,8 +99,7 @@
   });
 
   // Two dependent dropdowns: manufacturer, then model. A single combined list
-  // meant picking from 385 entries at once, and before that it was search-only —
-  // type nothing, see nothing — which is useless to anyone who doesn't already
+  // meant picking from 385 entries at once, and before that it was search-only, // type nothing, see nothing, which is useless to anyone who doesn't already
   // know their model's exact spelling.
   let vendorSel = $state('');
   let modelSel = $state('');
@@ -226,7 +227,7 @@
     try {
       try { existing = await api.printers() || []; } catch { /* */ }
       const r = await api.discoverConnector(Number(siteConnectorId), 8000);
-      if (!r.connector_online) { siteScanMsg = 'That site’s connector is offline — start the Cloud Client there, then scan again.'; }
+      if (!r.connector_online) { siteScanMsg = 'That site’s connector is offline, start the Cloud Client there, then scan again.'; }
       else {
         const raw = (r.devices || []).map((d) => ({ name: d.name, model: d.model, ip_address: d.ip, serial: d.serial, vendor: d.vendor }));
         const fresh = raw.filter((p) => !alreadyAdded(p));
@@ -264,7 +265,7 @@
       body.moonraker_port = VENDOR_PORT[selected.ct];
     }
     // Connector-routed (remote-LAN) printers aren't reachable directly from a
-    // cloud-hosted engine at create time — the relay is stood up AFTER creation.
+    // cloud-hosted engine at create time, the relay is stood up AFTER creation.
     // Tell the engine to skip its connect pre-flight so the add can succeed; the
     // connection is validated once the route is active below.
     if (siteConnectorId) body.defer_connection_test = true;
@@ -280,7 +281,7 @@
         const pid = created?.id ?? created?.printer_id;
         if (pid != null) {
           try { await api.savePrinterAutomation({ [pid]: { connector_id: Number(siteConnectorId) } }); }
-          catch { /* route can be set later from Settings → Connectors */ }
+          catch { /* route can be set later from Settings, Connectors */ }
         }
       }
       goto(basePath + '/app/printers');
@@ -294,25 +295,25 @@
 
 <PageTitle page="Add printer" />
 
-<div class="head">
-  <h1>Add a printer</h1>
-  <a href="{basePath}/app/printers" class="btn btn-ghost btn-sm">← Back</a>
-</div>
+<PageHead title="Add a printer" description={selected ? '' : 'Find your printer by brand or model and the right connection is set up for you. Everything connects through your private engine; nothing leaves your network.'}>
+  {#snippet actions()}
+    <a href="{basePath}/app/printers" class="btn btn-ghost"><Icon name="back" size={16} />Back to printers</a>
+  {/snippet}
+</PageHead>
 
 {#if !selected}
-  <p class="muted lead">Search your printer by brand or model — we set up the right connection automatically. Everything connects through your private engine; nothing leaves your network.</p>
 
   <div class="finder card card-pad">
     {#if catalogLoading}
-      <p class="muted tiny nores">Loading the printer catalog…</p>
+      <p class="muted tiny nores">Loading the printer catalog</p>
     {:else if catalogErr}
-      <p class="muted tiny nores">Catalog unavailable ({catalogErr}) — pick a platform below, or scan your network.</p>
+      <p class="muted tiny nores">Catalog unavailable ({catalogErr}), pick a platform below, or scan your network.</p>
     {:else}
       <div class="picker">
         <label class="pick">
           <span class="picklabel">Manufacturer</span>
           <select class="input" bind:value={vendorSel} onchange={onVendorChange} aria-label="Manufacturer">
-            <option value="">Select a manufacturer…</option>
+            <option value="">Select a manufacturer</option>
             {#each makers as v}
               <option value={v.label}>{v.label} ({v.count})</option>
             {/each}
@@ -323,9 +324,9 @@
           <span class="picklabel">Model</span>
           <select class="input" bind:value={modelSel} onchange={onModelChange}
                   disabled={!vendorSel} aria-label="Model">
-            <option value="">{vendorSel ? 'Select a model…' : 'Choose a manufacturer first'}</option>
+            <option value="">{vendorSel ? 'Select a model' : 'Choose a manufacturer first'}</option>
             {#each modelsForVendor as r}
-              <option value={r.model}>{r.model}{caps(r).length ? ' — ' + caps(r).join(', ') : ''}</option>
+              <option value={r.model}>{r.model}{caps(r).length ? ', ' + caps(r).join(', ') : ''}</option>
             {/each}
           </select>
         </label>
@@ -341,8 +342,7 @@
       {/if}
 
       <p class="muted tiny nores">
-        Can't see yours? Any Klipper or Moonraker machine works even if the exact model isn't listed —
-        the model only selects the slicing profile.
+        Can't see yours? Any Klipper or Moonraker machine works even if the exact model isn't listed, the model only selects the slicing profile.
       </p>
     {/if}
 
@@ -376,17 +376,17 @@
 
     {#if deploymentMode !== 'local'}
     <div class="field">
-      <label for="site">Site {#if connectors.length}<span class="muted tiny">— which network is this printer on?</span>{/if}</label>
+      <label for="site">Site {#if connectors.length}<span class="muted tiny">- which network is this printer on?</span>{/if}</label>
       {#if connectors.length}
         <select id="site" class="input" bind:value={siteConnectorId}>
-          <option value="">Direct — same network as this instance</option>
+          <option value="">Direct, same network as this instance</option>
           {#each connectors as c}<option value={String(c.id)}>{c.name}{c.online ? '' : ' (offline)'}</option>{/each}
         </select>
         {#if siteConnectorId}
-          <p class="muted tiny">Reached through the <b>{connectors.find((c) => String(c.id) === String(siteConnectorId))?.name}</b> connector. {selectedSiteOnline ? '' : 'That connector is currently offline — the printer is saved and will connect when the Cloud Client is running there.'}</p>
+          <p class="muted tiny">Reached through the <b>{connectors.find((c) => String(c.id) === String(siteConnectorId))?.name}</b> connector. {selectedSiteOnline ? '' : 'That connector is currently offline, the printer is saved and will connect when the Cloud Client is running there.'}</p>
         {/if}
       {:else}
-        <p class="muted tiny">No local connectors yet. Printers are reached directly on this instance’s network. To add printers on a remote site, set up a connector in <a href="{basePath}/app/settings">Settings → Connectors</a>.</p>
+        <p class="muted tiny">No local connectors yet. Printers are reached directly on this instance’s network. To add printers on a remote site, set up a connector in <a href="{basePath}/app/settings">Settings, Connectors</a>.</p>
       {/if}
     </div>
     {/if}
@@ -396,7 +396,7 @@
         <div class="dtitle"><b>Find printers on this site’s network</b></div>
         <p class="muted tiny">Scans the <b>{connectors.find((c) => String(c.id) === String(siteConnectorId))?.name}</b> LAN through its connector and fills in what it finds.</p>
         <div class="scanrow">
-          <button type="button" class="btn btn-primary btn-sm" onclick={scanSiteLan} disabled={siteScanning || !selectedSiteOnline}>{siteScanning ? 'Scanning…' : 'Scan this site'}</button>
+          <button type="button" class="btn btn-primary btn-sm" onclick={scanSiteLan} disabled={siteScanning || !selectedSiteOnline}>{siteScanning ? 'Scanning' : 'Scan this site'}</button>
           {#if !selectedSiteOnline}<span class="muted tiny">connector offline</span>{/if}
         </div>
         {#if siteScanMsg}<p class="muted tiny">{siteScanMsg}</p>{/if}
@@ -416,19 +416,19 @@
       <div class="discover">
         <div class="dtitle"><b>Find printers on your network</b></div>
         {#if isKlipper}
-          <p class="muted tiny">Probes your subnet for Klipper printers running Moonraker (port 7125) and fills in the IP — just give it a name.</p>
+          <p class="muted tiny">Probes your subnet for Klipper printers running Moonraker (port 7125) and fills in the IP, just give it a name.</p>
         {:else}
-          <p class="muted tiny">Scans your subnet for Bambu printers in LAN mode and fills in the IP, serial &amp; model — you just add the access code.</p>
+          <p class="muted tiny">Scans your subnet for Bambu printers in LAN mode and fills in the IP, serial &amp; model, you just add the access code.</p>
         {/if}
         <div class="scanrow">
           <input class="input" bind:value={subnet} placeholder="192.0.2.0/24" aria-label="Subnet to scan" />
           <button type="button" class="btn btn-primary btn-sm" onclick={scan} disabled={scanning}>
-            {scanning ? 'Scanning…' : 'Scan'}
+            {scanning ? 'Scanning' : 'Scan'}
           </button>
         </div>
         {#if scanning}
           <div class="bar"><div class="fill" style="width:{scanProgress.total ? Math.round((scanProgress.scanned / scanProgress.total) * 100) : 5}%"></div></div>
-          <p class="muted tiny">Scanned {scanProgress.scanned}{scanProgress.total ? ' / ' + scanProgress.total : ''} hosts…</p>
+          <p class="muted tiny">Scanned {scanProgress.scanned}{scanProgress.total ? ' / ' + scanProgress.total : ''} hosts</p>
         {/if}
         {#if scanErr}<p class="err">{scanErr}</p>{/if}
         {#if discovered.length}
@@ -464,7 +464,7 @@
     {#if selected.note}<p class="muted note">{selected.note}</p>{/if}
     {#if err}<p class="err">{err}</p>{/if}
     <div class="flex gap">
-      <button class="btn btn-primary" disabled={busy}>{busy ? 'Connecting…' : 'Add printer'}</button>
+      <button class="btn btn-primary" disabled={busy}>{busy ? 'Connecting' : 'Add printer'}</button>
       <a href="{basePath}/app/printers" class="btn btn-ghost">Cancel</a>
     </div>
   </form>

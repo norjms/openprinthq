@@ -1,64 +1,47 @@
 <script>
-  // ArtisanHub Farm wordmark + hex-nozzle mark — brandable per user.
+  // ArtisanHub Farm mark and name, brandable per instance.
   // SPDX-License-Identifier: AGPL-3.0-or-later
-  // If the user uploaded a custom logo it replaces the mark + wordmark; otherwise
-  // the built-in SVG mark shows with the (optionally renamed) wordmark text. The
-  // mark now uses theme variables so it recolours with the active theme.
+  // An uploaded logo replaces the mark and the name. Otherwise the built-in
+  // mark (a hexagon holding stacked print layers) sits on an accent tile beside
+  // the product name, which the owner can rename.
   import { branding, activeLogo } from '$lib/stores/appearance';
 
-  let { size = 30, wordmark = true } = $props();
+  let { size = 36, wordmark = true } = $props();
 
   const text = $derived($branding?.wordmark || $branding?.siteName || 'ArtisanHub Farm');
   const custom = $derived($activeLogo || '');
-  const isDefault = $derived(text === 'ArtisanHub Farm');
 </script>
 
 {#if custom}
-  <span class="logo custom" style="--s:{size}px">
+  <span class="logo custom">
     <img src={custom} alt={text} />
   </span>
 {:else}
-  <span class="logo" style="--s:{size}px">
-    <svg width={size} height={size} viewBox="0 0 64 64" fill="none" aria-hidden="true">
-      <defs>
-        <linearGradient id="ophqg{size}" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
-          <stop stop-color="var(--ophq-primary-2)" />
-          <stop offset="1" stop-color="var(--ophq-primary)" />
-        </linearGradient>
-      </defs>
-      <path d="M32 6 L52 17 V45 L32 56 L12 45 V17 Z" fill="none" stroke="url(#ophqg{size})" stroke-width="3" stroke-linejoin="round" />
-      <rect x="21" y="39" width="22" height="4.4" rx="1.6" fill="var(--ophq-accent)" />
-      <rect x="24" y="31" width="16" height="4.4" rx="1.6" fill="url(#ophqg{size})" />
-      <rect x="27" y="23" width="10" height="4.4" rx="1.6" fill="url(#ophqg{size})" opacity="0.7" />
-    </svg>
-    {#if wordmark}
-      {#if isDefault}
-        <span class="wm">ArtisanHub <b>Farm</b></span>
-      {:else}
-        <span class="wm">{text}</span>
-      {/if}
-    {/if}
+  <span class="logo">
+    <span class="tile" style="--s:{size}px" aria-hidden="true">
+      <svg width={Math.round(size * 0.56)} height={Math.round(size * 0.56)} viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2.5 20.5 7.3v9.4L12 21.5l-8.5-4.8V7.3z" />
+        <path d="M8 16h8M9.5 12.8h5M11 9.6h2" />
+      </svg>
+    </span>
+    {#if wordmark}<span class="wm">{text}</span>{/if}
   </span>
 {/if}
 
 <style>
-  .logo { display: inline-flex; align-items: center; gap: 0.55rem; }
-  /* Custom uploads are full lockups (mark + wordmark). Render every one at the
-     SAME fixed height (independent of the passed size) and centred, so the logo
-     behaves identically in the sidebar, header, footer and auth screens. Width
-     scales with aspect; it shrinks only if its container is narrower. */
-  .logo.custom { display: flex; width: 100%; justify-content: center; }
-  .logo.custom img {
-    height: 100px; width: auto; max-width: 100%;
-    object-fit: contain; display: block;
+  .logo { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
+  .tile {
+    width: var(--s); height: var(--s); flex: none; border-radius: 12px;
+    display: grid; place-items: center;
+    background: var(--ah-accent); color: var(--ah-on-accent);
   }
-  .logo img { width: auto; max-width: 240px; object-fit: contain; border-radius: 4px; display: block; }
   .wm {
-    font-family: var(--font-ui);
-    font-weight: 700;
-    font-size: calc(var(--s) * 0.62);
-    letter-spacing: -0.02em;
-    color: var(--ophq-text);
+    font-family: var(--ah-font-display); font-weight: 600; font-size: 18px;
+    letter-spacing: -0.02em; color: var(--ah-text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  .wm b { color: var(--ophq-primary-2); font-weight: 800; }
+  /* Uploaded logos are full lockups (mark and name): one fixed height everywhere. */
+  .logo.custom { display: flex; width: 100%; }
+  .logo.custom img { height: 40px; width: auto; max-width: 100%; object-fit: contain; display: block; }
 </style>

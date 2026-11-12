@@ -162,11 +162,11 @@
     try { await api.revokeInvite(code); await loadAll(); } catch (e) { err = e?.message || 'Revoke failed.'; }
   }
 
-  function fmt(ts) { return ts ? new Date(ts).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '—'; }
+  function fmt(ts) { return ts ? new Date(ts).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : ''; }
 </script>
 
 {#if !checked}
-  <p class="muted">Loading…</p>
+  <p class="muted">Loading</p>
 {:else if !authorized}
   <div class="card card-pad"><b>Not authorized.</b> This area is for owners only.</div>
 {:else}
@@ -178,14 +178,14 @@
     <h3>Printer hosting mode</h3>
     <p class="muted small">Controls which kinds of printers this deployment can manage, and how the Printers page presents adding them.</p>
     <ul class="muted small modelist">
-      <li><b>Local</b> — printers live on the <em>same network as ArtisanHub Farm</em> and are reached directly. The Cloud Client download and connectors UI are hidden. (You can still reveal them from the Printers page if you have a printer on another network.)</li>
-      <li><b>Remote</b> — printers live on a <em>different network</em>, reached through a Cloud Client connector installed on that LAN. Adding printers is disabled until at least one client has paired; once one does, the page unlocks.</li>
-      <li><b>Both</b> — manage local and remote printers together. Everything is available: add directly on this network <em>and</em> add via a connector.</li>
+      <li><b>Local</b>, printers live on the <em>same network as ArtisanHub Farm</em> and are reached directly. The Cloud Client download and connectors UI are hidden. (You can still reveal them from the Printers page if you have a printer on another network.)</li>
+      <li><b>Remote</b>, printers live on a <em>different network</em>, reached through a Cloud Client connector installed on that LAN. Adding printers is disabled until at least one client has paired; once one does, the page unlocks.</li>
+      <li><b>Both</b>, manage local and remote printers together. Everything is available: add directly on this network <em>and</em> add via a connector.</li>
     </ul>
     <div class="modetoggle">
-      <button class="modebtn" class:on={deploymentMode === 'local'} disabled={modeBusy} onclick={() => setMode('local')}>🏠 Local</button>
-      <button class="modebtn" class:on={deploymentMode === 'remote'} disabled={modeBusy} onclick={() => setMode('remote')}>☁️ Remote</button>
-      <button class="modebtn" class:on={deploymentMode === 'both'} disabled={modeBusy} onclick={() => setMode('both')}>🔄 Both</button>
+      <button class="modebtn" class:on={deploymentMode === 'local'} disabled={modeBusy} onclick={() => setMode('local')}>Local</button>
+      <button class="modebtn" class:on={deploymentMode === 'remote'} disabled={modeBusy} onclick={() => setMode('remote')}>Remote</button>
+      <button class="modebtn" class:on={deploymentMode === 'both'} disabled={modeBusy} onclick={() => setMode('both')}>Both</button>
     </div>
   </section>
 
@@ -195,7 +195,7 @@
     <p class="muted small">
       Remote camera video goes straight from the viewer's browser to the Cloud Client on the
       printer's network, so it never passes through this server. When both ends sit behind
-      restrictive NAT — which is normal on CGNAT connections — that direct path can't be
+      restrictive NAT, which is normal on CGNAT connections, that direct path can't be
       established and the video needs a relay to fall back to.
     </p>
     <p class="muted small">
@@ -209,7 +209,7 @@
       {#if turn.configured}
         <b class="ok">configured</b> <span class="muted">(key {turn.key_id_hint})</span>
       {:else}
-        <b class="warn">not configured</b> <span class="muted">— STUN only</span>
+        <b class="warn">not configured</b> <span class="muted">- STUN only</span>
       {/if}
     </p>
     <div class="turnform">
@@ -230,7 +230,7 @@
     {#if turnMsg}<p class="small ok">{turnMsg}</p>{/if}
     <p class="muted small">
       The token is stored encrypted and is never returned by the API, so it cannot be read back
-      here once saved — rotate it in Cloudflare and re-enter it if it is ever exposed.
+      here once saved, rotate it in Cloudflare and re-enter it if it is ever exposed.
     </p>
   </section>
 
@@ -263,7 +263,7 @@
     <form onsubmit={mintInvite} class="row">
       <input bind:value={inviteEmail} placeholder="restrict to email (optional)" />
       <input bind:value={inviteNote} placeholder="note (optional)" />
-      <button class="btn btn-primary" disabled={busy}>{busy ? 'Creating…' : 'Create invite'}</button>
+      <button class="btn btn-primary" disabled={busy}>{busy ? 'Creating' : 'Create invite'}</button>
     </form>
     {#if invites.length}
       <div class="tblwrap"><table>
@@ -273,10 +273,10 @@
             <tr>
               <td class="mono">{i.code}</td>
               <td><span class="chip {i.status}">{i.status}</span></td>
-              <td>{i.email || '—'}</td>
-              <td>{i.note || '—'}</td>
+              <td>{i.email || ''}</td>
+              <td>{i.note || ''}</td>
               <td>{fmt(i.expires_at)}</td>
-              <td>{i.used_by_email || '—'}</td>
+              <td>{i.used_by_email || ''}</td>
               <td>{#if i.status === 'active'}<button class="btn btn-ghost sm" onclick={() => revoke(i.code)}>Revoke</button>{/if}</td>
             </tr>
           {/each}
@@ -310,7 +310,7 @@
                 <input class="qin" type="number" min="0" step="1" placeholder="unlimited"
                        bind:value={quotaEdits[i.id]} aria-label={`Storage quota (MB) for ${i.subdomain}`} />
                 <span class="qunit muted">MB</span>
-                <button class="btn btn-ghost sm" onclick={() => saveQuota(i)} disabled={quotaBusy[i.id]}>{quotaBusy[i.id] ? '…' : 'Save'}</button>
+                <button class="btn btn-ghost sm" onclick={() => saveQuota(i)} disabled={quotaBusy[i.id]}>{quotaBusy[i.id] ? '' : 'Save'}</button>
               </td>
               <td>{fmt(i.created_at)}</td>
             </tr>
@@ -331,9 +331,9 @@
           {#each users as u}
             <tr>
               <td>{u.email}</td>
-              <td>{u.display_name || '—'}</td>
-              <td class="mono">{u.subdomain || '—'}</td>
-              <td>{u.instance_status || '—'}</td>
+              <td>{u.display_name || ''}</td>
+              <td class="mono">{u.subdomain || ''}</td>
+              <td>{u.instance_status || ''}</td>
               <td>{fmt(u.created_at)}</td>
             </tr>
           {/each}
@@ -348,7 +348,7 @@
   .modelist li { margin-bottom: 0.25rem; }
   .modetoggle { display: inline-flex; gap: 0; border: 1px solid var(--ophq-border); border-radius: 999px; overflow: hidden; margin: 0.3rem 0; }
   .modebtn { padding: 0.4rem 1.1rem; font-size: 0.85rem; font-weight: 600; border: none; background: var(--ophq-surface); color: var(--ophq-text-2); cursor: pointer; }
-  .modebtn.on { background: var(--ophq-primary); color: #fff; }
+  .modebtn.on { background: var(--ophq-primary); color: var(--ah-on-accent); }
   .modebtn:disabled { opacity: 0.6; cursor: default; }
   .note { margin-top: 0.4rem; }
   .feats { white-space: nowrap; }

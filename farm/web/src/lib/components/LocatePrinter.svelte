@@ -1,5 +1,6 @@
 <script>
-  // ArtisanHub Farm — locate an offline printer on the network and relink it.
+  import Icon from '$lib/components/AppIcon.svelte';
+  // ArtisanHub Farm, locate an offline printer on the network and relink it.
   // SPDX-License-Identifier: AGPL-3.0-or-later
   import { relocate, relink, canAutoRelocate, markAutoRelocate } from '$lib/relocate.js';
   import { api } from '$lib/api';
@@ -48,15 +49,15 @@
 
 <div class="locate" class:compact>
   {#if phase === 'idle'}
-    <button class="btn btn-ghost btn-sm" onclick={locate}>⌖ Locate on network</button>
+    <button class="btn btn-ghost btn-sm" onclick={locate}><Icon name="target" size={15} />Locate on the network</button>
   {:else if phase === 'scanning'}
-    <span class="row muted"><span class="spin" aria-hidden="true"></span> Searching the network for {printer.name}…</span>
+    <span class="row muted"><span class="spin" aria-hidden="true"></span> Searching the network for {printer.name}</span>
   {:else if phase === 'found'}
     {#if result.changed}
       <div class="prompt">
-        <span class="msg"><b>{printer.name}</b> found at a new address <span class="mono">{result.newIp}</span> (was <span class="mono">{printer.ip_address}</span>). Its IP changed — relink this printer to it?</span>
+        <span class="msg"><b>{printer.name}</b> found at a new address <span class="mono">{result.newIp}</span> (was <span class="mono">{printer.ip_address}</span>). Its IP changed, relink this printer to it?</span>
         <div class="acts">
-          <button class="btn btn-primary btn-sm" onclick={() => doRelink(result.device)} disabled={busy}>{busy ? 'Relinking…' : `Relink to ${result.newIp}`}</button>
+          <button class="btn btn-primary btn-sm" onclick={() => doRelink(result.device)} disabled={busy}>{busy ? 'Relinking' : `Relink to ${result.newIp}`}</button>
           <button class="btn btn-ghost btn-sm" onclick={() => (phase = 'idle')} disabled={busy}>Dismiss</button>
         </div>
       </div>
@@ -64,14 +65,14 @@
       <div class="prompt">
         <span class="msg"><b>{printer.name}</b> is reachable at <span class="mono">{result.newIp}</span> but the connection dropped. Reconnect?</span>
         <div class="acts">
-          <button class="btn btn-primary btn-sm" onclick={() => doRelink(result.device)} disabled={busy}>{busy ? 'Reconnecting…' : 'Reconnect'}</button>
+          <button class="btn btn-primary btn-sm" onclick={() => doRelink(result.device)} disabled={busy}>{busy ? 'Reconnecting' : 'Reconnect'}</button>
           <button class="btn btn-ghost btn-sm" onclick={() => (phase = 'idle')} disabled={busy}>Dismiss</button>
         </div>
       </div>
     {/if}
   {:else if phase === 'candidate'}
     <div class="prompt">
-      <span class="msg">Couldn't confirm <b>{printer.name}</b> by hardware id yet. Found {result.devices.length} Klipper printer{result.devices.length > 1 ? 's' : ''} on the network — is one of these it?</span>
+      <span class="msg">Couldn't confirm <b>{printer.name}</b> by hardware id yet. Found {result.devices.length} Klipper printer{result.devices.length > 1 ? 's' : ''} on the network, is one of these it?</span>
       <div class="cands">
         {#each result.devices as d}
           <button class="cand" onclick={() => doRelink(d)} disabled={busy}>
@@ -83,7 +84,7 @@
       <button class="btn btn-ghost btn-sm" onclick={() => (phase = 'idle')} disabled={busy}>None of these</button>
     </div>
   {:else if phase === 'offline'}
-    <span class="row muted">Not found on the network — {printer.name} appears to be truly offline. <button class="link" onclick={locate}>Scan again</button></span>
+    <span class="row muted">Not found on the network, {printer.name} appears to be truly offline. <button class="link" onclick={locate}>Scan again</button></span>
   {:else if phase === 'error'}
     <span class="row err">{err} <button class="link" onclick={locate}>Retry</button></span>
   {/if}

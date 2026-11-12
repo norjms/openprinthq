@@ -1,160 +1,71 @@
 /*
- * OpenPrintHQ design system
+ * OpenPrintHQ styles
  * SPDX-License-Identifier: AGPL-3.0-or-later
- * (c) 2026 OpenPrintHQ contributors
  *
- * Identity: a "control room / HQ" aesthetic — electric indigo primary, amber
- * signal accent, and a subtle blueprint grid. Deliberately distinct from
- * Bambuddy (teal/green) and SimplyPrint (light blue).
+ * The look comes from artisanhub-ui ("glass over a live feed"): its design
+ * values (--ah-*), its base classes (ah-*) and its fonts. This file maps the
+ * app's own --ophq-* names onto those values, so every component keeps its
+ * variable names and takes the shared look, and styles the app's own classes
+ * (.card, .btn, .chip, .input) the same way as the shared ones.
  *
- * THEMING (per-user, Settings → Look & Feel):
- *   Every colour is a `--ophq-*` custom property. A theme is a full set of those
- *   values, selected by `data-theme` on <html>:
- *     [data-theme="dark"]        the original near-black graphite theme
- *     [data-theme="light"]       a light grey (#999999) theme
- *     [data-theme="accessible"]  a WCAG-AAA high-contrast theme
- *     [data-theme="custom"]      user-defined (base + inline var overrides)
- *   Per-mode user edits are applied as inline style.setProperty on <html>, so
- *   they win over the block below. `:root` also carries the LIGHT palette as a
- *   sane default so a themeless document still renders.
- *
- *   Non-colour tokens (fonts, geometry, text-scale) live in :root and are shared
- *   across themes. `--ophq-text-scale` drives a global font-size multiplier.
- *   `data-a11y-*` attributes on <html> toggle accessibility behaviours.
+ * One theme, glass-dark, selected by data-theme on <html>. Transparency follows
+ * the device's "reduce transparency" setting unless the user chose otherwise
+ * (data-transparency="on" or "off"); off swaps glass for solid panels.
+ * data-a11y-* attributes on <html> toggle the accessibility behaviours below.
  */
-@import '@fontsource/inter/400.css';
-@import '@fontsource/inter/500.css';
-@import '@fontsource/inter/600.css';
-@import '@fontsource/inter/700.css';
-@import '@fontsource/jetbrains-mono/500.css';
+@import 'artisanhub-ui/fonts.css';
+@import 'artisanhub-ui/theme.css';
+@import 'artisanhub-ui/base.css';
 
-/* ---- shared, non-colour tokens ------------------------------------------ */
+/* ---- the app's names for the shared values ------------------------------ */
 :root {
-  /* type */
-  --font-ui: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-ui: var(--ah-font-sans);
+  --font-display: var(--ah-font-display);
+  --font-mono: var(--ah-font-mono);
 
-  /* geometry */
-  --radius: 12px;
-  --radius-sm: 8px;
-  --radius-lg: 18px;
+  --radius: var(--ah-radius-choice);
+  --radius-sm: var(--ah-radius-btn-sm);
+  --radius-lg: var(--ah-radius-card);
   --maxw: 1200px;
 
-  /* global text-size scale (Look & Feel → text size). 1 = 100%. */
+  /* global text-size scale (Settings, Appearance, text size). 1 = 100%. */
   --ophq-text-scale: 1;
-}
 
-/* ---- palette: LIGHT is an explicit opt-in (dark is the :root default) --- */
-:root[data-theme='light'] {
-  color-scheme: light;
-  /* base surfaces — #999999 backdrop with light raised panels for contrast */
-  /* ArtisanHub Farm: the hub's light look. */
-  --ophq-bg: #f0f0f0;
-  --ophq-bg-2: #e8e8e8;
-  --ophq-surface: #ffffff;
-  --ophq-surface-2: #f5f5f5;
-  --ophq-surface-3: #e8e8e8;
-  --ophq-border: #d0d0d0;
-  --ophq-border-soft: #e0e0e0;
+  --ophq-bg: var(--ah-page);
+  --ophq-bg-2: var(--ah-panel);
+  --ophq-surface: var(--ah-glass);
+  --ophq-surface-2: var(--ah-glass);
+  --ophq-surface-3: var(--ah-segment);
+  --ophq-border: var(--ah-glass-line);
+  --ophq-border-soft: var(--ah-row-line);
 
-  --ophq-primary: #2563eb;
-  --ophq-primary-2: #1d4ed8;
-  --ophq-primary-dim: rgba(37, 99, 235, 0.12);
-  --ophq-accent: #b06f00;
-  --ophq-success: #1f9d57;
-  --ophq-warn: #b5730a;
-  --ophq-danger: #d63a4a;
-  --ophq-info: #1f7fb8;
+  --ophq-primary: var(--ah-accent);
+  --ophq-primary-2: var(--ah-link);
+  --ophq-primary-dim: var(--ah-chip-live-bg);
+  --ophq-on-primary: var(--ah-on-accent);
+  /* Attention orange (#ffb38a) is for bars and marks; as text it uses its light tint to pass 4.5:1. */
+  --ophq-accent: var(--ah-chip-warn-text);
+  --ophq-success: var(--ah-success-2);
+  --ophq-ok: var(--ah-success-2);
+  --ophq-warn: var(--ah-chip-warn-text);
+  --ophq-warning: var(--ah-chip-warn-text);
+  /* Failure red (#e66767) is too dark for text on glass; text uses its light tint. */
+  --ophq-danger: var(--ah-chip-bad-text);
+  --ophq-err: var(--ah-chip-bad-text);
+  --ophq-info: var(--ah-accent);
 
-  --ophq-text: #14171b;
-  --ophq-text-2: #2f353d;
-  --ophq-muted: #383d45;
-  --ophq-faint: #565d68;
+  --ophq-text: var(--ah-text);
+  --ophq-text-2: var(--ah-text-2);
+  --ophq-muted: var(--ah-text-3);
+  --ophq-faint: var(--ah-text-3);
 
-  --ophq-glass: rgba(240, 242, 245, 0.72);
-  --ophq-shadow: 0 10px 30px -14px rgba(0, 0, 0, 0.35);
-  --ophq-shadow-glow: 0 0 0 1px rgba(109, 92, 240, 0.35), 0 8px 40px -8px rgba(109, 92, 240, 0.30);
-  --ophq-glow-1: rgba(109, 92, 240, 0.12);
-  --ophq-glow-2: rgba(176, 111, 0, 0.07);
-  --ophq-grid-opacity: 0.5;
-  --shadow: var(--ophq-shadow);
-  --shadow-glow: var(--ophq-shadow-glow);
-}
-
-/* ---- DARK: the original graphite theme (also the :root default) --------- */
-:root,
-[data-theme='dark'] {
-  color-scheme: dark;
-  /* ArtisanHub Farm: the hub's dark look (its default Legacy farm skin). */
-  --ophq-bg: #1e1e1e;
-  --ophq-bg-2: #181818;
-  --ophq-surface: #333333;
-  --ophq-surface-2: #3f3f3f;
-  --ophq-surface-3: #4a4a4a;
-  --ophq-border: #444444;
-  --ophq-border-soft: #3a3a3a;
-
-  --ophq-primary: #38bdf8;
-  --ophq-primary-2: #7dd3fc;
-  --ophq-primary-dim: rgba(56, 189, 248, 0.15);
-  --ophq-accent: #fbbf24;
-  --ophq-success: #34d399;
-  --ophq-warn: #fbbf24;
-  --ophq-danger: #f87171;
-  --ophq-info: #60a5fa;
-
-  --ophq-text: #ffffff;
-  --ophq-text-2: #d4d4d4;
-  --ophq-muted: #b0b0b0;
-  --ophq-faint: #808080;
-
-  --ophq-glass: rgba(30, 30, 30, 0.8);
-  --ophq-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.6);
-  --ophq-shadow-glow: 0 0 0 1px rgba(56, 189, 248, 0.35), 0 8px 40px -8px rgba(56, 189, 248, 0.3);
-  --ophq-glow-1: rgba(56, 189, 248, 0.06);
-  --ophq-glow-2: rgba(251, 191, 36, 0.03);
-  --ophq-grid-opacity: 0.6;
-  --shadow: var(--ophq-shadow);
-  --shadow-glow: var(--ophq-shadow-glow);
-}
-
-/* ---- ACCESSIBLE: WCAG-AAA high-contrast theme --------------------------- */
-/* White base, near-black text, deep-blue interactive colour (AAA on white and
-   AAA for white text on the button), thick borders. Accessible mode also turns
-   on the a11y behaviours below by default (underline links, strong focus,
-   larger targets) — the store sets the matching data-a11y-* attributes. */
-:root[data-theme='accessible'] {
-  color-scheme: light;
-  --ophq-bg: #ffffff;
-  --ophq-bg-2: #f2f2f2;
-  --ophq-surface: #ffffff;
-  --ophq-surface-2: #f6f6f6;
-  --ophq-surface-3: #e8e8e8;
-  --ophq-border: #595959;
-  --ophq-border-soft: #767676;
-
-  --ophq-primary: #0b3d91;   /* deep blue — white text on it ≈ 10:1 (AAA) */
-  --ophq-primary-2: #0b3d91; /* links: 10:1 on white (AAA) */
-  --ophq-primary-dim: rgba(11, 61, 145, 0.12);
-  --ophq-accent: #8a5000;    /* dark amber ≈ 7.4:1 (AAA) */
-  --ophq-success: #0a6b30;
-  --ophq-warn: #8a5000;
-  --ophq-danger: #b10000;
-  --ophq-info: #0b3d91;
-
-  --ophq-text: #000000;
-  --ophq-text-2: #1a1a1a;
-  --ophq-muted: #333333;     /* 12.6:1 on white (AAA) */
-  --ophq-faint: #4a4a4a;     /* 9:1 on white (AAA) */
-
-  --ophq-glass: rgba(255, 255, 255, 0.94);
-  --ophq-shadow: 0 4px 14px -6px rgba(0, 0, 0, 0.4);
-  --ophq-shadow-glow: 0 0 0 2px #0b3d91;
-  --ophq-glow-1: rgba(11, 61, 145, 0.04);
-  --ophq-glow-2: rgba(138, 80, 0, 0.03);
-  --ophq-grid-opacity: 0.25;
-  --shadow: var(--ophq-shadow);
-  --shadow-glow: var(--ophq-shadow-glow);
+  --ophq-glass: var(--ah-glass);
+  --ophq-shadow: none;
+  --ophq-shadow-glow: none;
+  --shadow: none;
+  --shadow-glow: none;
+  --ophq-tooltip-bg: var(--ah-solid-panel);
+  --ophq-tooltip-fg: var(--ah-text);
 }
 
 * { box-sizing: border-box; }
@@ -167,125 +78,129 @@ html {
 html, body {
   margin: 0;
   padding: 0;
-  background: var(--ophq-bg);
-  color: var(--ophq-text);
-  font-family: var(--font-ui);
-  font-size: 1rem;
-  line-height: 1.55;
+  background: var(--ah-page);
+  color: var(--ah-text);
+  font-family: var(--ah-font-sans);
+  font-size: 14px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
+body { min-height: 100vh; background: var(--ah-page-gradient) fixed, var(--ah-page); }
 
-/* blueprint grid backdrop */
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  background-color: var(--ophq-bg);
-  background-image:
-    radial-gradient(1200px 700px at 80% -10%, var(--ophq-glow-1), transparent 60%),
-    radial-gradient(900px 500px at 0% 100%, var(--ophq-glow-2), transparent 55%),
-    linear-gradient(var(--ophq-border-soft) 1px, transparent 1px),
-    linear-gradient(90deg, var(--ophq-border-soft) 1px, transparent 1px);
-  background-size: 100% 100%, 100% 100%, 40px 40px, 40px 40px;
-  background-position: 0 0, 0 0, -1px -1px, -1px -1px;
-  opacity: var(--ophq-grid-opacity, 0.5);
-}
+a { color: var(--ah-link); text-decoration: none; text-underline-offset: 2px; }
+a:hover { color: var(--ah-text); }
 
-a { color: var(--ophq-primary-2); text-decoration: none; }
-a:hover { color: var(--ophq-text); }
+h1, h2, h3, h4 { line-height: 1.2; margin: 0 0 0.4em; font-weight: 600; color: var(--ah-text); }
+h1 { font-family: var(--ah-font-display); font-weight: 500; letter-spacing: -0.03em; font-size: clamp(24px, 3vh, 40px); line-height: 1.1; }
+h2 { font-size: 20px; }
+h3 { font-size: 17px; }
+h4 { font-size: 15px; }
+p { color: var(--ah-text-2); }
 
-h1, h2, h3, h4 { line-height: 1.15; margin: 0 0 0.4em; font-weight: 700; letter-spacing: -0.02em; }
-h1 { font-size: clamp(2.2rem, 5vw, 3.6rem); }
-h2 { font-size: clamp(1.6rem, 3vw, 2.3rem); }
-p { color: var(--ophq-text-2); }
-
-.mono { font-family: var(--font-mono); }
-.muted { color: var(--ophq-muted); }
+.mono { font-family: var(--ah-font-mono); }
+/* JetBrains Mono is for code and G-code. Numbers and meta lines marked .mono
+   read in the UI font with even-width digits; code, inputs and consoles keep
+   the monospace face. */
+.ah-root .mono:not(input):not(textarea):not(pre):not(code) { font-family: var(--ah-font-sans); font-variant-numeric: tabular-nums; }
+.ah-root code, .ah-root pre, .ah-root .code, .ah-root .code .mono { font-family: var(--ah-font-mono); }
+.muted { color: var(--ah-text-3); }
 .container { width: 100%; max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
 
-/* ---- buttons ---- */
+/* ---- buttons (the app's names, the shared look) ---- */
 .btn {
-  display: inline-flex; align-items: center; gap: 0.5rem;
-  font-family: var(--font-ui); font-weight: 600; font-size: 0.95rem;
-  padding: 0.7rem 1.2rem; border-radius: var(--radius-sm);
-  border: 1px solid transparent; cursor: pointer; transition: all 0.16s ease;
-  text-decoration: none; white-space: nowrap;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  font: 600 14px var(--ah-font-sans); height: 38px; padding: 0 16px;
+  border-radius: var(--ah-radius-btn); border: 1px solid var(--ah-field-line);
+  background: var(--ah-glass); color: var(--ah-text);
+  cursor: pointer; text-decoration: none; white-space: nowrap;
 }
-.btn-primary { background: var(--ophq-primary); color: white; box-shadow: 0 6px 20px -8px var(--ophq-primary); }
-.btn-primary:hover { background: var(--ophq-primary-2); color: white; transform: translateY(-1px); }
-.btn-ghost { background: transparent; color: var(--ophq-text); border-color: var(--ophq-border); }
-.btn-ghost:hover { border-color: var(--ophq-primary); color: var(--ophq-primary-2); }
-.btn-sm { padding: 0.45rem 0.8rem; font-size: 0.85rem; }
+.btn:hover { color: var(--ah-text); border-color: rgba(255, 255, 255, 0.4); }
+.btn:disabled, .btn[aria-disabled='true'] { opacity: 0.55; cursor: not-allowed; }
+.btn-primary, a.btn-primary { background: var(--ah-accent); border-color: var(--ah-accent); color: var(--ah-on-accent); }
+.btn-primary:hover, a.btn-primary:hover { color: var(--ah-on-accent); filter: brightness(1.06); }
+.btn-ghost { background: transparent; border-color: rgba(255, 255, 255, 0.25); color: var(--ah-text); }
+.btn-danger { background: var(--ah-danger-bg); border-color: var(--ah-chip-bad-line); color: var(--ah-chip-bad-text); }
+.btn-danger:hover { color: var(--ah-chip-bad-text); }
+/* Inside the shell, links styled as buttons keep the button's colours. */
+.ah-root a.btn, .ah-root a.btn:hover { color: var(--ah-text); }
+.ah-root a.btn-primary, .ah-root a.btn-primary:hover { color: var(--ah-on-accent); }
+.ah-root a.btn-danger, .ah-root a.btn-danger:hover { color: var(--ah-chip-bad-text); }
+.ah-root a.chip { text-decoration: none; }
+.btn-xs { height: 28px; padding: 0 10px; border-radius: 8px; font-size: 12px; }
+.btn-sm { height: 32px; padding: 0 12px; border-radius: var(--ah-radius-btn-sm); font-size: 13px; }
 
-/* ---- cards ---- */
+/* ---- cards are glass ---- */
 .card {
-  background: linear-gradient(180deg, var(--ophq-surface), var(--ophq-surface-2));
-  border: 1px solid var(--ophq-border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
+  background: var(--ah-glass);
+  border: 1px solid var(--ah-glass-line);
+  border-radius: var(--ah-radius-card);
+  backdrop-filter: var(--ah-blur);
+  -webkit-backdrop-filter: var(--ah-blur);
+  min-width: 0;
 }
-.card-pad { padding: 1.4rem; }
+.card .card { background: var(--ah-panel); border-color: var(--ah-panel-line); border-radius: var(--ah-radius-choice); backdrop-filter: none; -webkit-backdrop-filter: none; }
+.card-pad { padding: var(--ah-card-pad) clamp(14px, 1.6vh, 22px); }
 
-/* ---- chips / badges ---- */
+/* ---- chips: every tint sits on the dark underlay so its text passes ---- */
 .chip {
-  display: inline-flex; align-items: center; gap: 0.4rem;
-  font-size: 0.78rem; font-weight: 600; padding: 0.25rem 0.65rem;
-  border-radius: 999px; border: 1px solid var(--ophq-border);
-  color: var(--ophq-text-2); background: var(--ophq-surface-2);
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 500; line-height: 18px; padding: 2px 9px;
+  border-radius: var(--ah-radius-pill); border: 1px solid var(--ah-field-line);
+  color: var(--ah-text);
+  background: linear-gradient(var(--ah-chip-neutral-bg), var(--ah-chip-neutral-bg)), var(--ah-chip-underlay);
+  white-space: nowrap;
 }
-.chip.accent { color: var(--ophq-accent); border-color: color-mix(in srgb, var(--ophq-accent) 30%, transparent); background: color-mix(in srgb, var(--ophq-accent) 8%, transparent); }
-.chip.primary { color: var(--ophq-primary-2); border-color: color-mix(in srgb, var(--ophq-primary) 35%, transparent); background: var(--ophq-primary-dim); }
-.chip.ok { color: var(--ophq-success); border-color: color-mix(in srgb, var(--ophq-success) 30%, transparent); background: color-mix(in srgb, var(--ophq-success) 8%, transparent); }
+.chip.primary, .chip.live, .chip.info { background: linear-gradient(var(--ah-chip-live-bg), var(--ah-chip-live-bg)), var(--ah-chip-underlay); border-color: var(--ah-chip-live-line); color: var(--ah-chip-live-text); }
+.chip.ok, .chip.success { background: linear-gradient(var(--ah-chip-ok-bg), var(--ah-chip-ok-bg)), var(--ah-chip-underlay); border-color: var(--ah-chip-ok-line); color: var(--ah-chip-ok-text); }
+.chip.accent, .chip.warn { background: linear-gradient(var(--ah-chip-warn-bg), var(--ah-chip-warn-bg)), var(--ah-chip-underlay); border-color: var(--ah-chip-warn-line); color: var(--ah-chip-warn-text); }
+.chip.danger, .chip.bad, .chip.err { background: linear-gradient(var(--ah-chip-bad-bg), var(--ah-chip-bad-bg)), var(--ah-chip-underlay); border-color: var(--ah-chip-bad-line); color: var(--ah-chip-bad-text); }
 
 /* ---- forms ---- */
-.input, .field input, .field select {
-  width: 100%; background: var(--ophq-bg-2); border: 1px solid var(--ophq-border);
-  color: var(--ophq-text); border-radius: var(--radius-sm); padding: 0.7rem 0.9rem;
-  font-family: var(--font-ui); font-size: 0.95rem; transition: border 0.15s;
+.input, .field input, .field select, .field textarea, select.input, textarea.input {
+  width: 100%; min-height: 38px; background: var(--ah-field); border: 1px solid var(--ah-field-line);
+  color: var(--ah-text); border-radius: var(--ah-radius-btn-sm); padding: 0 12px;
+  font: 14px var(--ah-font-sans);
 }
-.input:focus, .field input:focus { outline: none; border-color: var(--ophq-primary); box-shadow: 0 0 0 3px var(--ophq-primary-dim); }
+textarea.input, .field textarea { padding: 8px 12px; }
+.input:focus, .field input:focus, .field select:focus, .field textarea:focus { outline: none; box-shadow: var(--ah-focus); }
 .field { margin-bottom: 1rem; }
-.field label { display: block; font-size: 0.85rem; color: var(--ophq-muted); margin-bottom: 0.35rem; font-weight: 500; }
+.field label { display: block; font-size: 12px; color: var(--ah-text-2); margin-bottom: 6px; font-weight: 500; }
+input, select, textarea, button { font-family: inherit; }
+select option { background: var(--ah-solid-panel); color: var(--ah-text); }
 
 /* ---- utility ---- */
-.grid { display: grid; gap: 1.2rem; }
+.grid { display: grid; gap: 14px; }
 .flex { display: flex; }
 .between { justify-content: space-between; align-items: center; }
 .center { align-items: center; }
 .gap { gap: 1rem; }
-.stack > * + * { margin-top: 1rem; }
-.eyebrow { text-transform: uppercase; letter-spacing: 0.18em; font-size: 0.75rem; font-weight: 700; color: var(--ophq-primary-2); font-family: var(--font-mono); }
-.divider { height: 1px; background: var(--ophq-border); border: 0; margin: 2rem 0; }
+.stack > * + * { margin-top: 14px; }
+.eyebrow { text-transform: uppercase; letter-spacing: 0.12em; font-size: 12px; font-weight: 600; color: var(--ah-group-label); }
+.divider { height: 1px; background: var(--ah-row-line); border: 0; margin: 1.5rem 0; }
+.num { font-variant-numeric: tabular-nums; }
+.big { font-family: var(--ah-font-display); font-weight: 500; letter-spacing: -0.03em; font-size: 34px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+
+/* Scrollbars stay thin on glass. */
+* { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.25) transparent; }
 
 /* ---- accessibility behaviours (toggled by data-a11y-* on <html>) --------- */
-/* Always-on visible focus ring for keyboard users. */
-:focus-visible {
-  outline: 2px solid var(--ophq-primary);
-  outline-offset: 2px;
-  border-radius: 3px;
-}
-/* Underline all links (helps low-vision users distinguish links from text). */
+:focus-visible { outline: none; box-shadow: var(--ah-focus); border-radius: 4px; }
 [data-a11y-underline='on'] a { text-decoration: underline; }
-[data-a11y-underline='on'] .btn { text-decoration: none; }
-/* Stronger, higher-contrast focus indicator. */
+[data-a11y-underline='on'] .btn, [data-a11y-underline='on'] .ah-nav { text-decoration: none; }
 [data-a11y-focus='strong'] :focus-visible {
-  outline: 3px solid var(--ophq-accent);
+  outline: 3px solid var(--ah-attention);
   outline-offset: 3px;
-  box-shadow: 0 0 0 5px var(--ophq-primary-dim);
 }
-/* Larger click/tap targets (WCAG 2.5.5). */
 [data-a11y-targets='large'] .btn,
 [data-a11y-targets='large'] button,
-[data-a11y-targets='large'] .navitem,
+[data-a11y-targets='large'] .ah-nav,
 [data-a11y-targets='large'] select,
 [data-a11y-targets='large'] .input { min-height: 44px; }
-/* Higher-legibility font for dyslexia. */
 [data-a11y-font='legible'] {
-  --font-ui: 'Atkinson Hyperlegible', 'Verdana', 'Tahoma', system-ui, sans-serif;
+  --ah-font-sans: 'Atkinson Hyperlegible', 'Verdana', 'Tahoma', system-ui, sans-serif;
+  --font-ui: var(--ah-font-sans);
   letter-spacing: 0.01em;
 }
-/* Reduce motion — on user toggle or OS preference. */
 [data-a11y-motion='reduce'] *,
 [data-a11y-motion='reduce'] *::before,
 [data-a11y-motion='reduce'] *::after {
@@ -302,7 +217,6 @@ p { color: var(--ophq-text-2); }
     scroll-behavior: auto !important;
   }
 }
-/* Screen-reader-only helper for visually-hidden labels. */
 .sr-only {
   position: absolute !important; width: 1px; height: 1px;
   padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0);
@@ -310,11 +224,8 @@ p { color: var(--ophq-text-2); }
 }
 
 /* ---- instant tooltips (data-tip) ----------------------------------------- */
-/* Pure-CSS tooltip: the bubble + arrow are authored into the CSSOM at page
-   load (nothing lazy, nothing JS-driven), so on hover/focus they paint with
-   ZERO delay — unlike the native `title` attribute's ~1s browser delay. Shows
-   on :hover AND :focus-visible so keyboard users get it too. Pair every
-   data-tip with an aria-label (or visible text) for screen readers. */
+/* The bubble is in the CSSOM from page load, so it shows with no delay on hover
+   and on keyboard focus. Pair every data-tip with an aria-label or visible text. */
 [data-tip] { position: relative; }
 [data-tip]::after,
 [data-tip]::before {
@@ -324,22 +235,20 @@ p { color: var(--ophq-text-2); }
   visibility: hidden;
   pointer-events: none;
   z-index: 70;
-  transition: none;              /* instant — no fade/delay */
+  transition: none;
 }
 [data-tip]::after {
   content: attr(data-tip);
   bottom: calc(100% + 8px);
   transform: translateX(-50%);
-  background: var(--ophq-tooltip-bg, #0b0f16);
-  color: var(--ophq-tooltip-fg, #f4f7fb);
-  border: 1px solid var(--ophq-border);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
-  padding: 0.32rem 0.55rem;
-  border-radius: 6px;
-  font-size: 0.74rem;
+  background: var(--ophq-tooltip-bg);
+  color: var(--ophq-tooltip-fg);
+  border: 1px solid var(--ah-glass-line);
+  padding: 5px 9px;
+  border-radius: 8px;
+  font-size: 12px;
   font-weight: 500;
   line-height: 1.2;
-  letter-spacing: 0.01em;
   white-space: nowrap;
   max-width: 16rem;
 }
@@ -349,11 +258,10 @@ p { color: var(--ophq-text-2); }
   transform: translateX(-50%) rotate(45deg);
   width: 8px;
   height: 8px;
-  background: var(--ophq-tooltip-bg, #0b0f16);
-  border-right: 1px solid var(--ophq-border);
-  border-bottom: 1px solid var(--ophq-border);
+  background: var(--ophq-tooltip-bg);
+  border-right: 1px solid var(--ah-glass-line);
+  border-bottom: 1px solid var(--ah-glass-line);
 }
-/* Below-anchored variant for controls near the top edge (e.g. header STOP). */
 [data-tip][data-tip-pos='below']::after { bottom: auto; top: calc(100% + 8px); }
 [data-tip][data-tip-pos='below']::before {
   bottom: auto; top: calc(100% + 3px);
@@ -366,8 +274,5 @@ p { color: var(--ophq-text-2); }
   opacity: 1;
   visibility: visible;
 }
-/* Don't show a tooltip for a disabled control (nothing to act on). */
 [data-tip]:disabled::after,
 [data-tip]:disabled::before { display: none; }
-[data-a11y-motion='reduce'] [data-tip]::after,
-[data-a11y-motion='reduce'] [data-tip]::before { transition: none; }

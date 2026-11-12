@@ -1,5 +1,5 @@
 <script>
-  // ArtisanHub Farm — smart-plug power control + energy metering for one printer
+  // ArtisanHub Farm, smart-plug power control + energy metering for one printer
   // SPDX-License-Identifier: AGPL-3.0-or-later
   import { api } from '$lib/api';
 
@@ -128,7 +128,7 @@
   </div>
 
   {#if loading}
-    <p class="muted">Loading…</p>
+    <p class="muted">Loading</p>
   {:else if plug}
     <div class="pgrid">
       {#if noMetering}
@@ -137,9 +137,9 @@
           Energy figures need a plug with a built-in power monitor.
         </p>
       {:else}
-        <div class="pm"><span class="muted">Draw</span><b>{watts != null ? Math.round(watts) + ' W' : '—'}</b></div>
-        <div class="pm"><span class="muted">Today</span><b>{kwhToday != null ? kwhToday.toFixed(2) + ' kWh' : '—'}</b></div>
-        <div class="pm"><span class="muted">Total</span><b>{kwhTotal != null ? kwhTotal.toFixed(1) + ' kWh' : '—'}</b></div>
+        <div class="pm"><span class="muted">Draw</span><b>{watts != null ? Math.round(watts) + ' W' : ''}</b></div>
+        <div class="pm"><span class="muted">Today</span><b>{kwhToday != null ? kwhToday.toFixed(2) + ' kWh' : ''}</b></div>
+        <div class="pm"><span class="muted">Total</span><b>{kwhTotal != null ? kwhTotal.toFixed(1) + ' kWh' : ''}</b></div>
       {/if}
     </div>
     <div class="prow">
@@ -175,7 +175,7 @@
         </div>
       {/if}
       <div class="flex gap">
-        <button class="btn btn-primary btn-sm" onclick={createPlug} disabled={acting}>{acting ? 'Adding…' : 'Add plug'}</button>
+        <button class="btn btn-primary btn-sm" onclick={createPlug} disabled={acting}>{acting ? 'Adding' : 'Add plug'}</button>
         <button class="btn btn-ghost btn-sm" onclick={() => (adding = false)}>Cancel</button>
       </div>
       {#if msg?.kind === 'err' && /already has/i.test(msg.text || '')}
@@ -200,7 +200,7 @@
     </div>
   {:else}
     <p class="muted">No smart plug linked. Add a Tasmota plug for real power control, live watts, and auto power-off after prints.</p>
-    <button class="btn btn-ghost btn-sm" onclick={() => (adding = true)}>+ Link smart plug</button>
+    <button class="btn btn-ghost btn-sm" onclick={() => (adding = true)}>Link smart plug</button>
   {/if}
   {#if msg}<p class={msg.kind === 'ok' ? 'ok-msg' : 'err'}>{msg.text}</p>{/if}
 </div>
@@ -210,7 +210,7 @@
   .power h3 { margin: 0; font-size: 1.05rem; }
   .pgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.8rem; margin: 0.9rem 0; }
   .pm { display: flex; flex-direction: column; gap: 0.2rem; }
-  .pm b { font-family: var(--font-mono); font-size: 1.15rem; }
+  .pm b { font-family: var(--ah-font-display); font-weight: 500; letter-spacing: -0.03em; font-size: 22px; font-variant-numeric: tabular-nums; }
   .prow { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding-top: 0.4rem; border-top: 1px solid var(--ophq-border-soft); }
   .plabel { font-size: 0.82rem; }
   .opt { display: flex; align-items: center; gap: 0.5rem; margin: 0.7rem 0 0.3rem; font-size: 0.88rem; color: var(--ophq-text-2); cursor: pointer; }
@@ -221,8 +221,6 @@
   .fld.inline { flex-direction: row; align-items: center; gap: 0.5rem; }
   .fld label { font-size: 0.82rem; color: var(--ophq-text-2); }
   .input.sm { max-width: 90px; }
-  .chip.ok { color: var(--ophq-success); border-color: rgba(53,196,107,0.3); background: rgba(53,196,107,0.08); }
-  .btn-danger { background: var(--ophq-danger); color: #fff; }
   .tiny { font-size: 0.8rem; }
   .ok-msg { color: var(--ophq-success); font-size: 0.9rem; margin: 0.6rem 0 0; }
   .err { color: var(--ophq-danger); font-size: 0.9rem; margin: 0.6rem 0 0; }

@@ -4,6 +4,8 @@
   import { api } from '$lib/api';
   import EngineError from '$lib/components/EngineError.svelte';
   import PageTitle from '$lib/components/PageTitle.svelte';
+  import Icon from '$lib/components/AppIcon.svelte';
+  import PageHead from '$lib/components/PageHead.svelte';
 
   let loading = $state(true);
   let error = $state(null);
@@ -42,7 +44,7 @@
       recent = entries.map((e) => ({
         id: e.id,
         name: e.print_name || 'Print',
-        printer: e.printer_name || printerNames[String(e.printer_id)] || (e.printer_id ? 'Printer ' + e.printer_id : '—'),
+        printer: e.printer_name || printerNames[String(e.printer_id)] || (e.printer_id ? 'Printer ' + e.printer_id : ''),
         status: (e.status || '').toString(),
         dur: e.duration_seconds,
         ftype: e.filament_type || '',
@@ -57,12 +59,12 @@
   onMount(load);
 
   function fmtDur(sec) {
-    if (!sec) return '—';
+    if (!sec) return '';
     const h = Math.floor(sec / 3600), m = Math.round((sec % 3600) / 60);
     return h > 0 ? `${h}h ${m}m` : `${m}m`;
   }
   function fmtWhen(v) {
-    if (!v) return '—';
+    if (!v) return '';
     const d = new Date(v);
     return isNaN(d) ? '' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   }
@@ -76,7 +78,7 @@
   const successRate = $derived(s && s.total_prints > 0 ? Math.round((s.successful_prints / s.total_prints) * 100) : null);
   const tiles = $derived(s ? [
     { label: 'Total prints', value: s.total_prints ?? 0 },
-    { label: 'Success rate', value: successRate == null ? '—' : successRate + '%', ok: true },
+    { label: 'Success rate', value: successRate == null ? '' : successRate + '%', ok: true },
     { label: 'Failed', value: s.failed_prints ?? 0, danger: (s.failed_prints ?? 0) > 0,
       sub: (s.failed_prints ?? 0) > 0 && failedCost != null ? money(failedCost) + ' lost' : null },
     { label: 'Print time', value: (s.total_print_time_hours ?? 0).toFixed(1) + ' h' },
@@ -96,13 +98,14 @@
 
 <PageTitle page="Statistics" />
 
-<div class="head">
-  <div><h1>Statistics</h1><p class="muted">Production analytics for your fleet.</p></div>
-  <button class="btn btn-ghost btn-sm" onclick={load}>Refresh</button>
-</div>
+<PageHead title="Statistics" description="Production analytics for your fleet.">
+  {#snippet actions()}
+    <button class="btn" onclick={load}><Icon name="refresh" size={16} />Refresh</button>
+  {/snippet}
+</PageHead>
 
 {#if loading}
-  <div class="card card-pad muted">Loading analytics…</div>
+  <div class="card card-pad muted">Loading analytics</div>
 {:else if error === 'no-instance'}
   <div class="card card-pad"><p class="muted">Provision your instance from the <a href="{basePath}/app">overview</a> first.</p></div>
 {:else if error}
@@ -118,16 +121,16 @@
     {/each}
   </div>
   {#if s.total_prints === 0}
-    <div class="card card-pad muted note">No prints recorded yet — analytics fill in as you print across your fleet.</div>
+    <div class="card card-pad muted note">No prints recorded yet, analytics fill in as you print across your fleet.</div>
   {:else}
     <div class="grid two">
       <div class="card card-pad">
         <span class="eyebrow">By filament type</span>
-        {#if byType.length}{#each byType as [k, v]}<div class="row"><span>{k}</span><span class="mono">{v}</span></div>{/each}{:else}<p class="muted">—</p>{/if}
+        {#if byType.length}{#each byType as [k, v]}<div class="row"><span>{k}</span><span class="mono">{v}</span></div>{/each}{:else}<p class="muted"></p>{/if}
       </div>
       <div class="card card-pad">
         <span class="eyebrow">By printer</span>
-        {#if byPrinter.length}{#each byPrinter as [k, v]}<div class="row"><span>{k}</span><span class="mono">{v}</span></div>{/each}{:else}<p class="muted">—</p>{/if}
+        {#if byPrinter.length}{#each byPrinter as [k, v]}<div class="row"><span>{k}</span><span class="mono">{v}</span></div>{/each}{:else}<p class="muted"></p>{/if}
       </div>
     </div>
 
@@ -141,7 +144,7 @@
             <span class="rname">{r.name}</span>
             <span class="muted">{r.printer}</span>
             <span class="rfil">
-              {#if r.fcolor}<span class="dot" style="background:{r.fcolor}"></span>{/if}{r.ftype || '—'}{#if r.grams} · {Math.round(r.grams)} g{/if}
+              {#if r.fcolor}<span class="dot" style="background:{r.fcolor}"></span>{/if}{r.ftype || ''}{#if r.grams} · {Math.round(r.grams)} g{/if}
             </span>
             <span class="mono">{fmtDur(r.dur)}</span>
             <span><span class="chip {rtone(r.status)}">{r.status}</span></span>
@@ -164,15 +167,15 @@
         <div class="grid three">
           <div>
             <span class="fahd">By reason</span>
-            {#if faReasons.length}{#each faReasons as [k, v]}<div class="row"><span>{k}</span><span class="mono">{v}</span></div>{/each}{:else}<p class="muted">—</p>{/if}
+            {#if faReasons.length}{#each faReasons as [k, v]}<div class="row"><span>{k}</span><span class="mono">{v}</span></div>{/each}{:else}<p class="muted"></p>{/if}
           </div>
           <div>
             <span class="fahd">By printer</span>
-            {#if faPrinters.length}{#each faPrinters as [k, v]}<div class="row"><span>{k}</span><span class="mono">{v}</span></div>{/each}{:else}<p class="muted">—</p>{/if}
+            {#if faPrinters.length}{#each faPrinters as [k, v]}<div class="row"><span>{k}</span><span class="mono">{v}</span></div>{/each}{:else}<p class="muted"></p>{/if}
           </div>
           <div>
             <span class="fahd">By filament</span>
-            {#if faFilament.length}{#each faFilament as [k, v]}<div class="row"><span>{k}</span><span class="mono">{v}</span></div>{/each}{:else}<p class="muted">—</p>{/if}
+            {#if faFilament.length}{#each faFilament as [k, v]}<div class="row"><span>{k}</span><span class="mono">{v}</span></div>{/each}{:else}<p class="muted"></p>{/if}
           </div>
         </div>
         {#if fa.recent_failures?.length}
@@ -187,11 +190,9 @@
 {/if}
 
 <style>
-  .head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 1.4rem; }
-  .head h1 { margin: 0; }
   .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
   .tile { display: flex; flex-direction: column; gap: 0.3rem; }
-  .tile b { font-size: 1.7rem; font-family: var(--font-mono); }
+  .tile b { font-family: var(--ah-font-display); font-weight: 500; letter-spacing: -0.03em; font-size: 34px; line-height: 1.1; font-variant-numeric: tabular-nums; }
   .tile b.ok { color: var(--ophq-success); }
   .tile b.danger { color: var(--ophq-danger); }
   .tile .sub { font-size: 0.8rem; color: var(--ophq-danger); margin-top: 0.1rem; }
@@ -201,7 +202,7 @@
   .fa { margin-top: 1.2rem; }
   .fatiles { display: flex; gap: 2rem; margin: 0.9rem 0; }
   .fatile { display: flex; flex-direction: column; gap: 0.2rem; }
-  .fatile b { font-family: var(--font-mono); font-size: 1.6rem; }
+  .fatile b { font-family: var(--ah-font-display); font-weight: 500; letter-spacing: -0.03em; font-size: 28px; font-variant-numeric: tabular-nums; }
   .fatile b.warn { color: var(--ophq-accent); }
   .fatile .of { font-size: 1rem; }
   .fahd { display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ophq-muted); margin: 0.8rem 0 0.4rem; }
@@ -218,8 +219,6 @@
   .ar { text-align: right; }
   .rfil { display: flex; align-items: center; gap: 0.45rem; color: var(--ophq-text-2); }
   .rfil .dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.15); flex-shrink: 0; }
-  .chip.danger { color: var(--ophq-danger); border-color: rgba(255,92,108,0.3); background: rgba(255,92,108,0.08); }
-  .chip.ok { color: var(--ophq-success); border-color: rgba(53,196,107,0.3); background: rgba(53,196,107,0.08); }
   @media (max-width: 820px) {
     .tiles { grid-template-columns: repeat(2, 1fr); } .two { grid-template-columns: 1fr; }
     .rrow { grid-template-columns: 1.4fr 1fr 70px; }

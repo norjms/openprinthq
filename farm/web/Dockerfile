@@ -3,7 +3,8 @@
 FROM node:22-alpine AS build
 WORKDIR /app
 COPY package.json ./
-RUN npm install --no-audit --no-fund
+# git: the shared look (artisanhub-ui) is a dependency pinned by git tag.
+RUN apk add --no-cache git && npm install --no-audit --no-fund
 COPY . .
 # Deployed commit SHAs for the /legal AGPL §13 source offer (optional; empty by default).
 ARG OPHQ_APP_COMMIT=""

@@ -3,6 +3,8 @@
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
   import PageTitle from '$lib/components/PageTitle.svelte';
+  import PageHead from '$lib/components/PageHead.svelte';
+  import Icon from '$lib/components/AppIcon.svelte';
 
   let loading = $state(true);
   let error = $state(null);
@@ -60,13 +62,14 @@
 
 <PageTitle page="Slicer" />
 
-<div class="head">
-  <div><h1>Slicer</h1><p class="muted">OrcaSlicer{info.version ? ' ' + info.version : ''}, built in: slice on the server, no desktop app needed.</p></div>
-  <button class="btn btn-ghost btn-sm" onclick={load}>Refresh</button>
-</div>
+<PageHead title="Slicer" description="OrcaSlicer{info.version ? ' ' + info.version : ''}, built in: slice on the server, no desktop app needed.">
+  {#snippet actions()}
+    <button class="btn" onclick={load}><Icon name="refresh" size={16} />Refresh</button>
+  {/snippet}
+</PageHead>
 
 {#if loading}
-  <div class="card card-pad muted">Checking slicer…</div>
+  <div class="card card-pad muted">Checking slicer</div>
 {:else if error === 'no-instance'}
   <div class="card card-pad"><p class="muted">Provision your instance from the <a href="{basePath}/app">overview</a> first.</p></div>
 {:else if error}
@@ -81,13 +84,26 @@
           {#if info.version}<span class="muted small">{info.version}</span>{/if}
         </div>
         <div class="flex center gap">
-          <a class="btn btn-ghost btn-sm" href={info.desktop_url} target="_blank" rel="noopener">Open in a new tab</a>
-          <button class="btn btn-ghost btn-sm" onclick={() => (full = !full)}>{full ? 'Exit full screen' : 'Full screen'}</button>
+          <a class="btn btn-ghost btn-sm" href={info.desktop_url} target="_blank" rel="noopener"><Icon name="external" size={15} />Open in a new tab</a>
+          <button class="btn btn-ghost btn-sm" onclick={() => (full = !full)}><Icon name="expand" size={15} />{full ? 'Exit full screen' : 'Full screen'}</button>
         </div>
       </div>
       <iframe title="OrcaSlicer desktop" src={info.desktop_url} allow="clipboard-read; clipboard-write; fullscreen"></iframe>
     </div>
   {/if}
+
+  <div class="card card-pad status">
+    <div class="flex between center">
+      <div class="flex center gap">
+        <span class="dot" class:on={connected}></span>
+        <div>
+          <h3>OrcaSlicer {connected ? 'connected' : 'not reachable'}</h3>
+          <p class="muted">Server-side slicing engine{connected ? ', ready to slice STL and 3MF' : ''}.</p>
+        </div>
+      </div>
+      <span class="chip {connected ? 'ok' : 'accent'}">{connected ? 'Ready' : 'Offline'}</span>
+    </div>
+  </div>
 
   <div class="card card-pad send">
     <span class="eyebrow">Send plates from OrcaSlicer</span>
@@ -107,21 +123,8 @@
     {/if}
     {#if keyError}<p class="muted">{keyError}</p>{/if}
     <button class="btn btn-sm" onclick={makeKey} disabled={keyBusy || !info.print_host}>
-      {keyBusy ? 'Making...' : (info.print_host_keys > 0 ? 'Make a new key' : 'Make a key')}
+      <Icon name="key" size={15} />{keyBusy ? 'Making' : (info.print_host_keys > 0 ? 'Make a new key' : 'Make a key')}
     </button>
-  </div>
-
-  <div class="card card-pad status glow">
-    <div class="flex between center">
-      <div class="flex center gap">
-        <span class="dot" class:on={connected}></span>
-        <div>
-          <h3>OrcaSlicer {connected ? 'connected' : 'not reachable'}</h3>
-          <p class="muted">Server-side slicing engine{connected ? ' — ready to slice STL & 3MF' : ''}.</p>
-        </div>
-      </div>
-      <span class="chip {connected ? 'ok' : 'accent'}">{connected ? 'ready' : 'offline'}</span>
-    </div>
   </div>
 
   <div class="grid two">
@@ -130,43 +133,43 @@
       <div class="chips">
         {#each models.slice(0, 24) as m}<span class="chip">{m}</span>{/each}
         {#if models.length > 24}<span class="chip">+{models.length - 24} more</span>{/if}
-        {#if models.length === 0}<p class="muted">—</p>{/if}
+        {#if models.length === 0}<p class="muted">None yet</p>{/if}
       </div>
     </div>
     <div class="card card-pad">
       <span class="eyebrow">Preset sources</span>
       <div class="chips">
         {#each presetCats as c}<span class="chip primary">{c}</span>{/each}
-        {#if presetCats.length === 0}<p class="muted">—</p>{/if}
+        {#if presetCats.length === 0}<p class="muted">None yet</p>{/if}
       </div>
     </div>
   </div>
 
   <div class="card card-pad how">
     <span class="eyebrow">How to slice</span>
-    <p class="muted">Upload a model in <a href="{basePath}/app/files">Files</a>, then use its <b>Slice</b> action. Pick a printer, process and filament (searchable, and auto-filtered to what's compatible with the printer) — OrcaSlicer runs it server-side and, with "Slice &amp; queue" on, the result drops straight into your <a href="{basePath}/app/queue">Print queue</a>.</p>
+    <p class="muted">Upload a model in <a href="{basePath}/app/files">Files</a>, then use its <b>Slice</b> action. Pick a printer, process and filament (searchable, and filtered to what suits the printer). OrcaSlicer runs it on the server and, with "Slice and queue" on, the result drops straight into your <a href="{basePath}/app/queue">print queue</a>.</p>
   </div>
 {/if}
 
 <style>
-  .head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 1.4rem; }
-  .head h1 { margin: 0; }
   .workspace { margin-bottom: 1.2rem; overflow: hidden; }
-  .send { margin-bottom: 1.2rem; }
-  .send p { margin: 0.4rem 0; }
-  .send code { font-family: ui-monospace, monospace; font-size: 0.88em; padding: 0.1rem 0.35rem;
-               border-radius: 4px; border: 1px solid var(--ophq-border); word-break: break-all; }
-  .wsbar { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; padding: 0.7rem 1rem; border-bottom: 1px solid var(--ophq-border); }
-  .workspace iframe { display: block; width: 100%; height: 72vh; min-height: 460px; border: 0; background: #0b0e13; }
+  .wsbar { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; padding: 0.7rem 1rem; border-bottom: 1px solid var(--ah-row-line); }
+  .workspace iframe { display: block; width: 100%; height: 72vh; min-height: 460px; border: 0; background: var(--ah-solid-panel); }
   .workspace.full { position: fixed; inset: 0; z-index: 200; margin: 0; border-radius: 0; display: flex; flex-direction: column; }
   .workspace.full iframe { flex: 1; height: auto; min-height: 0; }
+  .send { margin-bottom: 1.2rem; }
+  .send p { margin: 0.4rem 0; }
+  .send code { font-family: var(--ah-font-mono); font-size: 0.88em; padding: 0.1rem 0.35rem;
+               border-radius: 6px; border: 1px solid var(--ah-panel-line); background: var(--ah-panel); word-break: break-all; }
+  .send .btn { margin-top: 0.4rem; }
   .status { margin-bottom: 1.2rem; }
   .status h3 { margin: 0; font-size: 1.1rem; }
   .status p { margin: 0.2rem 0 0; font-size: 0.9rem; }
-  .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--ophq-faint); box-shadow: 0 0 0 4px rgba(127,140,161,0.15); }
-  .dot.on { background: var(--ophq-success); box-shadow: 0 0 0 4px rgba(53,196,107,0.18); }
+  .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--ah-text-3); box-shadow: 0 0 0 4px rgba(127,140,161,0.15); flex: none; }
+  .dot.on { background: var(--ophq-success); box-shadow: 0 0 0 4px rgba(155,226,143,0.18); }
   .two { grid-template-columns: 1fr 1fr; }
   .chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.7rem; }
+  .chips p { margin: 0; }
   .how { margin-top: 1.2rem; }
   .how p { margin: 0.5rem 0 0; }
   @media (max-width: 820px) { .two { grid-template-columns: 1fr; } }

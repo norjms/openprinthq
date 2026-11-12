@@ -161,7 +161,7 @@
 </section>
 
 {#if loading}
-  <p class="muted">Loading...</p>
+  <p class="muted">Loading</p>
 {:else}
   <section>
     <h3>Categories</h3>

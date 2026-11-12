@@ -1,5 +1,5 @@
 <script>
-  // ArtisanHub Farm — notification channels (Discord/Telegram/email/Pushover/ntfy/webhook)
+  // ArtisanHub Farm, notification channels (Discord/Telegram/email/Pushover/ntfy/webhook)
   // SPDX-License-Identifier: AGPL-3.0-or-later
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
@@ -79,7 +79,7 @@
 <div class="card card-pad notif">
   <div class="nh">
     <span class="eyebrow">Notifications</span>
-    <button class="btn btn-ghost btn-sm" onclick={() => { adding = !adding; f = newForm(); }}>{adding ? 'Close' : '+ Add channel'}</button>
+    <button class="btn btn-ghost btn-sm" onclick={() => { adding = !adding; f = newForm(); }}>{adding ? 'Close' : 'Add channel'}</button>
   </div>
   <p class="muted">Get alerted on print events via Discord, Telegram, email, Pushover, ntfy or a generic webhook.</p>
 
@@ -106,12 +106,12 @@
           <label class="ev"><input type="checkbox" checked={!!f[key]} onchange={(e) => (f[key] = e.target.checked)} /><span>{label}</span></label>
         {/each}
       </div>
-      <div class="flex gap"><button class="btn btn-primary btn-sm" onclick={create} disabled={busy === 'create'}>{busy === 'create' ? 'Adding…' : 'Add channel'}</button></div>
+      <div class="flex gap"><button class="btn btn-primary btn-sm" onclick={create} disabled={busy === 'create'}>{busy === 'create' ? 'Adding' : 'Add channel'}</button></div>
     </div>
   {/if}
 
   {#if loading}
-    <p class="muted">Loading…</p>
+    <p class="muted">Loading</p>
   {:else if providers.length === 0}
     <p class="muted small">No channels yet.</p>
   {:else}

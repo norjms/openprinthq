@@ -1,7 +1,7 @@
 // OpenPrintHQ browser API client
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Talks to the control-plane (via the /api proxy) for account + instance data,
-// and — once provisioned — to the user's own engine instance.
+// and, once provisioned, to the user's own engine instance.
 
 import { base as basePath } from '$app/paths';
 import { probeSession, isSessionExpired, authExpiredError, sessionExpired } from './session.js';
@@ -151,7 +151,7 @@ export const api = {
   removePrinterFromGroup: (id, printerId) =>
     req('/engine/api/v1/printer-groups/' + id + '/printers/' + printerId, { method: 'DELETE' }),
   // Update a printer record (name, ip_address, mac_address, chamber_heater,
-  // show_filament_panel, …). Changing ip_address re-links + reconnects engine-side.
+  // show_filament_panel, ). Changing ip_address re-links + reconnects engine-side.
   updatePrinter: (id, body) =>
     req('/engine/api/v1/printers/' + id, { method: 'PATCH', body: JSON.stringify(body) }),
   // Delete a printer from the dashboard. delete_archives=false PRESERVES print
@@ -310,10 +310,10 @@ export const api = {
     req('/engine/api/v1/printers/' + id + '/ams/load?tray_id=' + encodeURIComponent(trayId), { method: 'POST' }),
   amsUnload: (id) =>
     req('/engine/api/v1/printers/' + id + '/ams/unload', { method: 'POST' }),
-  // kind: 'nozzle' | 'bed' | 'chamber' — engine takes ?target= as a query param.
+  // kind: 'nozzle' | 'bed' | 'chamber', engine takes ?target= as a query param.
   // For dual-nozzle machines, nozzle index 0 = right/default, 1 = left.
   // The nozzle index is sent whenever one is given, INCLUDING 0. Testing the
-  // value for truthiness dropped index 0 — the right nozzle — and only worked
+  // value for truthiness dropped index 0, the right nozzle, and only worked
   // because the engine happens to default to it.
   setTemp: (id, kind, target, nozzle) =>
     req('/engine/api/v1/printers/' + id + '/temperature/' + kind + '?target=' + encodeURIComponent(target) +
@@ -351,7 +351,7 @@ export const api = {
     req('/cameras/printer/' + printerId + '/' + kind, { method: 'PUT', body: JSON.stringify(patch) }),
 
   // Objects on the current plate, and skipping some of them mid-print.
-  // `reload` re-pulls the 3MF from the printer over FTP, which is slow — only
+  // `reload` re-pulls the 3MF from the printer over FTP, which is slow, only
   // pass it when the cached list looks wrong.
   printObjects: (id, reload = false) =>
     req('/engine/api/v1/printers/' + id + '/print/objects' + (reload ? '?reload=true' : '')),
@@ -376,7 +376,7 @@ export const api = {
     req('/engine/api/v1/printers/' + id + '/calibration?' +
         Object.entries(flags).filter(([, v]) => v).map(([k]) => k + '=true').join('&'), { method: 'POST' }),
 
-  // Filament presets the printer knows about — feeds the slot editor.
+  // Filament presets the printer knows about, feeds the slot editor.
   availableFilaments: () => req('/engine/api/v1/printers/available-filaments'),
   // Write a slot's filament metadata (type, colour, temp window). Colour is
   // RRGGBBAA hex without the leading '#'.
@@ -449,7 +449,7 @@ export const api = {
     req('/engine/api/v1/library/files/' + fileId + '/slice', { method: 'POST', body: JSON.stringify(body) }),
   sliceJob: (jobId) => req('/engine/api/v1/slice-jobs/' + jobId),
   // Add sliced library files (.gcode / .gcode.3mf) to the print queue as
-  // unassigned items — the engine scheduler dispatches to a compatible printer.
+  // unassigned items, the engine scheduler dispatches to a compatible printer.
   addToQueue: (fileIds) =>
     req('/engine/api/v1/library/files/add-to-queue', {
       method: 'POST', body: JSON.stringify({ file_ids: fileIds })

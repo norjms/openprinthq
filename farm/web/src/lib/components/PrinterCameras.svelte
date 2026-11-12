@@ -5,6 +5,7 @@
   // SPDX-License-Identifier: AGPL-3.0-or-later
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
+  import Icon from '$lib/components/AppIcon.svelte';
 
   let { printerId } = $props();
 
@@ -60,7 +61,7 @@
   }
 
   const tone = (s) => (s === 'ONLINE' ? 'ok' : s === 'OFFLINE' ? 'danger' : '');
-  const label = (s) => ({ ONLINE: 'online', OFFLINE: 'offline', DISABLED: 'off', UNKNOWN: 'not checked yet' }[s] || s);
+  const label = (s) => ({ ONLINE: 'Online', OFFLINE: 'Offline', DISABLED: 'Off', UNKNOWN: 'Not checked yet' }[s] || s);
   const kindLabel = (k) => ({ builtin: 'printer', engine: 'external', extra: 'added' }[k] || k);
 </script>
 
@@ -68,11 +69,11 @@
   <div class="chead">
     <span class="ctitle">Cameras</span>
     <span class="sp"></span>
-    {#if !adding}<button class="btn btn-ghost btn-sm" type="button" onclick={() => (adding = true)}>Add a camera</button>{/if}
+    {#if !adding}<button class="btn btn-sm" type="button" onclick={() => (adding = true)}><Icon name="plus" size={15} />Add a camera</button>{/if}
   </div>
 
   {#if cams === null}
-    <p class="muted pad">Loading…</p>
+    <p class="muted pad">Loading cameras</p>
   {:else}
     {#if cams.length === 0}
       <p class="muted pad">No cameras for this printer yet. Add one by its stream address, such as a chamber camera.</p>
@@ -82,7 +83,7 @@
           <li>
             <div class="who">
               <span class="nm">{c.camera_name}</span>
-              <span class="src mono">{kindLabel(c.kind)}{c.source ? ' · ' + c.source : ''}</span>
+              <span class="src mono">{kindLabel(c.kind)}{c.source ? ', ' + c.source : ''}</span>
             </div>
             <span class="chip {tone(c.state)}">{label(c.state)}</span>
             <button class="btn btn-ghost btn-sm" type="button" disabled={busy === c.stream_name} onclick={() => toggle(c)}>
@@ -98,11 +99,11 @@
 
     {#if adding}
       <form class="add" onsubmit={add}>
-        <label>Name <input bind:value={name} maxlength="60" /></label>
+        <label>Name <input class="input" bind:value={name} maxlength="60" /></label>
         <label class="grow">Stream address
-          <input bind:value={url} placeholder="rtsp://camera.local:554/stream1" autocomplete="off" spellcheck="false" />
+          <input class="input" bind:value={url} placeholder="rtsp://camera.local:554/stream1" autocomplete="off" spellcheck="false" />
         </label>
-        <button class="btn btn-primary btn-sm" type="submit" disabled={busy === 'add'}>{busy === 'add' ? 'Adding…' : 'Add'}</button>
+        <button class="btn btn-primary btn-sm" type="submit" disabled={busy === 'add'}>{busy === 'add' ? 'Adding' : 'Add camera'}</button>
         <button class="btn btn-ghost btn-sm" type="button" onclick={() => { adding = false; formErr = null; }}>Cancel</button>
         {#if formErr}<p class="err full">{formErr}</p>{/if}
       </form>
@@ -112,24 +113,21 @@
 </div>
 
 <style>
-  .cams { padding: 0; overflow: hidden; margin-top: 0.8rem; }
-  .chead { display: flex; align-items: center; gap: 0.6rem; padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--ophq-border-soft); }
-  .ctitle { font-size: 0.9rem; color: var(--ophq-text-2); font-weight: 600; }
+  .cams { padding: 0; overflow: hidden; }
+  .chead { display: flex; align-items: center; gap: 10px; padding: 14px 16px 10px; }
+  .ctitle { font-family: var(--ah-font-display); font-size: 16px; font-weight: 600; color: var(--ah-text); }
   .sp { flex: 1; }
-  .pad { padding: 0.6rem 0.75rem; margin: 0; font-size: 0.85rem; }
-  .list { list-style: none; margin: 0; padding: 0; }
-  .list li { display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--ophq-border-soft); }
-  .list li:last-child { border-bottom: 0; }
+  .pad { padding: 0 16px 14px; margin: 0; font-size: 13px; }
+  .list { list-style: none; margin: 0; padding: 0 0 4px; }
+  .list li { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-top: 1px solid var(--ah-row-line); }
   .who { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-  .nm { font-weight: 600; font-size: 0.88rem; }
-  .src { font-size: 0.72rem; color: var(--ophq-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .chip.ok { color: var(--ophq-success); border-color: rgba(53,196,107,0.3); background: rgba(53,196,107,0.08); }
-  .chip.danger { color: var(--ophq-danger); border-color: rgba(255,92,108,0.3); background: rgba(255,92,108,0.08); }
+  .nm { font-weight: 600; font-size: 14px; }
+  .src { font-size: 12px; color: var(--ah-text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .danger { color: var(--ophq-danger); }
-  .add { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.6rem; padding: 0.7rem 0.75rem; border-top: 1px solid var(--ophq-border-soft); }
-  .add label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.78rem; color: var(--ophq-text-2); }
-  .add .grow { flex: 1; min-width: 220px; }
-  .add input { font: inherit; font-size: 0.85rem; }
-  .err { color: var(--ophq-danger); font-size: 0.82rem; }
+  .add { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; padding: 12px 16px 14px; border-top: 1px solid var(--ah-row-line); }
+  .add label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--ah-text-2); }
+  .add .grow { flex: 1; min-width: 200px; }
+  .add input { font: inherit; font-size: 14px; }
+  .err { color: var(--ophq-danger); font-size: 13px; }
   .full { width: 100%; margin: 0; }
 </style>

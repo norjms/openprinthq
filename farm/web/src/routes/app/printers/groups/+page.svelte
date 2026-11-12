@@ -3,6 +3,8 @@
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
   import PageTitle from '$lib/components/PageTitle.svelte';
+  import PageHead from '$lib/components/PageHead.svelte';
+  import Icon from '$lib/components/AppIcon.svelte';
   import { prettyModel } from '$lib/models.js';
 
   let loading = $state(true);
@@ -126,21 +128,14 @@
 
 <PageTitle page="Printer groups" />
 
-<div class="head">
-  <div>
-    <h1>Printer groups</h1>
-    <p class="muted">
-      A group is a queue target. Send a job to a group and it runs on whichever member frees
-      up first, so a farm keeps working without anyone assigning machines by hand.
-    </p>
-  </div>
-  <div class="flex gap">
-    <a class="btn btn-ghost btn-sm" href="{basePath}/app/printers">Back to printers</a>
-    <button class="btn btn-primary btn-sm" onclick={() => (showCreate = !showCreate)}>
-      {showCreate ? 'Cancel' : '+ New group'}
+<PageHead title="Printer groups" description="A group is a queue target. Send a job to a group and it runs on whichever member frees up first, so a farm keeps working without anyone assigning machines by hand.">
+  {#snippet actions()}
+    <a class="btn btn-ghost" href="{basePath}/app/printers"><Icon name="back" size={16} />Back to printers</a>
+    <button class="btn btn-primary" onclick={() => (showCreate = !showCreate)}>
+      {#if !showCreate}<Icon name="plus" size={16} />{/if}{showCreate ? 'Cancel' : 'New group'}
     </button>
-  </div>
-</div>
+  {/snippet}
+</PageHead>
 
 {#if notice}
   <div class="card card-pad notice">{notice}</div>
@@ -188,7 +183,7 @@
 {/if}
 
 {#if loading}
-  <div class="card card-pad muted">Connecting to your engine…</div>
+  <div class="card card-pad muted">Connecting to your engine</div>
 {:else if error === 'no-instance'}
   <div class="card card-pad">
     <p>Your instance is still being provisioned. Groups appear once the engine is up.</p>
@@ -283,7 +278,7 @@
   .mlabel { font-size: 0.85rem; font-weight: 600; }
   .chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
   .chip { font-size: 0.8rem; padding: 0.2rem 0.6rem; border-radius: 999px; border: 1px solid var(--ophq-border); background: var(--ophq-bg-2); color: var(--ophq-text); cursor: pointer; text-decoration: none; }
-  .chip.on { border-color: var(--ophq-primary); background: rgba(79, 138, 109, 0.14); }
+  .chip.on { border-color: var(--ophq-primary); background: rgba(155,226,143, 0.14); }
   .chip.static { cursor: default; }
   .chip.off { opacity: 0.55; }
   .glist { display: flex; flex-direction: column; gap: 0.9rem; }

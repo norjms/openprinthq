@@ -1,0 +1,171 @@
+{
+  "version": 1,
+  "product": "ArtisanHub",
+  "groups": [
+    {
+      "label": "Print",
+      "items": [
+        {
+          "id": "farm",
+          "label": "Farm overview",
+          "href": "/farm",
+          "icon": "grid",
+          "badge": "plate_checks"
+        },
+        {
+          "id": "printers",
+          "label": "Printers",
+          "href": "/farm?view=printers",
+          "icon": "printer",
+          "farm_path": "/app/printers"
+        },
+        {
+          "id": "cameras",
+          "label": "Cameras",
+          "href": "/farm?view=cameras",
+          "icon": "camera",
+          "farm_path": "/app/cameras"
+        },
+        {
+          "id": "queue",
+          "label": "Print queue",
+          "href": "/farm?view=queue",
+          "icon": "list-queue",
+          "farm_path": "/app/queue"
+        },
+        {
+          "id": "filament",
+          "label": "Filament",
+          "href": "/farm?view=filament",
+          "icon": "spool",
+          "farm_path": "/app/filament"
+        },
+        {
+          "id": "slicing",
+          "label": "Slicing",
+          "href": "/slicing",
+          "icon": "layers"
+        }
+      ]
+    },
+    {
+      "label": "Library",
+      "items": [
+        {
+          "id": "models",
+          "label": "Models",
+          "href": "/",
+          "icon": "cube",
+          "match": [
+            "/models"
+          ]
+        },
+        {
+          "id": "add-model",
+          "label": "Add model",
+          "href": "/new",
+          "icon": "plus"
+        },
+        {
+          "id": "find",
+          "label": "Find models",
+          "href": "/find",
+          "icon": "search",
+          "match": [
+            "/makerworld"
+          ]
+        },
+        {
+          "id": "licenses",
+          "label": "Licenses",
+          "href": "/licenses",
+          "icon": "file-text",
+          "badge": "licenses_attention"
+        }
+      ]
+    },
+    {
+      "label": "Shop",
+      "items": [
+        {
+          "id": "orders",
+          "label": "Orders",
+          "href": "/orders",
+          "icon": "cart",
+          "badge": "open_orders"
+        },
+        {
+          "id": "quotes",
+          "label": "Quotes",
+          "href": "/quotes",
+          "icon": "message",
+          "badge": "quotes_waiting"
+        },
+        {
+          "id": "inventory",
+          "label": "Inventory",
+          "href": "/inventory",
+          "icon": "box"
+        },
+        {
+          "id": "shopping-list",
+          "label": "Shopping list",
+          "href": "/planner",
+          "icon": "list",
+          "badge": "live_out_of_supplies"
+        },
+        {
+          "id": "reports",
+          "label": "Reports",
+          "href": "/reports",
+          "icon": "chart"
+        }
+      ]
+    },
+    {
+      "label": "Admin",
+      "items": [
+        {
+          "id": "sync",
+          "label": "Sync health",
+          "href": "/sync",
+          "icon": "sync",
+          "badge": "jobs_failed"
+        },
+        {
+          "id": "people",
+          "label": "People",
+          "href": "/people",
+          "icon": "users",
+          "match": [
+            "/team",
+            "/platform"
+          ]
+        },
+        {
+          "id": "connections",
+          "label": "Connections",
+          "href": "/connections",
+          "icon": "plug",
+          "perm": "connections"
+        },
+        {
+          "id": "devices",
+          "label": "Devices",
+          "href": "/devices",
+          "icon": "tv",
+          "match": [
+            "/add-on",
+            "/tv"
+          ]
+        },
+        {
+          "id": "settings",
+          "label": "Settings",
+          "href": "/settings",
+          "icon": "cog"
+        }
+      ]
+    }
+  ]
+}

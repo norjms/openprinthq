@@ -79,7 +79,7 @@ function evictOldest() {
 /**
  * Encode an already-loaded, same-origin <img> down to a small JPEG and store it.
  * Silently does nothing if the canvas is tainted, storage is unavailable, or the
- * frame will not shrink far enough — a missing placeholder is a cosmetic loss.
+ * frame will not shrink far enough, a missing placeholder is a cosmetic loss.
  */
 export function writeFrame(id, img) {
   if (!img || !img.naturalWidth) return false;

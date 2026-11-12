@@ -44,7 +44,7 @@ test('the detail view says whether video is live or a snapshot', async ({ page, 
   const badge = page.locator('.badge').first();
   await expect(badge, `camera returns ${bytes} bytes but the page renders no LIVE/SNAPSHOT badge`)
     .toBeVisible({ timeout: 20000 });
-  const text = (await badge.innerText()).trim();
+  const text = (await badge.innerText()).trim().toUpperCase();
   expect(['LIVE', 'SNAPSHOT'], `unexpected badge text: ${text}`).toContain(text);
 
   // Whichever mode it reports must match what is actually rendered, or the badge
@@ -99,7 +99,7 @@ test('every tile on the Cameras grid that claims LIVE is actually playing', asyn
     const before = tiles.map((f) => {
       const b = f.parentElement.querySelector('.badge') || f.querySelector('.badge');
       const v = f.querySelector('video');
-      return { live: !!(b && b.textContent.trim() === 'LIVE'), t: v ? v.currentTime : null };
+      return { live: !!(b && b.textContent.trim().toUpperCase() === 'LIVE'), t: v ? v.currentTime : null };
     });
     await new Promise((r) => setTimeout(r, 1500));
     return tiles.map((f, i) => {

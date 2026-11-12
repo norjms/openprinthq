@@ -1,5 +1,6 @@
 <script>
-  // ArtisanHub Farm — API keys & webhooks (#15).
+  import Icon from '$lib/components/AppIcon.svelte';
+  // ArtisanHub Farm, API keys & webhooks (#15).
   // Create/scope/revoke API keys (engine /api-keys) that authenticate the
   // /webhook/* automation endpoints. The full key is shown exactly once at
   // creation. Docs the available webhook endpoints.
@@ -97,19 +98,19 @@
 <div class="card card-pad akeys">
   <div class="ah">
     <div><span class="eyebrow">API keys &amp; webhooks</span><p class="muted">Scoped keys for automating your farm over the <code>/webhook</code> endpoints (CI, scripts, home automation).</p></div>
-    <button class="btn btn-primary btn-sm" onclick={openForm}>+ New key</button>
+    <button class="btn btn-primary btn-sm" onclick={openForm}>New key</button>
   </div>
 
   {#if created}
     <div class="newkey">
-      <div class="nk-h">Key created — copy it now, it won’t be shown again.</div>
-      <div class="nk-row"><code class="nk-code mono">{created.key}</code><button class="btn btn-ghost btn-sm" onclick={copyKey}>{copied ? 'Copied ✓' : 'Copy'}</button></div>
+      <div class="nk-h">Key created, copy it now, it won’t be shown again.</div>
+      <div class="nk-row"><code class="nk-code mono">{created.key}</code><button class="btn btn-ghost btn-sm" onclick={copyKey}>{copied ? 'Copied' : 'Copy'}</button></div>
       <button class="btn btn-ghost btn-xs dismiss" onclick={() => (created = null)}>Dismiss</button>
     </div>
   {/if}
 
   {#if loading}
-    <p class="muted">Loading keys…</p>
+    <p class="muted">Loading keys</p>
   {:else if error === 'no-instance'}
     <p class="muted">Provision your instance first.</p>
   {:else if error}
@@ -121,14 +122,14 @@
       {#each keys as k (k.id)}
         <div class="krow" class:off={!k.enabled}>
           <div class="kmain">
-            <div class="kname">{k.name} <code class="mono kp">{k.key_prefix}…</code>{#if !k.enabled}<span class="chip">disabled</span>{/if}</div>
+            <div class="kname">{k.name} <code class="mono kp">{k.key_prefix}</code>{#if !k.enabled}<span class="chip">disabled</span>{/if}</div>
             <div class="kscopes">{scopeList(k).slice(0, 4).join(' · ')}{#if scopeList(k).length > 4} +{scopeList(k).length - 4}{/if}{#if k.printer_ids?.length} · {k.printer_ids.length} printer(s){/if}</div>
-            <div class="kmeta muted mono">created {fmt(k.created_at) || '—'}{#if k.last_used} · last used {fmt(k.last_used)}{:else} · never used{/if}{#if k.expires_at} · expires {fmt(k.expires_at)}{/if}</div>
+            <div class="kmeta muted mono">created {fmt(k.created_at) || ''}{#if k.last_used} · last used {fmt(k.last_used)}{:else} · never used{/if}{#if k.expires_at} · expires {fmt(k.expires_at)}{/if}</div>
           </div>
           <div class="kacts">
             <button class="btn btn-ghost btn-xs" onclick={() => toggleEnabled(k)}>{k.enabled ? 'Disable' : 'Enable'}</button>
             {#if confirmDel === k.id}
-              <button class="btn btn-danger btn-xs" onclick={() => del(k)}>Revoke</button><button class="btn btn-ghost btn-xs" onclick={() => (confirmDel = null)} aria-label="Cancel">✕</button>
+              <button class="btn btn-danger btn-xs" onclick={() => del(k)}>Revoke</button><button class="btn btn-ghost btn-xs" onclick={() => (confirmDel = null)} aria-label="Cancel"><Icon name="x" size={14} /></button>
             {:else}
               <button class="btn btn-ghost btn-xs" onclick={() => (confirmDel = k.id)}>Revoke</button>
             {/if}
@@ -138,7 +139,7 @@
     </div>
   {/if}
 
-  <button class="btn btn-ghost btn-sm hooks-toggle" onclick={() => (showHooks = !showHooks)}>{showHooks ? '▾' : '▸'} Webhook endpoints</button>
+  <button class="btn btn-ghost btn-sm hooks-toggle" onclick={() => (showHooks = !showHooks)}><Icon name={showHooks ? 'down' : 'chevron-right'} size={14} />Webhook endpoints</button>
   {#if showHooks}
     <div class="hooks">
       <p class="muted small">Send the key as <code>Authorization: Bearer &lt;key&gt;</code>. Reachable on your LAN / via the local connector agent at the engine API; public-internet exposure is a planned follow-up.</p>
@@ -156,8 +157,8 @@
 {#if showForm}
   <div class="overlay" role="presentation" onclick={() => (showForm = false)}>
     <div class="dialog card" role="dialog" onclick={(e) => e.stopPropagation()}>
-      <div class="dhead"><div><span class="eyebrow">New API key</span><h3>Create key</h3></div><button class="btn btn-ghost btn-sm" onclick={() => (showForm = false)} aria-label="Close">✕</button></div>
-      <div class="fld"><label for="kn">Name</label><input id="kn" class="input" bind:value={form.name} placeholder="Home Assistant, CI runner…" /></div>
+      <div class="dhead"><div><span class="eyebrow">New API key</span><h3>Create key</h3></div><button class="btn btn-ghost btn-sm" onclick={() => (showForm = false)} aria-label="Close"><Icon name="x" size={14} /></button></div>
+      <div class="fld"><label for="kn">Name</label><input id="kn" class="input" bind:value={form.name} placeholder="Home Assistant, CI runner" /></div>
       <span class="gl">Permissions</span>
       <div class="scopes">
         {#each SCOPES as s}
@@ -165,7 +166,7 @@
         {/each}
       </div>
       {#if printers.length}
-        <span class="gl">Restrict to printers <span class="muted">(optional — none = all)</span></span>
+        <span class="gl">Restrict to printers <span class="muted">(optional, none = all)</span></span>
         <div class="prs">
           {#each printers as p (p.id)}
             <label class="pr"><input type="checkbox" checked={form.printer_ids.includes(p.id)} onchange={() => togglePrinter(p.id)} /><span>{p.name}</span></label>
@@ -175,7 +176,7 @@
       <div class="fld"><label for="exp">Expires <span class="muted">(optional)</span></label><input id="exp" class="input" type="date" bind:value={form.expires_at} /></div>
       {#if formErr}<p class="err">{formErr}</p>{/if}
       <div class="flex gap dactions">
-        <button class="btn btn-primary" onclick={save} disabled={saving}>{saving ? 'Creating…' : 'Create key'}</button>
+        <button class="btn btn-primary" onclick={save} disabled={saving}>{saving ? 'Creating' : 'Create key'}</button>
         <button class="btn btn-ghost" onclick={() => (showForm = false)} disabled={saving}>Cancel</button>
       </div>
     </div>
@@ -187,7 +188,7 @@
   .ah { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
   .ah p { margin: 0.3rem 0 0; font-size: 0.88rem; max-width: 62ch; }
   code { font-family: var(--font-mono); font-size: 0.9em; background: var(--ophq-bg-2); padding: 0.05rem 0.3rem; border-radius: 4px; }
-  .newkey { margin: 1rem 0; padding: 0.9rem; border: 1px solid var(--ophq-success); border-radius: var(--radius-sm); background: rgba(53,196,107,0.07); }
+  .newkey { margin: 1rem 0; padding: 0.9rem; border: 1px solid var(--ophq-success); border-radius: var(--radius-sm); background: rgba(155,226,143,0.07); }
   .nk-h { font-size: 0.86rem; color: var(--ophq-success); margin-bottom: 0.5rem; }
   .nk-row { display: flex; gap: 0.5rem; align-items: center; }
   .nk-code { flex: 1; overflow-x: auto; white-space: nowrap; padding: 0.4rem 0.6rem; background: var(--ophq-bg-2); border-radius: var(--radius-sm); }
@@ -207,8 +208,8 @@
   .htbl { width: 100%; border-collapse: collapse; font-size: 0.82rem; margin-top: 0.5rem; }
   .htbl td { padding: 0.28rem 0.5rem; border-bottom: 1px solid var(--ophq-border-soft); vertical-align: middle; }
   .verb { font-size: 0.68rem; font-weight: 700; padding: 0.08rem 0.4rem; border-radius: 4px; }
-  .verb.get { color: #4ea1ff; background: rgba(78,161,255,0.12); }
-  .verb.post { color: var(--ophq-success); background: rgba(53,196,107,0.12); }
+  .verb.get { color: #4ea1ff; background: rgba(143,211,255,0.12); }
+  .verb.post { color: var(--ophq-success); background: rgba(155,226,143,0.12); }
   .hp { color: var(--ophq-text); }
   .hd { font-size: 0.78rem; }
   .chip { font-size: 0.68rem; padding: 0.05rem 0.4rem; border: 1px solid var(--ophq-border); border-radius: 999px; color: var(--ophq-muted); }

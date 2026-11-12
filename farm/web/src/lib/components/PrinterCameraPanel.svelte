@@ -12,7 +12,9 @@
 
   let {
     printerId, printerName = 'printer', status = null, connected = false,
-    isBambu = true, tick = 0, onerror = () => {}, onopen = () => {}
+    isBambu = true, tick = 0, onerror = () => {}, onopen = () => {},
+    // bare: only the bar of camera actions, for a page that shows the feed itself.
+    bare = false
   } = $props();
 
   let cap = $state(null);           // { webrtc, webrtc_source, routed_via_connector, relay_available }
@@ -59,7 +61,7 @@
       liveview = next;
       msg = { ok: true, text: next
         ? 'Camera feed enabled at the printer.'
-        : 'Camera feed disabled at the printer — nobody can view it until it is turned back on.' };
+        : 'Camera feed disabled at the printer, nobody can view it until it is turned back on.' };
     } catch (e) {
       msg = { ok: false, text: e?.message || 'Could not change the camera feed.' };
     } finally { busy = null; }
@@ -77,9 +79,9 @@
   );
 </script>
 
-<div class="card cam">
+<div class="cam" class:card={!bare} class:bare>
   <div class="chead">
-    <span class="ctitle">Camera</span>
+    {#if !bare}<span class="ctitle">Camera</span>{/if}
     {#if sourceLabel}<span class="src mono">{sourceLabel}</span>{/if}
     {#if cap?.routed_via_connector}<span class="src mono">via connector</span>{/if}
     <span class="sp"></span>
@@ -124,17 +126,21 @@
     </button>
   </div>
 
-  <div class="stage">
-    <CameraStream printerId={printerId} tick={tick} mode="detail"
-                  alt="{printerName} camera live view" title="Open the camera in its own tab"
-                  onerror={onerror} onclick={onopen} />
-  </div>
+  {#if !bare}
+    <div class="stage">
+      <CameraStream printerId={printerId} tick={tick} mode="detail"
+                    alt="{printerName} camera live view" title="Open the camera in its own tab"
+                    onerror={onerror} onclick={onopen} />
+    </div>
+  {/if}
 
   {#if msg}<p class={msg.ok ? 'ok-msg' : 'err'}>{msg.text}</p>{/if}
 </div>
 
 <style>
   .cam { padding: 0; overflow: hidden; }
+  .cam.bare { overflow: visible; }
+  .cam.bare .chead { border-bottom: 0; padding: 0; }
   .chead {
     display: flex; align-items: center; gap: 0.6rem;
     padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--ophq-border-soft);

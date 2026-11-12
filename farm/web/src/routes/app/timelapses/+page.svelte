@@ -1,10 +1,26 @@
 <script>
-  import { base as basePath } from '$app/paths';
-  // Timelapses moved under Cameras. Redirect old links to the Cameras tab.
+  // Timelapses: recorded prints from every camera, newest first.
   // SPDX-License-Identifier: AGPL-3.0-or-later
-  import { onMount } from 'svelte';
-  import { goto } from '$app/navigation';
-  onMount(() => { goto(basePath + '/app/cameras?tab=timelapses', { replaceState: true }); });
+  import PageTitle from '$lib/components/PageTitle.svelte';
+  import PageHead from '$lib/components/PageHead.svelte';
+  import Icon from '$lib/components/AppIcon.svelte';
+  import Timelapses from '$lib/components/Timelapses.svelte';
+
+  let reload = $state();
 </script>
 
-<div class="card card-pad muted">Redirecting to Cameras → Timelapses…</div>
+<PageTitle page="Timelapses" />
+
+<PageHead title="Timelapses" description="Recorded prints from every camera, newest first.">
+  {#snippet actions()}
+    <button class="btn" onclick={() => reload?.()}><Icon name="refresh" size={16} />Refresh</button>
+  {/snippet}
+</PageHead>
+
+<div class="tlpage fill">
+  <Timelapses bind:reload />
+</div>
+
+<style>
+  .tlpage { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+</style>

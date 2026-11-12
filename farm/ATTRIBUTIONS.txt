@@ -37,10 +37,11 @@ orca-slicer-api — https://github.com/maziggy/orca-slicer-api
 
 FONTS  (bundled in the web app; SIL Open Font License 1.1)
 ----------------------------------------------------------
-Inter — Copyright (C) Rasmus Andersson — https://github.com/rsms/inter
+Manrope, Copyright (C) Mikhail Sharanda, https://github.com/sharanda/manrope
+Sora, Copyright (C) the Sora project authors, https://github.com/sora-xor/sora-font
 JetBrains Mono — Copyright (C) JetBrains s.r.o. — https://github.com/JetBrains/JetBrainsMono
-  Both are distributed via @fontsource under the SIL OFL-1.1; the full license
-  text ships with each font package.
+  All three are distributed via @fontsource (through artisanhub-ui) under the
+  SIL OFL-1.1; the full license text ships with each font package.
 
 
 CORE FRAMEWORKS & LIBRARIES

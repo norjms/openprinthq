@@ -12,6 +12,7 @@
   // the previous behaviour rather than to a broken tab.
   import { onMount } from 'svelte';
   import PageTitle from '$lib/components/PageTitle.svelte';
+  import PageHead from '$lib/components/PageHead.svelte';
   import EngineFiles from '$lib/components/EngineFiles.svelte';
   import LibraryBrowse from '$lib/components/LibraryBrowse.svelte';
   import LibraryCollections from '$lib/components/LibraryCollections.svelte';
@@ -221,16 +222,21 @@
 <PageTitle page="Files" />
 
 {#if state_ === 'checking'}
-  <p class="muted">Opening your library...</p>
+  <PageHead title="Files" description="Your private 3MF, STL and G-code library." />
+  <p class="muted">Opening your library</p>
 {:else if state_ === 'fallback'}
   <EngineFiles />
 {:else}
-  <div class="tabs">
-    <button class:on={view === 'models'} onclick={() => (view = 'models')}>Models</button>
-    <button class:on={view === 'folders'} onclick={() => (view = 'folders')}>Folders</button>
-    <button class:on={view === 'collections'} onclick={() => (view = 'collections')}>Collections</button>
-    <button class:on={view === 'settings'} onclick={() => (view = 'settings')}>Settings</button>
-  </div>
+  <PageHead title="Files" description="Your private 3MF, STL and G-code library.">
+    {#snippet actions()}
+      <div class="ah-seg" role="tablist" aria-label="Library views">
+        <button type="button" role="tab" aria-selected={view === 'models'} onclick={() => (view = 'models')}>Models</button>
+        <button type="button" role="tab" aria-selected={view === 'folders'} onclick={() => (view = 'folders')}>Folders</button>
+        <button type="button" role="tab" aria-selected={view === 'collections'} onclick={() => (view = 'collections')}>Collections</button>
+        <button type="button" role="tab" aria-selected={view === 'settings'} onclick={() => (view = 'settings')}>Settings</button>
+      </div>
+    {/snippet}
+  </PageHead>
 
 {#if view === 'folders'}
   <LibraryBrowse />
@@ -241,19 +247,20 @@
 {:else}
   <div class="bar">
     <input
-      class="search"
+      class="search input"
       type="search"
       placeholder="Search models"
+      aria-label="Search models"
       bind:value={search}
       oninput={onSearchInput}
     />
-    <select value={category} onchange={(e) => setCategory(e.currentTarget.value)}>
+    <select class="input" aria-label="Category" value={category} onchange={(e) => setCategory(e.currentTarget.value)}>
       <option value="">All categories</option>
       {#each categories as c (c.id)}
         <option value={c.id}>{c.name}</option>
       {/each}
     </select>
-    <select value={sort} onchange={(e) => setSort(e.currentTarget.value)}>
+    <select class="input" aria-label="Sort by" value={sort} onchange={(e) => setSort(e.currentTarget.value)}>
       <option value="updated">Recently updated</option>
       <option value="created">Newest</option>
       <option value="name">Name</option>
@@ -271,13 +278,13 @@
       <span>{selected.size} selected</span>
       <button class="act" onclick={bulkTag} disabled={bulkBusy}>Add tags</button>
       <select disabled={bulkBusy} onchange={(e) => { bulkCategory(e.currentTarget.value); e.currentTarget.value = ''; }}>
-        <option value="">Set category...</option>
+        <option value="">Set category</option>
         <option value="none">No category</option>
         {#each categories as c (c.id)}<option value={c.id}>{c.name}</option>{/each}
       </select>
       {#if collections.length > 0}
         <select disabled={bulkBusy} onchange={(e) => { bulkCollection(e.currentTarget.value); e.currentTarget.value = ''; }}>
-          <option value="">Add to collection...</option>
+          <option value="">Add to collection</option>
           {#each collections as c (c.id)}<option value={c.id}>{c.name}</option>{/each}
         </select>
       {/if}
@@ -285,7 +292,7 @@
       <button class="act danger" onclick={bulkDelete} disabled={bulkBusy}>Delete</button>
       <button class="act" onclick={clearSelection} disabled={bulkBusy}>Clear</button>
     {/if}
-    {#if bulkBusy}<span class="muted">Working...</span>{/if}
+    {#if bulkBusy}<span class="muted">Working</span>{/if}
     {#if bulkNote}<span class="muted">{bulkNote}</span>{/if}
   </div>
 
@@ -300,7 +307,7 @@
   ondrop={(e) => { e.preventDefault(); dragging = false; uploader?.send(e.dataTransfer?.files); }}
 >
   {#if loading && models.length === 0}
-    <p class="muted">Loading...</p>
+    <p class="muted">Loading</p>
   {:else if models.length === 0}
     <p class="muted">
       {search || category
@@ -310,7 +317,7 @@
   {:else}
     <div class="grid" class:dim={loading}>
       {#each models as m (m.id)}
-        <div class="card" class:picked={selected.has(m.id)}>
+        <div class="mcard" class:picked={selected.has(m.id)}>
         <label class="pick">
           <input type="checkbox" checked={selected.has(m.id)} onchange={() => toggle(m.id)} />
         </label>
@@ -357,117 +364,46 @@
 {/if}
 
 <style>
-  .tabs { display: flex; gap: 0.4rem; margin-bottom: 0.9rem; }
-  .tabs button {
-    padding: 0.35rem 0.9rem;
-    border: 1px solid var(--ophq-border); border-radius: 999px;
-    background: var(--ophq-surface); color: var(--ophq-text-2);
-    cursor: pointer; font: inherit;
-  }
-  .tabs button.on { border-color: var(--ophq-primary); color: var(--ophq-text); }
-
   /* Only a problem is badged. A clean result is the expected case and a badge
      on every card teaches people to stop reading badges. */
-  .mesh {
-    align-self: flex-start;
-    font-size: 0.72rem;
-    padding: 0.1rem 0.45rem;
-    border-radius: 999px;
-    border: 1px solid var(--ophq-border);
-    color: var(--ophq-text-2);
-  }
-  .mesh.bad { border-color: var(--ophq-danger, #c0392b); color: var(--ophq-danger, #c0392b); }
+  .mesh { align-self: flex-start; font-size: 12px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--ah-field-line); color: var(--ah-text-2); }
+  .mesh.bad { border-color: var(--ah-chip-bad-line); color: var(--ah-chip-bad-text); background: linear-gradient(var(--ah-chip-bad-bg), var(--ah-chip-bad-bg)), var(--ah-chip-underlay); }
 
-  .bar {
-    display: flex;
-    gap: 0.6rem;
-    align-items: center;
-    flex-wrap: wrap;
-    margin-bottom: 1rem;
-  }
+  .bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; flex: none; }
+  .bar .input { width: auto; }
   .search { flex: 1 1 16rem; min-width: 12rem; }
-  .search, select {
-    padding: 0.5rem 0.7rem;
-    border: 1px solid var(--ophq-border);
-    border-radius: 8px;
-    background: var(--ophq-surface);
-    color: var(--ophq-text);
-  }
-  .count { color: var(--ophq-muted); font-size: 0.85rem; margin-left: auto; }
+  .count { color: var(--ah-text-3); font-size: 13px; margin-left: auto; }
 
-  .dropzone { border: 1px dashed transparent; border-radius: 12px; padding: 0.4rem; min-height: 6rem; }
-  .dropzone.over { border-color: var(--ophq-primary); background: var(--ophq-bg-2); }
+  .dropzone { border: 1px dashed transparent; border-radius: var(--ah-radius-card); min-height: 6rem; }
+  .dropzone.over { border-color: var(--ah-accent); background: var(--ah-panel); }
 
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
-    gap: 0.9rem;
-  }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; }
   /* Dimmed rather than replaced while refetching: swapping the grid for a
      spinner on every keystroke makes the page flicker and loses scroll. */
   .dim { opacity: 0.55; }
 
-  .card {
-    position: relative;
-    display: block;
-    border: 1px solid var(--ophq-border);
-    border-radius: 12px;
-    overflow: hidden;
-    background: var(--ophq-surface);
-    color: inherit;
-    text-decoration: none;
-    transition: border-color 0.15s ease;
-  }
-  .card:hover { border-color: var(--ophq-primary); }
-  .card.picked { border-color: var(--ophq-primary); box-shadow: 0 0 0 1px var(--ophq-primary) inset; }
-  .card > a { display: block; color: inherit; text-decoration: none; }
-  .pick {
-    position: absolute; top: 0.4rem; left: 0.4rem; z-index: 2;
-    background: var(--ophq-surface); border: 1px solid var(--ophq-border);
-    border-radius: 6px; padding: 0.15rem 0.25rem; line-height: 0;
-  }
-  .selbar {
-    display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap;
-    margin-bottom: 0.8rem; padding: 0.5rem 0.7rem;
-    border: 1px solid var(--ophq-primary); border-radius: 8px; background: var(--ophq-bg-2);
-  }
-  .selbar.idle { border-color: var(--ophq-border); background: transparent; padding: 0.25rem 0; }
-  .selbar select {
-    padding: 0.3rem 0.6rem; border: 1px solid var(--ophq-border); border-radius: 8px;
-    background: var(--ophq-surface); color: var(--ophq-text); font: inherit; font-size: 0.85rem;
-  }
-  .act.danger { color: var(--ophq-danger); border-color: color-mix(in srgb, var(--ophq-danger) 40%, var(--ophq-border)); }
-  .act {
-    padding: 0.3rem 0.75rem; border: 1px solid var(--ophq-border); border-radius: 8px;
-    background: var(--ophq-surface); color: var(--ophq-text); cursor: pointer; font: inherit; font-size: 0.85rem;
-  }
+  .mcard { position: relative; display: block; border: 1px solid var(--ah-glass-line); border-radius: var(--ah-radius-choice); overflow: hidden; background: var(--ah-glass); backdrop-filter: var(--ah-blur); -webkit-backdrop-filter: var(--ah-blur); color: inherit; }
+  .mcard:hover { border-color: rgba(255, 255, 255, 0.32); }
+  .mcard.picked { border-color: var(--ah-accent); box-shadow: 0 0 0 1px var(--ah-accent) inset; }
+  .mcard > a { display: block; color: var(--ah-text); text-decoration: none; }
+  .pick { position: absolute; top: 8px; left: 8px; z-index: 2; background: var(--ah-panel); border: 1px solid var(--ah-panel-line); border-radius: 8px; padding: 3px 4px; line-height: 0; }
+  .pick input { accent-color: var(--ah-accent); }
+  .selbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 8px 12px; border: 1px solid var(--ah-chip-live-line); border-radius: var(--ah-radius-btn); background: var(--ah-panel); flex: none; }
+  .selbar.idle { border-color: transparent; background: transparent; padding: 0; }
+  .selbar select { min-height: 32px; padding: 0 10px; border: 1px solid var(--ah-field-line); border-radius: var(--ah-radius-btn-sm); background: var(--ah-field); color: var(--ah-text); font: 13px var(--ah-font-sans); }
+  .act { height: 32px; padding: 0 12px; border: 1px solid var(--ah-field-line); border-radius: var(--ah-radius-btn-sm); background: var(--ah-glass); color: var(--ah-text); cursor: pointer; font: 600 13px var(--ah-font-sans); }
+  .act.danger { color: var(--ah-chip-bad-text); border-color: var(--ah-chip-bad-line); background: var(--ah-danger-bg); }
   .act:disabled { opacity: 0.5; cursor: default; }
 
-  .thumb {
-    aspect-ratio: 1 / 1;
-    display: grid;
-    place-items: center;
-    background: var(--ophq-bg-2);
-    overflow: hidden;
-  }
+  .thumb { aspect-ratio: 4 / 3; display: grid; place-items: center; background: var(--ah-panel); overflow: hidden; }
   .thumb img { width: 100%; height: 100%; object-fit: cover; }
-  .noimg { color: var(--ophq-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
-
-  .meta { padding: 0.55rem 0.65rem 0.7rem; display: grid; gap: 0.15rem; }
+  .noimg { color: var(--ah-text-3); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
+  .meta { padding: 10px 12px 12px; display: grid; gap: 2px; }
   .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .sub { color: var(--ophq-muted); font-size: 0.78rem; }
+  .sub { color: var(--ah-text-3); font-size: 12px; }
 
-  .pager { display: flex; gap: 0.8rem; align-items: center; justify-content: center; margin-top: 1.2rem; }
-  .pager button {
-    padding: 0.4rem 0.9rem;
-    border: 1px solid var(--ophq-border);
-    border-radius: 8px;
-    background: var(--ophq-surface);
-    color: var(--ophq-text);
-    cursor: pointer;
-  }
+  .pager { display: flex; gap: 12px; align-items: center; justify-content: center; margin-top: 16px; }
+  .pager button { height: 32px; padding: 0 12px; border: 1px solid var(--ah-field-line); border-radius: var(--ah-radius-btn-sm); background: var(--ah-glass); color: var(--ah-text); cursor: pointer; font: 600 13px var(--ah-font-sans); }
   .pager button:disabled { opacity: 0.4; cursor: default; }
-
-  .muted { color: var(--ophq-muted); }
-  .warn { color: var(--ophq-warn); }
+  .warn { color: var(--ah-chip-warn-text); }
 </style>

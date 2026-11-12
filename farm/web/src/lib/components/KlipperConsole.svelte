@@ -1,9 +1,9 @@
 <script>
-  // ArtisanHub Farm — realtime Klipper/Moonraker console.
+  // ArtisanHub Farm, realtime Klipper/Moonraker console.
   // Streams Klipper's own g-code responses (polled from Moonraker's
   // server.gcode_store via the engine's /klipper/console passthrough) and lets
   // you submit commands. Unlike the generic send-only GcodeConsole, this shows
-  // the printer's replies — "// echo", "!! error", temp reports, etc. — so it's
+  // the printer's replies, "// echo", "!! error", temp reports, etc., so it's
   // a true console. Klipper transport only; lives in the Move & control area.
   // SPDX-License-Identifier: AGPL-3.0-or-later
   import { api } from '$lib/api';
@@ -109,11 +109,11 @@
 
   <div class="logwrap" bind:this={logEl} onscroll={onScroll} tabindex="0" role="log" aria-label="Klipper console output">
     {#if !connected}
-      <p class="muted empty">Printer offline — connect to see the live console.</p>
+      <p class="muted empty">Printer offline, connect to see the live console.</p>
     {:else if err}
       <p class="muted empty">Console unavailable: {err}</p>
     {:else if store.length === 0}
-      <p class="muted empty">Waiting for console output… sent commands and the printer's replies appear here live.</p>
+      <p class="muted empty">Waiting for console output sent commands and the printer's replies appear here live.</p>
     {:else}
       {#each store as l, i (l.time + '-' + i)}
         <div class="line {lineKind(l)}">
@@ -129,9 +129,9 @@
            bind:value={input} onkeydown={onKey} disabled={busy || printing || !connected}
            spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="G-code command input" />
     <button class="btn btn-primary btn-sm" data-tip="Send the command" aria-label="Send command"
-            onclick={() => send()} disabled={busy || printing || !connected || !input.trim()}>{busy ? 'Sending…' : 'Send'}</button>
+            onclick={() => send()} disabled={busy || printing || !connected || !input.trim()}>{busy ? 'Sending' : 'Send'}</button>
   </div>
-  <p class="muted note">Commands run directly on the printer. A bad move or temperature can damage hardware — use with care.</p>
+  <p class="muted note">Commands run directly on the printer. A bad move or temperature can damage hardware, use with care.</p>
 </div>
 
 <style>

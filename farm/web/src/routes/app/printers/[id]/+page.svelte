@@ -1,16 +1,16 @@
 <script module>
+  import { base as basePath } from '$app/paths';
   // Cached once per page load, shared across every printer-detail instance.
   let hmsCache = null;
 </script>
 
 <script>
-  import { base as basePath } from '$app/paths';
-  // ArtisanHub Farm — per-printer detail & control.
+  // ArtisanHub Farm, per-printer detail & control.
   // SPDX-License-Identifier: AGPL-3.0-or-later
   //
   // One shell for every printer type: camera, printing progress, the control
   // cluster, then filament. A machine that can't do something doesn't render a
-  // greyed-out version of it — the section is simply absent, decided by the
+  // greyed-out version of it, the section is simply absent, decided by the
   // availability sets below rather than by probing the engine.
   //
   // Every section is arrangeable (see $lib/printerSections).
@@ -36,6 +36,10 @@
   import PageTitle from '$lib/components/PageTitle.svelte';
   import SectionFrame from '$lib/components/SectionFrame.svelte';
   import PrinterLayoutBar from '$lib/components/PrinterLayoutBar.svelte';
+  import CameraStream from '$lib/components/CameraStream.svelte';
+  import Icon from '$lib/components/AppIcon.svelte';
+  import { liveFeed } from '$lib/stores/feed';
+  import { setCrumb } from '$lib/stores/crumb';
 
   import { printerLabel, printerImage } from '$lib/models.js';
   import { markSeen, recentlyOnline } from '$lib/online.js';
@@ -53,6 +57,21 @@
   let acting = $state(null);
   let timer = null;
   let klipperHomed = $state(null);
+
+  // ---- the fleet, for the printer switcher ---------------------------------
+  let fleet = $state([]);
+  onMount(() => {
+    api.printers().then((d) => { fleet = (Array.isArray(d) ? d : (d?.printers || d?.items || [])).map((p) => ({ id: p.id, name: p.name || `Printer ${p.id}` })); }).catch(() => {});
+    liveFeed.set(true);
+    return () => liveFeed.set(false);
+  });
+  const fleetIdx = $derived(fleet.findIndex((p) => String(p.id) === String(id)));
+  function stepPrinter(dir) {
+    if (!fleet.length) return;
+    const i = ((fleetIdx < 0 ? 0 : fleetIdx) + dir + fleet.length) % fleet.length;
+    goto(`${basePath}/app/printers/${fleet[i].id}`);
+  }
+  $effect(() => { setCrumb(st?.name || meta?.name || ''); });
 
   // ---- live camera --------------------------------------------------------
   let camTick = $state(0);
@@ -104,7 +123,7 @@
   onMount(() => {
     // Status is cheap and wants to feel live. The camera snapshot is a full
     // JPEG relayed through the connector and control-plane, so it refreshes far
-    // more slowly — WebRTC is what "live" is for; this fallback only needs to
+    // more slowly, WebRTC is what "live" is for; this fallback only needs to
     // look current. Polling pauses while arranging so sections don't shuffle
     // out from under the cursor.
     timer = setInterval(() => {
@@ -142,16 +161,33 @@
 
   function tone(s) {
     const x = s.toLowerCase();
-    if (/run|print/.test(x)) return 'primary';
-    if (/pause/.test(x)) return 'accent';
+    if (/run|print/.test(x)) return 'live';
+    if (/pause/.test(x)) return 'warn';
     if (/idle|ready|finish|online/.test(x)) return 'ok';
     if (/error|offline|fault|fail/.test(x)) return 'danger';
     return '';
   }
+  function stateLabel(s) {
+    const x = s.toLowerCase();
+    if (/run|print/.test(x)) return 'Printing';
+    if (/pause/.test(x)) return 'Paused';
+    if (/finish/.test(x)) return 'Finished';
+    if (/idle|ready|online/.test(x)) return st?.awaiting_plate_clear ? 'Clear plate' : 'Ready';
+    if (/offline/.test(x)) return 'Offline';
+    if (/error|fault|fail/.test(x)) return 'Error';
+    return s ? s[0].toUpperCase() + s.slice(1).toLowerCase() : '';
+  }
+  const brandLabel = $derived(printerLabel(meta?.connection_type, meta?.model));
+  async function toggleLight() {
+    acting = 'light';
+    try { await api.chamberLight(id, !st?.chamber_light); await loadStatus(false); }
+    catch (e) { error = e.message || 'Could not switch the light.'; }
+    finally { acting = null; }
+  }
 
   // ---- printer alerts (Bambu HMS) -----------------------------------------
   // The lookup key is "MMMM_EEEE": module from attr bits 16-31, error from the
-  // LOW 16 bits of code. The mask matters — some entries carry high bits whose
+  // LOW 16 bits of code. The mask matters, some entries carry high bits whose
   // real error nibble is the low half.
   function hmsErrNum(e) {
     return (parseInt(String(e?.code ?? '').replace(/^0x/i, ''), 16) || 0) & 0xffff;
@@ -226,7 +262,7 @@
     finally { acting = null; }
   }
 
-  // Emergency stop — immediate, NO confirmation (the regular Stop is gated).
+  // Emergency stop, immediate, NO confirmation (the regular Stop is gated).
   // Klipper gets a true firmware halt; others get an immediate print-stop.
   async function emergencyStop() {
     if (acting) return;
@@ -268,6 +304,9 @@
   }
   const potentialKeys = $derived(availableKeys(false));
   const liveKeys = $derived(availableKeys(true));
+
+  const pageKeys = $derived(new Set(pageList.map((s) => s.key)));
+  const showFeed = $derived(pageKeys.has('camera') && camAvailable && online);
 
   const pageList = $derived.by(() => {
     const base = editing
@@ -319,7 +358,7 @@
       if (layoutScope === 'printer') {
         byPrinter[String(id)] = merged;
       } else {
-        // Saving as the default also drops this printer's override — otherwise
+        // Saving as the default also drops this printer's override, otherwise
         // the new default would appear to do nothing on the page you set it from.
         delete byPrinter[String(id)];
         ps.order = merged.order;
@@ -339,134 +378,85 @@
 
 <PageTitle page={st?.name || meta?.name || 'Printer'} />
 
+{#snippet sectionBody(s)}
+  {#if s.key === 'header'}
+    <div class="phead card">
+      <div class="pid">
+        {#if printerImage(meta?.connection_type, meta?.model)}
+          <div class="pthumb">
+            <img src={printerImage(meta?.connection_type, meta?.model)} alt="{brandLabel || 'printer'}" />
+          </div>
+        {/if}
+        <div class="pnames">
+          <b>{st?.name || meta?.name || 'Printer'}</b>
+          <div class="pmeta">
+            {#if brandLabel}<span>{brandLabel}</span>{/if}
+            <span>#{id}</span>
+            {#if st?.firmware_version}<span>Firmware {st.firmware_version}</span>{/if}
+            {#if st?.wifi_signal != null}<span>Wi-Fi {st.wifi_signal} dBm</span>{/if}
+          </div>
+        </div>
+      </div>
+    </div>
+  {:else if s.key === 'alerts'}
+    <!-- Alerts show as banners above the view; in arranging they hold their place. -->
+    <div class="card card-pad muted">Printer alerts appear above the printer view when the printer reports a fault.</div>
+  {:else if s.key === 'camera'}
+    <div class="card card-pad camrow">
+      <span class="ah-muted">The live view fills the page behind these panels.</span>
+      <PrinterCameraPanel printerId={id} printerName={meta?.name || 'printer'} status={st}
+                          connected={online} isBambu={isBambu} tick={camTick} bare
+                          onerror={() => (camAvailable = false)} onopen={openCamera} />
+    </div>
+    <PrinterCameras printerId={id} />
+  {:else if s.key === 'progress'}
+    <PrinterProgressPanel printerId={id} status={st} isBambu={isBambu} acting={acting} online={online}
+                          onpause={() => control('print/pause', 'pause')}
+                          onresume={() => control('print/resume', 'resume')}
+                          onstop={() => control('print/stop', 'stop')}
+                          onclearplate={clearPlate}
+                          refresh={() => loadStatus(false)} />
+  {:else if s.key === 'control'}
+    <PrinterControlPanel printerId={id} status={st} meta={meta} printing={isPrinting || isPaused}
+                         isBambu={isBambu} isKlipper={isKlipper} chamberHeater={chamberHeaterOn}
+                         homedAxes={klipperHomed} online={online} refresh={() => loadStatus(false)} />
+  {:else if s.key === 'filament'}
+    <PrinterFilamentPanel printerId={id} status={st} isBambu={isBambu}
+                          refresh={() => loadStatus(false)} />
+  {:else if s.key === 'console'}
+    <KlipperConsole printerId={id} connected={online} printing={isPrinting}
+                    onhomed={(h) => (klipperHomed = h)} />
+  {:else if s.key === 'power'}
+    <PowerPanel printerId={id} />
+  {:else if s.key === 'maintenance'}
+    <MaintenancePanel printerId={id} />
+  {:else if s.key === 'klipper-tuning'}
+    <KlipperTuning printerId={id} connected={online} printing={isPrinting} />
+  {:else if s.key === 'eject'}
+    <EjectPanel printerId={id} connected={online} kind={meta?.connection_type} status={st} />
+  {:else if s.key === 'gcode'}
+    <GcodeConsole printerId={id} kind={meta?.connection_type} printing={isPrinting} />
+  {/if}
+{/snippet}
+
 {#snippet pageSection(s)}
   <SectionFrame def={s.def} hidden={s.hidden} unavailable={s.unavailable} {editing}
                 first={s.first} last={s.last}
                 onmove={(d) => movePage(s.key, d)} ontoggle={() => togglePage(s.key)}>
-    {#if s.key === 'header'}
-      <div class="phead card">
-        <div class="pid">
-          {#if printerImage(meta?.connection_type, meta?.model)}
-            <div class="pthumb">
-              <img src={printerImage(meta?.connection_type, meta?.model)}
-                   alt="{printerLabel(meta?.connection_type, meta?.model) || 'printer'}" />
-            </div>
-          {/if}
-          <div class="pnames">
-            <h1>{st?.name || meta?.name || 'Printer'}</h1>
-            <div class="pmeta mono">
-              {#if printerLabel(meta?.connection_type, meta?.model)}
-                <span>{printerLabel(meta?.connection_type, meta?.model)}</span>
-              {/if}
-              <span>#{id}</span>
-              {#if st?.firmware_version}<span>{st.firmware_version}</span>{/if}
-              {#if st?.wifi_signal != null}<span>{st.wifi_signal}dBm</span>{/if}
-            </div>
-          </div>
-        </div>
-        <div class="pactions">
-          <span class="chip {tone(stateStr)}">{stateStr}</span>
-          <button class="btn btn-ghost btn-sm"
-                  data-tip={online ? 'Disconnect from the printer' : 'Connect to the printer'}
-                  aria-label={online ? 'Disconnect from the printer' : 'Connect to the printer'}
-                  onclick={toggleConnection} disabled={!!acting}>
-            {online ? 'Disconnect' : 'Connect'}
-          </button>
-          <button class="btn btn-ghost btn-sm" data-tip="Printer settings" aria-label="Printer settings"
-                  onclick={() => (settingsOpen = true)}>
-            <span aria-hidden="true">⚙</span> Settings
-          </button>
-          <button class="estop" type="button" onclick={emergencyStop}
-                  disabled={!online || acting === 'estop'}
-                  data-tip="Emergency stop — immediate, no confirmation" data-tip-pos="below"
-                  aria-label="Emergency stop — immediate, no confirmation">
-            <span class="estop-oct"><span class="estop-txt">{acting === 'estop' ? '…' : 'STOP'}</span></span>
-          </button>
-        </div>
-      </div>
-
-    {:else if s.key === 'alerts'}
-      <div class="alerts">
-        {#each alerts as a}
-          <div class="alert {a.severe ? 'sev' : ''}">
-            <span class="ai">⚠</span>
-            <span class="atext">
-              {#if a.desc}{a.desc}{:else}Printer alert — check the printer's screen for details.{/if}
-              <span class="mono acode">HMS {a.code}</span>
-            </span>
-          </div>
-        {/each}
-        <button class="btn btn-ghost btn-sm clr" onclick={clearHms} disabled={clearingHms}>
-          {clearingHms ? 'Clearing…' : 'Clear alerts'}
-        </button>
-      </div>
-
-    {:else if s.key === 'camera'}
-      {#if camAvailable || st?.cover_url}
-        <PrinterCameraPanel printerId={id} printerName={meta?.name || 'printer'} status={st}
-                            connected={online} isBambu={isBambu} tick={camTick}
-                            onerror={() => (camAvailable = false)} onopen={openCamera} />
-      {/if}
-      <PrinterCameras printerId={id} />
-
-    {:else if s.key === 'progress'}
-      <PrinterProgressPanel printerId={id} status={st} isBambu={isBambu} acting={acting} online={online}
-                            onpause={() => control('print/pause', 'pause')}
-                            onresume={() => control('print/resume', 'resume')}
-                            onstop={() => control('print/stop', 'stop')}
-                            onclearplate={clearPlate}
-                            refresh={() => loadStatus(false)} />
-
-    {:else if s.key === 'control'}
-      <PrinterControlPanel printerId={id} status={st} meta={meta} printing={isPrinting || isPaused}
-                           isBambu={isBambu} isKlipper={isKlipper} chamberHeater={chamberHeaterOn}
-                           homedAxes={klipperHomed} online={online} refresh={() => loadStatus(false)} />
-
-    {:else if s.key === 'filament'}
-      <PrinterFilamentPanel printerId={id} status={st} isBambu={isBambu}
-                            refresh={() => loadStatus(false)} />
-
-    {:else if s.key === 'console'}
-      <KlipperConsole printerId={id} connected={online} printing={isPrinting}
-                      onhomed={(h) => (klipperHomed = h)} />
-
-    {:else if s.key === 'power'}
-      <PowerPanel printerId={id} />
-
-    {:else if s.key === 'maintenance'}
-      <MaintenancePanel printerId={id} />
-
-    {:else if s.key === 'klipper-tuning'}
-      <KlipperTuning printerId={id} connected={online} printing={isPrinting} />
-
-    {:else if s.key === 'eject'}
-      <EjectPanel printerId={id} connected={online} kind={meta?.connection_type} status={st} />
-
-    {:else if s.key === 'gcode'}
-      <GcodeConsole printerId={id} kind={meta?.connection_type} printing={isPrinting} />
-    {/if}
+    {@render sectionBody(s)}
   </SectionFrame>
 {/snippet}
 
-<div class="head">
-  <a href="{basePath}/app/printers" class="btn btn-ghost btn-sm" data-tip="Back to all printers"
-     aria-label="Back to all printers">← Printers</a>
-  <div class="head-actions">
-    {#if !editing && !loading && !error}
-      <button class="btn btn-ghost btn-sm" data-tip="Reorder or hide the sections on this page"
-              aria-label="Arrange sections" onclick={startEditing}>
-        <span aria-hidden="true">⇅</span> Arrange
-      </button>
-    {/if}
-    <button class="btn btn-ghost btn-sm" data-tip="Refresh live status now" aria-label="Refresh live status"
-            onclick={() => control('refresh-status', 'refresh')} disabled={!!acting}>
-      {acting === 'refresh' ? 'Refreshing…' : 'Refresh'}
-    </button>
-  </div>
+<!-- The live view: the camera fills the page behind the glass panels. -->
+<div class="feed-bg" aria-hidden="true">
+  {#if showFeed}
+    <CameraStream printerId={id} tick={camTick} mode="fill" alt="" onerror={() => (camAvailable = false)} />
+  {/if}
+  <div class="feed-shade"></div>
 </div>
 
 {#if loading}
-  <div class="card card-pad muted">Connecting to your printer…</div>
+  <div class="card card-pad muted">Connecting to your printer</div>
 {:else if error === 'not-found'}
   <div class="card card-pad">
     <h3>Printer not found</h3>
@@ -478,32 +468,109 @@
     <p class="muted">Provision your instance from the <a href="{basePath}/app">overview</a> first.</p>
   </div>
 {:else}
-  {#if error}<p class="err banner">{error}</p>{/if}
+  {#if alerts.length && !editing}
+    <div class="alerts" role="alert">
+      {#each alerts as a}
+        <div class="ah-banner {a.severe ? 'ah-banner--bad' : ''}">
+          <Icon name="alert" size={18} />
+          <span class="atext">
+            {#if a.desc}{a.desc}{:else}Printer alert. Check the printer's screen for details.{/if}
+            <span class="acode">HMS {a.code}</span>
+          </span>
+          <button class="btn btn-sm" onclick={clearHms} disabled={clearingHms}>{clearingHms ? 'Clearing' : 'Clear alerts'}</button>
+        </div>
+      {/each}
+    </div>
+  {/if}
+  {#if isOffline && printerForLocate}
+    <div class="offline-locate ah-banner">
+      <Icon name="alert" size={18} />
+      <div class="ol-body">
+        <div class="ol-head"><b>{printerForLocate.name} is offline</b><span class="muted tiny">Checking the network in case its address changed</span></div>
+        <LocatePrinter printer={printerForLocate} auto={true} onrelinked={afterRelink} />
+      </div>
+    </div>
+  {/if}
+  {#if error}<div class="ah-banner ah-banner--bad" role="alert">{error}</div>{/if}
+
+  <div class="pv-head">
+    <div class="pv-title">
+      <div class="eyebrow">{brandLabel || 'Printer'} · {stateLabel(stateStr)}</div>
+      <h1>{st?.name || meta?.name || 'Printer'}{#if brandLabel}{' '}<span class="dim">{brandLabel}</span>{/if}</h1>
+    </div>
+    <div class="toolbar ah-glass" role="toolbar" aria-label="Printer actions">
+      {#if isBambu || st?.chamber_light != null}
+        <button class="tb" class:on={!!st?.chamber_light} onclick={toggleLight} disabled={!online || !!acting}
+                aria-pressed={!!st?.chamber_light}><Icon name="light" size={16} />Light</button>
+      {/if}
+      <button class="tb" onclick={openCamera}><Icon name="external" size={16} />Camera tab</button>
+      {#if !editing}
+        <button class="tb" onclick={startEditing}><Icon name="grid" size={16} />Arrange</button>
+      {/if}
+      <button class="tb" onclick={() => (settingsOpen = true)}><Icon name="cog" size={16} />Settings</button>
+      <button class="tb" onclick={toggleConnection} disabled={!!acting}>
+        <Icon name="plug" size={16} />{online ? 'Disconnect' : 'Connect'}
+      </button>
+      <button class="tb" onclick={() => control('refresh-status', 'refresh')} disabled={!!acting}
+              aria-label="Refresh live status"><Icon name="refresh" size={16} />{acting === 'refresh' ? 'Refreshing' : 'Refresh'}</button>
+      <button class="tb estop" type="button" onclick={emergencyStop}
+              disabled={!online || acting === 'estop'}
+              data-tip="Stops at once, with no confirmation" data-tip-pos="below">
+        <Icon name="stop" size={16} />{acting === 'estop' ? 'Stopping' : 'Emergency stop'}
+      </button>
+    </div>
+  </div>
+
+  <div class="switcher">
+    <button class="sw-step" onclick={() => stepPrinter(-1)} disabled={fleet.length < 2} aria-label="Previous printer"><Icon name="back" size={18} /></button>
+    <label class="sr-only" for="pv-pick">Switch printer</label>
+    <select id="pv-pick" class="input sw-pick" value={String(id)} onchange={(e) => goto(`${basePath}/app/printers/${e.currentTarget.value}`)}>
+      {#each fleet as p (p.id)}<option value={String(p.id)}>{p.name}</option>{/each}
+      {#if !fleet.length}<option value={String(id)}>{st?.name || meta?.name || 'Printer'}</option>{/if}
+    </select>
+    <button class="sw-step" onclick={() => stepPrinter(1)} disabled={fleet.length < 2} aria-label="Next printer"><Icon name="arrow" size={18} /></button>
+    <span class="chip {tone(stateStr)}">{stateLabel(stateStr)}</span>
+    {#if fleet.length}<span class="ah-muted">{fleetIdx + 1} of {fleet.length} printers</span>{/if}
+  </div>
 
   {#if editing}
     <PrinterLayoutBar scope={layoutScope} printerName={st?.name || meta?.name || 'this printer'}
       hasOverride={printerHasOverride} saving={layoutSaving} msg={layoutMsg}
       onscope={(v) => (layoutScope = v)} onsave={saveLayout}
       oncancel={cancelEditing} onreset={resetDraft} />
-  {:else if layoutMsg}
-    <p class={layoutMsg.ok ? 'ok-msg banner' : 'err banner'}>{layoutMsg.text}</p>
-  {/if}
-
-  {#if isOffline && printerForLocate}
-    <div class="offline-locate">
-      <div class="ol-head">
-        <span class="ol-title">⚠ {printerForLocate.name} is offline</span>
-        <span class="muted tiny">Checking the network in case its IP changed…</span>
+    <div class="stack arrange">
+      {#each pageList as s (s.key)}
+        {@render pageSection(s)}
+      {/each}
+    </div>
+  {:else}
+    {#if layoutMsg}<div class="ah-banner {layoutMsg.ok ? 'ah-banner--live' : 'ah-banner--bad'}" role="status">{layoutMsg.text}</div>{/if}
+    <div class="pv fill">
+      <section class="hero" aria-label="Printer view">
+        <div class="hero-top">
+          <span class="live-pill">
+            {#if showFeed}<span class="dot"></span>Live view{:else}No camera{/if}
+          </span>
+          {#if pageKeys.has('camera')}
+            <div class="hero-cam ah-glass">
+              <PrinterCameraPanel printerId={id} printerName={meta?.name || 'printer'} status={st}
+                                  connected={online} isBambu={isBambu} tick={camTick} bare
+                                  onerror={() => (camAvailable = false)} onopen={openCamera} />
+            </div>
+          {/if}
+        </div>
+        {#if pageKeys.has('progress')}
+          <div class="hero-job">{@render sectionBody({ key: 'progress' })}</div>
+        {/if}
+      </section>
+      <div class="wcol" aria-label="Printer panels">
+        {#each pageList.filter((s) => !['header', 'alerts', 'camera', 'progress'].includes(s.key)) as s (s.key)}
+          {@render pageSection(s)}
+        {/each}
+        {#if pageKeys.has('camera')}<PrinterCameras printerId={id} />{/if}
       </div>
-      <LocatePrinter printer={printerForLocate} auto={true} onrelinked={afterRelink} />
     </div>
   {/if}
-
-  <div class="stack">
-    {#each pageList as s (s.key)}
-      {@render pageSection(s)}
-    {/each}
-  </div>
 {/if}
 
 {#if settingsOpen}
@@ -520,89 +587,66 @@
 {/if}
 
 <style>
-  .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-  .head-actions { display: flex; gap: 0.5rem; align-items: center; }
-  .banner { margin: 0 0 1rem; }
-  .ok-msg { color: var(--ophq-success); font-size: 0.9rem; }
-  .err { color: var(--ophq-danger); font-size: 0.9rem; }
-  .tiny { font-size: 0.8rem; }
+  /* ---- the live view behind everything ---- */
+  .feed-bg { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden;
+             background: radial-gradient(80% 75% at 46% 42%, var(--ah-page-top) 0%, var(--ah-page-mid) 45%, var(--ah-page) 100%); }
+  .feed-bg :global(img), .feed-bg :global(video) { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .feed-bg :global(.badge), .feed-bg :global(.recon) { display: none; }
+  /* Darken the edges where the glass sits so text over the feed stays readable. */
+  .feed-shade { position: absolute; inset: 0;
+    background: linear-gradient(90deg, rgba(14, 20, 26, 0.6) 0%, rgba(14, 20, 26, 0.2) 24%, rgba(14, 20, 26, 0) 45%, rgba(14, 20, 26, 0.25) 66%, rgba(14, 20, 26, 0.6) 100%),
+                linear-gradient(180deg, rgba(14, 20, 26, 0.45) 0%, rgba(14, 20, 26, 0) 22%, rgba(14, 20, 26, 0) 60%, rgba(14, 20, 26, 0.6) 100%); }
 
-  /* Sections are plain siblings with a single gap: each panel is a card in its
-     own right, and outside edit mode SectionFrame adds no wrapper at all. */
-  .stack { display: flex; flex-direction: column; gap: 1rem; }
+  .alerts { display: flex; flex-direction: column; gap: 8px; }
+  .atext { flex: 1; }
+  .acode { opacity: 0.8; font-size: 12px; margin-left: 6px; white-space: nowrap; }
+  .offline-locate { align-items: flex-start; }
+  .ol-body { flex: 1; display: flex; flex-direction: column; gap: 10px; min-width: 0; color: var(--ah-text); }
+  .ol-head { display: flex; flex-direction: column; color: var(--ah-chip-warn-text); }
+  .tiny { font-size: 12px; }
 
-  /* header */
-  .phead {
-    display: flex; justify-content: space-between; align-items: center; gap: 1rem;
-    flex-wrap: wrap; padding: 0.8rem 0.9rem;
-  }
-  .pid { display: flex; align-items: center; gap: 0.85rem; min-width: 0; }
-  .pthumb {
-    width: 54px; height: 54px; flex: 0 0 auto; border-radius: var(--radius-sm);
-    background: var(--ophq-bg-2); border: 1px solid var(--ophq-border);
-    display: grid; place-items: center; overflow: hidden;
-  }
+  /* ---- title and actions ---- */
+  .pv-head { display: flex; align-items: center; justify-content: space-between; gap: 14px 24px; flex-wrap: wrap; }
+  .pv-title { min-width: 0; }
+  .pv-title h1 { margin: 2px 0 0; font-size: clamp(26px, 2.4vw, 40px); }
+  .pv-title .dim { color: var(--ah-text-3); }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px; border-radius: 20px; }
+  .tb { display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 12px; border-radius: 12px; border: 1px solid transparent; background: transparent; color: var(--ah-text); font: 600 13px var(--ah-font-sans); cursor: pointer; white-space: nowrap; }
+  .tb:hover:not(:disabled) { background: var(--ah-segment); border-color: var(--ah-field-line); }
+  .tb:disabled { opacity: 0.45; cursor: default; }
+  .tb.on { background: var(--ah-selected); color: var(--ah-text-on-selected); }
+  .tb.estop { background: var(--ah-danger-bg); border-color: var(--ah-chip-bad-line); color: var(--ah-chip-bad-text); }
+
+  .switcher { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .sw-step { width: 40px; height: 40px; border-radius: 14px; border: 1px solid var(--ah-field-line); background: var(--ah-glass); backdrop-filter: var(--ah-blur); -webkit-backdrop-filter: var(--ah-blur); color: var(--ah-text); display: grid; place-items: center; cursor: pointer; }
+  .sw-step:disabled { opacity: 0.45; cursor: default; }
+  .sw-pick { width: min(360px, 100%); min-height: 40px; border-radius: 14px; font-weight: 600; }
+
+  /* ---- the view: a window onto the feed, and the panels beside it ---- */
+  .pv { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); gap: 14px; min-height: 0; }
+  .hero { position: relative; display: flex; flex-direction: column; justify-content: space-between; gap: 14px; min-height: 360px;
+          border-radius: 28px; border: 1px solid rgba(255, 255, 255, 0.22); padding: 16px; }
+  .hero-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  .live-pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 999px; background: rgba(20, 30, 38, 0.6); border: 1px solid var(--ah-glass-line); font-size: 13px; font-weight: 600; }
+  .live-pill .dot { width: 8px; height: 8px; border-radius: 4px; background: var(--ah-attention); }
+  .hero-cam { border-radius: 14px; padding: 4px 8px; }
+  .hero-job :global(.card) { background: rgba(28, 40, 50, 0.55); }
+  .wcol { display: flex; flex-direction: column; gap: 14px; min-height: 0; overflow: auto; padding-right: 2px; }
+  .stack { display: flex; flex-direction: column; gap: 14px; }
+  .wcol > :global(*), .stack > :global(*) { flex-shrink: 0; }
+
+  /* header section (shown while arranging) */
+  .phead { display: flex; align-items: center; gap: 14px; padding: 12px 14px; }
+  .pid { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .pthumb { width: 54px; height: 54px; flex: 0 0 auto; border-radius: 12px; background: var(--ah-panel); border: 1px solid var(--ah-panel-line); display: grid; place-items: center; overflow: hidden; }
   .pthumb img { width: 100%; height: 100%; object-fit: contain; padding: 3px; }
-  .pnames { min-width: 0; }
-  .pnames h1 { margin: 0; font-size: 1.5rem; line-height: 1.15; }
-  .pmeta { display: flex; gap: 0.7rem; color: var(--ophq-muted); font-size: 0.8rem; flex-wrap: wrap; margin-top: 0.2rem; }
-  .pactions { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+  .pnames { min-width: 0; display: flex; flex-direction: column; }
+  .pmeta { display: flex; gap: 10px; color: var(--ah-text-3); font-size: 12px; flex-wrap: wrap; }
+  .camrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 
-  /* Emergency stop — octagon "stop sign", immediate (no confirmation). */
-  .estop { background: none; border: 0; padding: 0; cursor: pointer; }
-  .estop-oct {
-    --oct: polygon(30% 0, 70% 0, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0 70%, 0 30%);
-    position: relative; display: grid; place-items: center; width: 50px; height: 50px;
-    background: #fff;
-    clip-path: var(--oct);
-    filter: drop-shadow(0 3px 8px rgba(229,52,47,0.5));
-    transition: transform 0.12s ease, filter 0.12s ease;
-    animation: estopPulse 2.6s ease-in-out infinite;
-  }
-  .estop-oct::before {
-    content: ''; position: absolute; inset: 3px; clip-path: var(--oct);
-    background: radial-gradient(circle at 50% 33%, #ff6a5f 0%, #e5342f 52%, #b81c17 100%);
-  }
-  .estop-txt {
-    position: relative; z-index: 1; color: #fff; font-weight: 900; font-size: 0.62rem;
-    letter-spacing: 0.04em; text-shadow: 0 1px 2px rgba(0,0,0,0.4);
-  }
-  .estop:hover:not(:disabled) .estop-oct { transform: scale(1.06); filter: drop-shadow(0 4px 12px rgba(229,52,47,0.78)); animation: none; }
-  .estop:active:not(:disabled) .estop-oct { transform: scale(0.95); }
-  .estop:focus-visible .estop-oct { outline: 2px solid var(--ophq-primary); outline-offset: 3px; }
-  .estop:disabled { cursor: default; opacity: 0.4; }
-  .estop:disabled .estop-oct { animation: none; }
-  @keyframes estopPulse {
-    0%, 100% { filter: drop-shadow(0 3px 8px rgba(229,52,47,0.4)); }
-    50% { filter: drop-shadow(0 3px 14px rgba(229,52,47,0.85)); }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .estop-oct { animation: none; }
-  }
-
-  /* offline banner */
-  .offline-locate {
-    margin: 0 0 1rem; padding: 0.9rem 1rem;
-    border: 1px solid rgba(255,176,32,0.35); background: rgba(255,176,32,0.06);
-    border-radius: var(--radius-sm); display: flex; flex-direction: column; gap: 0.7rem;
-  }
-  .ol-head { display: flex; flex-direction: column; gap: 0.15rem; }
-  .ol-title { font-weight: 600; color: var(--ophq-warn); }
-
-  /* alerts */
-  .alerts { display: flex; flex-direction: column; gap: 0.5rem; }
-  .alert {
-    display: flex; align-items: center; gap: 0.6rem; padding: 0.7rem 1rem;
-    border-radius: var(--radius-sm); font-size: 0.9rem;
-    border: 1px solid rgba(245,166,35,0.35); background: rgba(245,166,35,0.08); color: var(--ophq-warn);
-  }
-  .alert.sev { border-color: rgba(255,92,108,0.35); background: rgba(255,92,108,0.08); color: var(--ophq-danger); }
-  .alert .ai { font-size: 1rem; }
-  .alert .atext { flex: 1; }
-  .alert .acode { opacity: 0.7; font-size: 0.8rem; margin-left: 0.4rem; white-space: nowrap; }
-  .alerts .clr { align-self: flex-end; }
-
-  @media (max-width: 620px) {
-    .pactions { width: 100%; justify-content: space-between; }
+  @media (max-width: 1099px) {
+    .pv { grid-template-columns: 1fr; }
+    .wcol { overflow: visible; }
+    .hero { min-height: 50vh; }
   }
 </style>

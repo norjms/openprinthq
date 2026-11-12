@@ -1,9 +1,9 @@
-// OpenPrintHQ — printer model display names.
+// OpenPrintHQ, printer model display names.
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 // Bambu printers report a terse internal code (e.g. "O1D", "O1C2") or a full
 // 3MF name ("Bambu Lab H2D"). We show the common marketing name (H2D, H2C,
-// X1C…). Mirrors the engine's utils/printer_models.py so display matches
+// X1C). Mirrors the engine's utils/printer_models.py so display matches
 // discovery. Non-Bambu / unknown models pass through unchanged (minus a
 // redundant "Bambu Lab " prefix).
 
@@ -38,7 +38,7 @@ const MANUFACTURER = {
 };
 
 /**
- * "<Manufacturer> <Model>" display label — e.g. "Bambu Lab H2D" for a Bambu, or
+ * "<Manufacturer> <Model>" display label, e.g. "Bambu Lab H2D" for a Bambu, or
  * "Voron 2.4 R2 350" for a Klipper Voron (manufacturer already in the model).
  */
 export function printerLabel(connectionType, model) {
@@ -54,12 +54,12 @@ export function printerLabel(connectionType, model) {
 // The slice dialog should offer profiles only for the printers a user has added,
 // not OrcaSlicer's full ~hundreds-entry catalogue. We match a connected printer's
 // marketing model (via prettyModel) against the preset display names.
-// Some very-new models (e.g. H2C) aren't in older OrcaSlicer builds yet — fall
+// Some very-new models (e.g. H2C) aren't in older OrcaSlicer builds yet, fall
 // back to the closest sibling's presets so those printers can still slice.
 const _PRESET_ALIAS = { 'h2c': 'h2d' };
 function _coreTokens(str) {
   return String(str || '').toLowerCase().replace(/[^a-z0-9. ]/g, ' ').split(/\s+/)
-    .filter(Boolean).filter((t) => !/^r\d+$/.test(t)); // drop revision tokens (r2…)
+    .filter(Boolean).filter((t) => !/^r\d+$/.test(t)); // drop revision tokens (r2)
 }
 function _nameMatches(nameLower, toks) {
   if (!toks.length) return false;
@@ -67,8 +67,8 @@ function _nameMatches(nameLower, toks) {
 }
 /**
  * Filter OrcaSlicer printer presets to those matching the user's connected
- * printers. `presets`: [{ name, … }]; `printers`: [{ model, … }]. Returns the
- * matching subset — or the full list if nothing matched (so slicing is never
+ * printers. `presets`: [{ name,  }]; `printers`: [{ model,  }]. Returns the
+ * matching subset, or the full list if nothing matched (so slicing is never
  * blocked). Each printer contributes its native presets, or its alias sibling's
  * presets when it has no native match in the current catalogue.
  */

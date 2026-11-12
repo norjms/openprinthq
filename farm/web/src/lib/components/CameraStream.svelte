@@ -190,20 +190,20 @@
   <span class="badge" class:islive={live} title={live
       ? 'Live video, streaming directly from your network'
       : 'Still frames, refreshed every 60 seconds. A direct live connection could not be established.'}>
-    {live ? 'LIVE' : 'SNAPSHOT'}
+    {live ? 'Live' : 'Snapshot'}
   </span>
 </div>
 
 <style>
   .wrap { position: relative; display: inline-block; }
   .wrap.fill { display: block; width: 100%; height: 100%; }
-  .badge { position: absolute; top: 6px; right: 6px; z-index: 2;
-           padding: 1px 6px; border-radius: 999px; font-size: 0.62rem;
-           letter-spacing: 0.06em; font-weight: 600; pointer-events: none;
-           background: rgba(0,0,0,0.6); color: #ddd; }
-  .badge.islive { background: rgba(20,120,60,0.85); color: #fff; }
+  .badge { position: absolute; top: 8px; right: 8px; z-index: 2;
+           padding: 1px 8px; border-radius: 999px; font-size: 11px; text-transform: uppercase;
+           letter-spacing: 0.08em; font-weight: 600; pointer-events: none;
+           background: rgba(20, 30, 38, 0.6); color: var(--ah-text-2); border: 1px solid var(--ah-glass-line); }
+  .badge.islive { background: linear-gradient(var(--ah-chip-ok-bg), var(--ah-chip-ok-bg)), rgba(20, 30, 38, 0.6); border-color: var(--ah-chip-ok-line); color: var(--ah-chip-ok-text); }
   video.fill { width: 100%; height: 100%; object-fit: cover; display: block; cursor: pointer; }
-  video.detail { width: 100%; max-width: 640px; aspect-ratio: 16 / 9; object-fit: contain; background: var(--ophq-bg-2); border: 1px solid var(--ophq-border); border-radius: var(--radius-sm); display: block; cursor: pointer; }
-  video.contain { max-width: 96vw; max-height: 92vh; border-radius: var(--radius-sm); border: 1px solid var(--ophq-border); box-shadow: var(--shadow-glow); display: block; }
+  video.detail { width: 100%; max-width: 640px; aspect-ratio: 16 / 9; object-fit: contain; background: var(--ah-panel); border: 1px solid var(--ah-panel-line); border-radius: var(--ah-radius-choice); display: block; cursor: pointer; }
+  video.contain { max-width: 96vw; max-height: 92vh; border-radius: var(--ah-radius-choice); border: 1px solid var(--ah-glass-line); display: block; }
   .hidden { display: none; }
 </style>

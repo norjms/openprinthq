@@ -1,7 +1,8 @@
 <script>
-  // ArtisanHub Farm — standalone fullscreen camera view, opened in its own tab.
-  // Intentionally minimal: just the live stream + a close (✕) button that closes
-  // this tab. No zoom, no overlays — the tab that launched it is never touched.
+  import Icon from '$lib/components/AppIcon.svelte';
+  // ArtisanHub Farm, standalone fullscreen camera view, opened in its own tab.
+  // Intentionally minimal: just the live stream and a close button that closes
+  // this tab. No zoom, no overlays, the tab that launched it is never touched.
   // SPDX-License-Identifier: AGPL-3.0-or-later
   import { page } from '$app/stores';
   import CameraStream from '$lib/components/CameraStream.svelte';
@@ -29,7 +30,7 @@
 <PageTitle page="Camera" />
 
 <div class="cam-full">
-  <button class="cam-x" type="button" onclick={closeTab} aria-label="Close camera tab" title="Close tab">✕</button>
+  <button class="cam-x" type="button" onclick={closeTab} aria-label="Close camera tab" title="Close tab"><Icon name="x" size={18} /></button>
   {#if unavailable}
     <div class="cam-msg">Camera unavailable. The printer may be offline or the stream is not reachable.</div>
   {:else}
@@ -43,23 +44,24 @@
   :global(body:has(.cam-full)) { margin: 0; }
   .cam-full {
     position: fixed; inset: 0; z-index: 100;
-    background: #000; display: flex; align-items: center; justify-content: center;
+    background: var(--ah-page); display: flex; align-items: center; justify-content: center;
     overflow: hidden;
   }
   .cam-full :global(video), .cam-full :global(img) {
     max-width: 100vw; max-height: 100vh; width: auto; height: auto; object-fit: contain;
     border: 0; border-radius: 0; box-shadow: none; background: transparent;
   }
-  /* Hide the snapshot fallback's "reconnecting…" chip / skeleton frame in the
-     fullscreen tab — the stream fills the whole viewport on its own. */
+  /* Hide the snapshot fallback's "reconnecting" chip / skeleton frame in the
+     fullscreen tab, the stream fills the whole viewport on its own. */
   .cam-full :global(.recon) { display: none; }
+  .cam-full :global(.wrap) { max-width: 100vw; max-height: 100vh; }
   .cam-x {
     position: fixed; top: 1rem; right: 1rem; z-index: 101;
     width: 44px; height: 44px; border-radius: 50%;
-    background: rgba(20,20,20,0.72); color: #fff; border: 1px solid rgba(255,255,255,0.25);
+    background: rgba(20, 30, 38, 0.7); color: var(--ah-text); border: 1px solid var(--ah-field-line);
     font-size: 1.2rem; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center;
     backdrop-filter: blur(6px);
   }
-  .cam-x:hover { background: rgba(40,40,40,0.9); border-color: rgba(255,255,255,0.5); }
-  .cam-msg { color: #cfd6e2; font-size: 0.95rem; padding: 1rem 1.4rem; text-align: center; }
+  .cam-x:hover { border-color: rgba(255, 255, 255, 0.5); }
+  .cam-msg { color: var(--ah-text-2); font-size: 15px; padding: 16px 22px; text-align: center; }
 </style>

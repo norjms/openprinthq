@@ -9,6 +9,9 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import PageTitle from '$lib/components/PageTitle.svelte';
+  import PageHead from '$lib/components/PageHead.svelte';
+  import Icon from '$lib/components/AppIcon.svelte';
+  import { setCrumb } from '$lib/stores/crumb';
   import ModelViewer from '$lib/components/ModelViewer.svelte';
   import GcodeViewer from '$lib/components/GcodeViewer.svelte';
   import { library, libraryAsset, previewFile, PREVIEWABLE,
@@ -141,7 +144,6 @@
     }
   }
 
-
   async function removeFile(f) {
     if (!confirm(`Delete ${f.filename} from your storage? This cannot be undone.`)) return;
     busy = f.id;
@@ -225,14 +227,19 @@
     load();
     libraryIntegrity().then((r) => { integrity = r; });
   });
+  $effect(() => { if (model?.name) setCrumb(model.name); });
 </script>
 
 <PageTitle page={model ? model.name : 'Model'} />
 
-<p class="back"><a href="{basePath}/app/files">Back to library</a></p>
+<PageHead title={model ? model.name : 'Model'} description={model?.category_name || ''}>
+  {#snippet actions()}
+    <a class="btn btn-ghost" href="{basePath}/app/files"><Icon name="back" size={16} />Back to library</a>
+  {/snippet}
+</PageHead>
 
 {#if loading}
-  <p class="muted">Loading...</p>
+  <p class="muted">Loading</p>
 {:else if error}
   <p class="warn">{error}</p>
 {:else if model}
@@ -260,8 +267,8 @@
       {/if}
     </div>
 
-    <div class="info">
-      <h2>{model.name}</h2>
+    <div class="info card card-pad">
+      <h2 class="ah-card-title">Details</h2>
       <div class="chips">
         {#if model.category_name}<span class="chip">{model.category_name}</span>{/if}
         {#each model.tags || [] as t (t.id ?? t.name)}<span class="chip">{t.name ?? t}</span>{/each}
@@ -335,12 +342,12 @@
             {/if}
             {#if queueable(f)}
               <button class="act" onclick={() => send(f)} disabled={sending === f.id}>
-                {sending === f.id ? 'Queueing...' : 'Send to queue'}
+                {sending === f.id ? 'Queueing' : 'Send to queue'}
               </button>
             {/if}
             <a class="act" href={libraryAsset(f.url)} download={f.filename}>Download</a>
             <button class="act danger" onclick={() => removeFile(f)} disabled={busy === f.id}>
-              {busy === f.id ? 'Deleting...' : 'Delete'}
+              {busy === f.id ? 'Deleting' : 'Delete'}
             </button>
           </li>
         {/each}

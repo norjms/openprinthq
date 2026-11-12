@@ -175,7 +175,7 @@
 <div class="wrap">
   <div class="host" bind:this={host} class:hidden={status !== 'ok' && status !== 'loading'}></div>
   {#if status === 'loading'}
-    <span class="note">Loading preview...</span>
+    <span class="note">Loading preview</span>
   {:else if status === 'empty'}
     {#if fallbackThumb}
       <img class="fallback" src={fallbackThumb} alt="" />

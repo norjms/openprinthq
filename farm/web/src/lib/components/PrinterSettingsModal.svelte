@@ -1,5 +1,6 @@
 <script>
-  // ArtisanHub Farm — per-printer settings, edited in a popup layer (not a route).
+  import Icon from '$lib/components/AppIcon.svelte';
+  // ArtisanHub Farm, per-printer settings, edited in a popup layer (not a route).
   // Persisted on the printer record in the database (source of truth) via PATCH.
   // SPDX-License-Identifier: AGPL-3.0-or-later
   import { api } from '$lib/api';
@@ -56,7 +57,7 @@
         <h3>Printer settings</h3>
         <span class="muted tiny">{name}</span>
       </div>
-      <button class="btn btn-ghost btn-sm" onclick={() => onclose?.()} aria-label="Close">✕</button>
+      <button class="btn btn-ghost btn-sm" onclick={() => onclose?.()} aria-label="Close"><Icon name="x" size={16} /></button>
     </div>
 
     <div class="mbody">
@@ -83,7 +84,7 @@
             Multi-material unit panel
             <span class="muted tiny block">
               Show the multi-material filament panel (Bambu AMS, Creality CFS, Prusa
-              MMU…) when a unit is connected. Hidden automatically if none is detected.
+              MMU) when a unit is connected. Hidden automatically if none is detected.
             </span>
           </span>
         </label>
@@ -93,7 +94,7 @@
             Bed ejection &amp; continuous printing
             <span class="muted tiny block">
               Show the automatic bed-clearing / continuous-printing panel. Off by
-              default — enable only for printers with a bed-ejection setup.
+              default, enable only for printers with a bed-ejection setup.
             </span>
           </span>
         </label>
@@ -115,7 +116,7 @@
           <div class="drow">
             <button class="btn btn-ghost btn-sm" onclick={() => (confirmDelete = false)} disabled={deleting}>Cancel</button>
             <button class="btn btn-danger btn-sm" onclick={doDelete} disabled={deleting}>
-              {deleting ? 'Deleting…' : 'Delete printer'}
+              {deleting ? 'Deleting' : 'Delete printer'}
             </button>
           </div>
         {/if}
@@ -126,7 +127,7 @@
 
     <div class="mfoot">
       <button class="btn btn-ghost btn-sm" onclick={() => onclose?.()} disabled={saving || deleting}>Cancel</button>
-      <button class="btn btn-primary btn-sm" onclick={save} disabled={saving || deleting}>{saving ? 'Saving…' : 'Save'}</button>
+      <button class="btn btn-primary btn-sm" onclick={save} disabled={saving || deleting}>{saving ? 'Saving' : 'Save'}</button>
     </div>
   </div>
 </div>
@@ -149,12 +150,10 @@
   .err { color: var(--ophq-danger); font-size: 0.88rem; margin: 0; }
   section.danger { border-top: 1px solid var(--ophq-border-soft); padding-top: 0.9rem; }
   section.danger h4 { color: var(--ophq-danger); }
-  .del { color: var(--ophq-danger); border-color: rgba(255,92,108,0.35); }
+  .del { color: var(--ophq-danger); border-color: rgba(230,103,103,0.35); }
   .del:hover { border-color: var(--ophq-danger); }
   .cq { font-size: 0.88rem; margin: 0 0 0.7rem; }
   .drow { display: flex; gap: 0.6rem; }
-  .btn-danger { background: var(--ophq-danger); color: #fff; }
-  .btn-danger:hover { background: #ff7280; color: #fff; }
   .mfoot { display: flex; justify-content: flex-end; gap: 0.6rem; padding: 0.9rem 1.2rem;
     border-top: 1px solid var(--ophq-border-soft); background: var(--ophq-bg-2); }
 </style>

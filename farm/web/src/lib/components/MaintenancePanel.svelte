@@ -1,5 +1,5 @@
 <script>
-  // ArtisanHub Farm — per-printer maintenance (runtime-based reminders).
+  // ArtisanHub Farm, per-printer maintenance (runtime-based reminders).
   // SPDX-License-Identifier: AGPL-3.0-or-later
   import { api } from '$lib/api';
 
@@ -69,12 +69,10 @@
   .due-t { color: var(--ophq-danger); }
   .mlist { display: flex; flex-direction: column; gap: 0.4rem; }
   .mrow { display: grid; grid-template-columns: 1fr auto auto; gap: 1rem; align-items: center; padding: 0.5rem 0.7rem; border: 1px solid var(--ophq-border); border-radius: var(--radius-sm); background: var(--ophq-surface); }
-  .mrow.due { border-color: rgba(255,92,108,0.3); }
+  .mrow.due { border-color: rgba(230,103,103,0.3); }
   .mn { font-size: 0.9rem; }
   .mmeta { display: flex; align-items: center; gap: 0.7rem; font-size: 0.78rem; }
   .every { font-size: 0.72rem; }
-  .chip.danger { color: var(--ophq-danger); border-color: rgba(255,92,108,0.3); background: rgba(255,92,108,0.08); }
-  .chip.accent { color: var(--ophq-accent); border-color: rgba(255,176,32,0.3); background: rgba(255,176,32,0.08); }
   .small { font-size: 0.9rem; }
   .btn-xs { padding: 0.12rem 0.5rem; font-size: 0.72rem; }
   .ok-msg { color: var(--ophq-success); font-size: 0.88rem; margin: 0.7rem 0 0; }

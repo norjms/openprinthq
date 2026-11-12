@@ -136,7 +136,7 @@
   ondrop={onDrop}
 >
   {#if loading && folders.length === 0 && files.length === 0}
-    <p class="muted">Loading...</p>
+    <p class="muted">Loading</p>
   {:else if folders.length === 0 && files.length === 0}
     <p class="muted">This folder is empty. Drop files here to upload.</p>
   {:else}
@@ -168,7 +168,7 @@
         <button class="act" onclick={() => relocate(f, true)} disabled={busy === f.url}>Move</button>
         <button class="act" onclick={() => relocate(f, false)} disabled={busy === f.url}>Copy</button>
         <button class="act danger" onclick={() => removeFile(f)} disabled={busy === f.url}>
-          {busy === f.url ? 'Deleting...' : 'Delete'}
+          {busy === f.url ? 'Deleting' : 'Delete'}
         </button>
       </div>
     {/each}

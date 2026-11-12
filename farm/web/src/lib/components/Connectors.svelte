@@ -1,6 +1,7 @@
 <script>
   import { base as basePath } from '$app/paths';
-  // ArtisanHub Farm — local connectors (#28/#29).
+  import Icon from '$lib/components/AppIcon.svelte';
+  // ArtisanHub Farm, local connectors (#28/#29).
   // Manage outbound-tunnel agents that let this cloud instance reach printers
   // on a private LAN behind NAT/CGNAT/firewalls. Create a connector (token
   // shown once), install the agent on that network, revoke when done.
@@ -68,7 +69,7 @@
     catch { /* ignore */ } finally { signBusy = false; }
   }
   // Printers routed through a connector are useless once the key it verifies
-  // commands with is gone — they stay listed but silently stop responding. Offer
+  // commands with is gone, they stay listed but silently stop responding. Offer
   // to clear them in the same action rather than leaving the user to discover
   // stranded entries later.
   let alsoRemovePrinters = $state(false);
@@ -148,7 +149,7 @@
     scanBusy = c.id; scanMsg = { ...scanMsg, [c.id]: '' };
     try {
       const r = await api.discoverConnector(c.id, 8000, subnet);
-      if (!r.connector_online) { scanMsg = { ...scanMsg, [c.id]: 'This connector is offline — start the Cloud Client on that site, then scan again.' }; scanResults = { ...scanResults, [c.id]: [] }; }
+      if (!r.connector_online) { scanMsg = { ...scanMsg, [c.id]: 'This connector is offline, start the Cloud Client on that site, then scan again.' }; scanResults = { ...scanResults, [c.id]: [] }; }
       else {
         scanResults = { ...scanResults, [c.id]: r.devices || [] };
         scanMsg = { ...scanMsg, [c.id]: (r.devices?.length ? '' : 'No printers announced on that LAN during the scan window. Confirm the printers are on and in LAN mode, then retry.') };
@@ -172,7 +173,7 @@
 
   const tok = $derived(created?.token || '<connector-token>');
   // These used to walk the user through copying files out of a connector/
-  // folder in the source repo. That agent was retired on 2026-08-25 — the Cloud
+  // folder in the source repo. That agent was retired on 2026-08-25, the Cloud
   // Client supersedes it on every platform, and it is the build that actually
   // receives fixes (the single-instance guard among them). Point at installers
   // and the published image instead of at source.
@@ -188,7 +189,7 @@
 
 <div class="card card-pad conn">
   <div class="ch">
-    <div><span class="eyebrow">Local connectors</span><p class="muted">Reach printers on a private network — behind NAT, CGNAT, or a firewall — with no port-forwarding. Install the Cloud Client on that LAN; it dials out to this instance. Create <b>one connector per site</b> (home, shop, office) — you'll pick which site a printer lives on when you add it. The first client to connect with a connector's token <b>pairs</b> to it automatically (no key to copy); after that the connector only accepts that client until you Reset it.</p></div>
+    <div><span class="eyebrow">Local connectors</span><p class="muted">Reach printers on a private network, behind NAT, CGNAT, or a firewall, with no port-forwarding. Install the Cloud Client on that LAN; it dials out to this instance. Create <b>one connector per site</b> (home, shop, office), you'll pick which site a printer lives on when you add it. The first client to connect with a connector's token <b>pairs</b> to it automatically (no key to copy); after that the connector only accepts that client until you Reset it.</p></div>
   </div>
 
   <div class="create">
@@ -202,14 +203,14 @@
       oninput={() => { if (nameError) nameError = null; }}
       onkeydown={(e) => e.key === 'Enter' && create()}
     />
-    <button class="btn btn-primary btn-sm" onclick={create} disabled={creating}>{creating ? 'Creating…' : '+ New connector'}</button>
+    <button class="btn btn-primary btn-sm" onclick={create} disabled={creating}>{creating ? 'Creating' : 'New connector'}</button>
   </div>
   {#if nameError}<p class="err" id="connector-name-error" role="alert">{nameError}</p>{/if}
 
   {#if created}
     <div class="newtok">
-      <div class="nt-h">Connector token — copy it now, it won’t be shown again.</div>
-      <div class="nt-row"><code class="mono">{created.token}</code><button class="btn btn-ghost btn-sm" onclick={copyTok}>{copied ? 'Copied ✓' : 'Copy'}</button></div>
+      <div class="nt-h">Connector token, copy it now, it won’t be shown again.</div>
+      <div class="nt-row"><code class="mono">{created.token}</code><button class="btn btn-ghost btn-sm" onclick={copyTok}>{copied ? 'Copied' : 'Copy'}</button></div>
       <div class="os-tabs">
         {#each [['docker', 'Docker'], ['linux', 'Linux'], ['macos', 'macOS'], ['windows', 'Windows 11']] as [k, lbl]}
           <button class="ostab" class:on={os === k} onclick={() => (os = k)}>{lbl}</button>
@@ -229,8 +230,8 @@
       <div class="skacts">
         <span class="muted mono tiny">created {fmt(signCreated)}</span>
         {#if confirmRegen}
-          <span class="flex gap"><button class="btn btn-primary btn-xs" onclick={genKey} disabled={signBusy}>Regenerate</button><button class="btn btn-ghost btn-xs" onclick={() => (confirmRegen = false)} aria-label="Cancel">✕</button></span>
-          <span class="muted tiny">— you’ll need to update every connector with the new key.</span>
+          <span class="flex gap"><button class="btn btn-primary btn-xs" onclick={genKey} disabled={signBusy}>Regenerate</button><button class="btn btn-ghost btn-xs" onclick={() => (confirmRegen = false)} aria-label="Cancel"><Icon name="x" size={14} /></button></span>
+          <span class="muted tiny">- you’ll need to update every connector with the new key.</span>
         {:else if confirmRemove}
           <div class="removewarn">
             <p class="tiny">
@@ -247,7 +248,7 @@
                 {list.length === 1 ? 'this connector' : 'these connectors'}
               </label>
             {/if}
-            <span class="flex gap"><button class="btn btn-danger btn-xs" onclick={removeKey} disabled={signBusy}>{alsoRemovePrinters ? 'Remove key and printers' : 'Remove key'}</button><button class="btn btn-ghost btn-xs" onclick={() => { confirmRemove = false; alsoRemovePrinters = false; }} aria-label="Cancel">✕</button></span>
+            <span class="flex gap"><button class="btn btn-danger btn-xs" onclick={removeKey} disabled={signBusy}>{alsoRemovePrinters ? 'Remove key and printers' : 'Remove key'}</button><button class="btn btn-ghost btn-xs" onclick={() => { confirmRemove = false; alsoRemovePrinters = false; }} aria-label="Cancel"><Icon name="x" size={14} /></button></span>
           </div>
         {:else}
           <button class="btn btn-ghost btn-xs" onclick={() => (confirmRegen = true)}>Regenerate</button>
@@ -255,12 +256,12 @@
         {/if}
       </div>
     {:else}
-      <button class="btn btn-ghost btn-sm" onclick={genKey} disabled={signBusy}>{signBusy ? 'Generating…' : 'Generate client key'}</button>
+      <button class="btn btn-ghost btn-sm" onclick={genKey} disabled={signBusy}>{signBusy ? 'Generating' : 'Generate client key'}</button>
     {/if}
   </div>
 
   {#if loading}
-    <p class="muted">Loading…</p>
+    <p class="muted">Loading</p>
   {:else if error}
     <p class="err">{error}</p>
   {:else if list.length === 0}
@@ -271,7 +272,7 @@
         <div class="crow">
           <div class="cmain">
             <div class="cname">{c.name} <span class="dot {c.online ? 'on' : ''}" title={c.online ? 'online' : 'offline'}></span><span class="st muted">{c.online ? 'online' : 'offline'}</span>
-              {#if c.has_client_key}<span class="lock" title="A client is paired. The connector is locked to that client's key; reset to pair a different one.">🔒 paired</span>
+              {#if c.has_client_key}<span class="lock" title="A client is paired. The connector is locked to that client's key; reset to pair a different one."><Icon name="lock" size={13} /> paired</span>
               {:else}<span class="lock open" title="No client paired yet. The first Cloud Client that connects with this token locks onto its key (trust-on-first-use).">🔓 awaiting first client</span>{/if}
             </div>
             <div class="cmeta muted mono">last seen {fmt(c.last_seen)}{#if c.client?.hostname} · {c.client.hostname}{#if c.client.platform} ({c.client.platform}/{c.client.arch}){/if}{#if c.client.version} · client {c.client.version}{/if}{/if}</div>
@@ -287,17 +288,17 @@
           </div>
           <div class="flex gap">
             <input class="input subnet mono" placeholder="192.0.2.0/24" value={subnetFor(c)} oninput={(e) => (subnets = { ...subnets, [c.id]: e.target.value })} title="Subnet to scan (defaults to the client's host network; /24 max)" disabled={!c.online} />
-            <button class="btn btn-ghost btn-xs" onclick={() => scanSite(c)} disabled={scanBusy === c.id || !c.online} title={c.online ? 'Scan the selected subnet for printers' : 'Connector offline'}>{scanBusy === c.id ? 'Scanning…' : 'Scan LAN'}</button>
+            <button class="btn btn-ghost btn-xs" onclick={() => scanSite(c)} disabled={scanBusy === c.id || !c.online} title={c.online ? 'Scan the selected subnet for printers' : 'Connector offline'}>{scanBusy === c.id ? 'Scanning' : 'Scan LAN'}</button>
             {#if c.has_client_key}
               {#if confirmReset === c.id}
-                <button class="btn btn-danger btn-xs" onclick={() => resetKey(c)} disabled={resetBusy}>{resetBusy ? '…' : 'Reset key'}</button><button class="btn btn-ghost btn-xs" onclick={() => (confirmReset = null)} aria-label="Cancel">✕</button>
+                <button class="btn btn-danger btn-xs" onclick={() => resetKey(c)} disabled={resetBusy}>{resetBusy ? '' : 'Reset key'}</button><button class="btn btn-ghost btn-xs" onclick={() => (confirmReset = null)} aria-label="Cancel"><Icon name="x" size={14} /></button>
               {:else}
                 <button class="btn btn-ghost btn-xs" onclick={() => (confirmReset = c.id)} title="Unpair the current client so a new one can connect">Reset key</button>
               {/if}
             {/if}
             <button class="btn btn-ghost btn-xs" onclick={() => openKeyForm(c)} title="Advanced: paste a key manually">Key</button>
             {#if confirmDel === c.id}
-              <button class="btn btn-danger btn-xs" onclick={() => del(c)}>Revoke</button><button class="btn btn-ghost btn-xs" onclick={() => (confirmDel = null)} aria-label="Cancel">✕</button>
+              <button class="btn btn-danger btn-xs" onclick={() => del(c)}>Revoke</button><button class="btn btn-ghost btn-xs" onclick={() => (confirmDel = null)} aria-label="Cancel"><Icon name="x" size={14} /></button>
             {:else}
               <button class="btn btn-ghost btn-xs" onclick={() => (confirmDel = c.id)}>Revoke</button>
             {/if}
@@ -326,7 +327,7 @@
             <p class="muted tiny">Paste this connector's <b>public</b> key (run <code>node src/agent.js --pubkey</code> on the connector, or copy it from the connector's startup log). Once set, the connector must prove it holds the matching private key on every connect.</p>
             <textarea class="input kf" rows="4" placeholder="-----BEGIN PUBLIC KEY-----&#10;...&#10;-----END PUBLIC KEY-----" bind:value={keyPem} spellcheck="false"></textarea>
             <div class="flex gap">
-              <button class="btn btn-primary btn-xs" onclick={() => saveClientKey(c)} disabled={keyBusy || !keyPem.trim()}>{keyBusy ? 'Saving…' : 'Save key'}</button>
+              <button class="btn btn-primary btn-xs" onclick={() => saveClientKey(c)} disabled={keyBusy || !keyPem.trim()}>{keyBusy ? 'Saving' : 'Save key'}</button>
               {#if c.has_client_key}<button class="btn btn-ghost btn-xs" onclick={() => clearClientKey(c)} disabled={keyBusy}>Remove (disable mutual auth)</button>{/if}
               <button class="btn btn-ghost btn-xs" onclick={() => (keyFormId = null)}>Cancel</button>
             </div>
@@ -361,7 +362,7 @@
   code { font-family: var(--font-mono); font-size: 0.9em; background: var(--ophq-bg-2); padding: 0.05rem 0.3rem; border-radius: 4px; }
   .create { display: flex; gap: 0.5rem; margin: 1rem 0; }
   .create .input { max-width: 320px; }
-  .newtok { margin: 0.5rem 0 1rem; padding: 0.9rem; border: 1px solid var(--ophq-success); border-radius: var(--radius-sm); background: rgba(53,196,107,0.07); }
+  .newtok { margin: 0.5rem 0 1rem; padding: 0.9rem; border: 1px solid var(--ophq-success); border-radius: var(--radius-sm); background: rgba(155,226,143,0.07); }
   .nt-h { font-size: 0.86rem; color: var(--ophq-success); margin-bottom: 0.5rem; }
   .nt-row { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.8rem; }
   .nt-row code { flex: 1; overflow-x: auto; white-space: nowrap; padding: 0.4rem 0.6rem; }
@@ -377,16 +378,16 @@
   .crow { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.6rem 0.8rem; border: 1px solid var(--ophq-border); border-radius: var(--radius-sm); background: var(--ophq-surface); }
   .cname { font-weight: 600; display: flex; align-items: center; gap: 0.5rem; }
   .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ophq-muted); display: inline-block; }
-  .dot.on { background: var(--ophq-success); box-shadow: 0 0 6px rgba(53,196,107,0.6); }
+  .dot.on { background: var(--ophq-success); box-shadow: 0 0 6px rgba(155,226,143,0.6); }
   .st { font-size: 0.78rem; font-weight: 400; }
   .cmeta { font-size: 0.72rem; margin-top: 0.15rem; }
   .err { color: var(--ophq-danger); font-size: 0.88rem; }
   .dupwarn { margin-top: 0.35rem; padding: 0.5rem 0.6rem; font-size: 0.82rem; line-height: 1.45;
-             border: 1px solid rgba(220,80,80,0.35); background: rgba(220,80,80,0.08);
+             border: 1px solid rgba(230,103,103,0.35); background: rgba(230,103,103,0.08);
              border-radius: 0.4rem; }
   .subnet { width: 9.5rem; font-size: 0.78rem; padding: 0.2rem 0.45rem; }
   .input.invalid { border-color: var(--ophq-danger); }
-  .lock { font-size: 0.68rem; color: var(--ophq-success); border: 1px solid rgba(53,196,107,0.3); background: rgba(53,196,107,0.08); padding: 0.05rem 0.4rem; border-radius: 999px; }
+  .lock { font-size: 0.68rem; color: var(--ophq-success); border: 1px solid rgba(155,226,143,0.3); background: rgba(155,226,143,0.08); padding: 0.05rem 0.4rem; border-radius: 999px; }
   .lock.open { color: var(--ophq-muted); border-color: var(--ophq-border); background: transparent; }
   .scanres { margin: -0.2rem 0 0.3rem; padding: 0.6rem 0.8rem; border: 1px solid var(--ophq-border); border-top: none; border-radius: 0 0 var(--radius-sm) var(--radius-sm); background: var(--ophq-bg-2); }
   .srhead { margin-bottom: 0.3rem; }

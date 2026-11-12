@@ -1,6 +1,6 @@
 <script>
   import { base as basePath } from '$app/paths';
-  // Download + install instructions for the OpenPrintHQ Cloud Client — the
+  // Download + install instructions for the OpenPrintHQ Cloud Client, the
   // outbound-only connector that bridges this cloud instance to printers on a
   // private LAN. Buttons point at the public release page; Docker runs inline.
   const CLIENT_REPO = 'https://github.com/norjms/openprinthq-cloud-client';
@@ -13,7 +13,7 @@
   const platforms = [
     { os: 'Windows', icon: '⊞', file: '.msi installer', note: 'Installs a background service + system-tray app. Starts at boot, no login needed.' },
     { os: 'macOS', icon: '', file: '.pkg installer', note: 'Installs a LaunchDaemon + menu-bar app. Starts at boot, no login needed.' },
-    { os: 'Linux', icon: '🐧', file: '.deb / .rpm', note: 'Ships its own runtime; enable the systemd service for boot-without-login.' }
+    { os: 'Linux', icon: 'terminal', file: '.deb / .rpm', note: 'Ships its own runtime; enable the systemd service for boot-without-login.' }
   ];
 
   const dockerRun =
@@ -29,11 +29,11 @@ docker run -d --name openprinthq-connector --restart unless-stopped \\
   -v ophq-connector-data:/data \\
   openprinthq/connector`;
 
-  // compose.yml — the named volume persists the connector's pairing key across
+  // compose.yml, the named volume persists the connector's pairing key across
   // container recreates (without it, the key regenerates and the instance would
   // reject the new one until you Reset the connector).
   const dockerCompose =
-`# compose.yml — run the connector on a machine on your printers' LAN.
+`# compose.yml, run the connector on a machine on your printers' LAN.
 # 'docker load' the image tarball from a release first, or build ./agent.
 services:
   connector:
@@ -70,9 +70,9 @@ volumes:
       <p class="muted">
         This instance runs in the cloud. To reach printers on your local network, run the
         <strong>Cloud Client</strong> connector on any always-on machine there (a PC, Mac, mini-PC or
-        Raspberry Pi). It dials <em>out</em> to your instance over HTTPS — no port-forwarding and no
+        Raspberry Pi). It dials <em>out</em> to your instance over HTTPS, no port-forwarding and no
         inbound firewall rules. First create a token in
-        <a href="{basePath}/app/settings#connectors">Settings → Connectors</a>, then install and paste it in.
+        <a href="{basePath}/app/settings#connectors">Settings, Connectors</a>, then install and paste it in.
       </p>
     </div>
   </div>
@@ -82,7 +82,7 @@ volumes:
       <div class="dl-card">
         <div class="dl-os"><span class="dl-ic">{p.icon}</span>{p.os}</div>
         <p class="dl-note muted">{p.note}</p>
-        <a class="btn btn-primary btn-sm" href={RELEASES} target="_blank" rel="noopener">Download {p.file} →</a>
+        <a class="btn btn-primary btn-sm" href={RELEASES} target="_blank" rel="noopener">Download {p.file}</a>
       </div>
     {/each}
   </div>

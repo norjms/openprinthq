@@ -1,5 +1,5 @@
 <script>
-  // ArtisanHub Farm — Obico AI print-failure (spaghetti) detection config.
+  // ArtisanHub Farm, Obico AI print-failure (spaghetti) detection config.
   // SPDX-License-Identifier: AGPL-3.0-or-later
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
@@ -80,8 +80,8 @@
   {/if}
 
   <div class="flex gap acts">
-    <button class="btn btn-primary btn-sm" onclick={save} disabled={busy}>{busy ? 'Saving…' : 'Save'}</button>
-    <button class="btn btn-ghost btn-sm" onclick={test} disabled={testing || !cfg.obico_ml_url}>{testing ? 'Testing…' : 'Test connection'}</button>
+    <button class="btn btn-primary btn-sm" onclick={save} disabled={busy}>{busy ? 'Saving' : 'Save'}</button>
+    <button class="btn btn-ghost btn-sm" onclick={test} disabled={testing || !cfg.obico_ml_url}>{testing ? 'Testing' : 'Test connection'}</button>
   </div>
   {#if msg}<p class={msg.kind === 'ok' ? 'ok-msg' : 'err'}>{msg.text}</p>{/if}
 </div>
@@ -99,7 +99,6 @@
   .prs { display: flex; flex-wrap: wrap; gap: 0.8rem; }
   .pr { display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; color: var(--ophq-text-2); }
   .acts { margin-top: 1rem; }
-  .chip.ok { color: var(--ophq-success); border-color: rgba(53,196,107,0.3); background: rgba(53,196,107,0.08); }
   .ok-msg { color: var(--ophq-success); font-size: 0.88rem; margin: 0.7rem 0 0; }
   .err { color: var(--ophq-danger); font-size: 0.88rem; margin: 0.7rem 0 0; }
   @media (max-width: 700px) { .grid2 { grid-template-columns: 1fr; } }
