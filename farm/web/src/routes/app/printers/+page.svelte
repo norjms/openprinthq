@@ -15,6 +15,10 @@
   let loading = $state(true);
   let error = $state(null);
   let printers = $state([]);
+  // Team mode: a member sees only the printers the owner gave them, and does not add printers.
+  let me = $state(null);
+  const member = $derived(!!me?.team && !me?.isOwner);
+  const limited = $derived(member && me?.printerAccess !== 'all');
   let timer = null;
   // Camera thumbnails: a slow 60s snapshot poll (bump camTick) keeps resource
   // use low, independent of the 5s status poll. CameraImg shows the cached last
@@ -68,6 +72,7 @@
   onMount(() => {
     load(true);
     loadConnectors();
+    api.me().then((m) => { me = m; }).catch(() => {});
     api.pubConfig().then((c) => { deploymentMode = c.deployment_mode || 'both'; }).catch(() => {});
     timer = setInterval(() => { load(false); loadConnectors(); }, 5000);
     // Camera snapshots refresh on a slow 60s cadence (independent of the 5s
@@ -203,7 +208,8 @@
 {/snippet}
 
 {#snippet addButton(label, big = false)}
-  {#if deploymentMode === 'remote' && !hasPairedClient}
+  {#if member}
+  {:else if deploymentMode === 'remote' && !hasPairedClient}
     <span class="btn btn-primary {big ? '' : ''} disabled" aria-disabled="true" title="Install and pair a client app on your printers' network first. Then you can add printers."><Icon name="plus" size={16} />{label}</span>
   {:else}
     <a class="btn btn-primary" href="{basePath}/app/printers/add"><Icon name="plus" size={16} />{label}</a>
@@ -225,6 +231,10 @@
   {/snippet}
 </PageHead>
 
+{#if limited && !loading && printers.length > 0}
+  <p class="muted">You see the printers the owner gave you. Ask the owner for access to more printers.</p>
+{/if}
+
 {#if loading}
   <div class="card card-pad muted">Connecting to your engine</div>
 {:else if error === 'no-instance'}
@@ -234,6 +244,12 @@
   </div>
 {:else if error}
   <EngineError {error} onretry={() => load()} />
+{:else if printers.length === 0 && member}
+  <div class="card card-pad empty">
+    <span class="empty-ic"><Icon name="printer" size={28} /></span>
+    <h3>No printers to show</h3>
+    <p class="muted">Ask the owner for access to more printers.</p>
+  </div>
 {:else if printers.length === 0}
   {@render clientStatus()}
 

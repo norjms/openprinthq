@@ -37,6 +37,7 @@ the owner.
 | `OPHQ_GO2RTC_URL` | go2rtc's API, for example `http://go2rtc:1984`. |
 | `OPHQ_SLICER_URL` | The slicing service, for example `http://orca-slicer-api:3000`. |
 | `OPHQ_GATEWAY_SECRET` | The proxy adds it as `X-ophq-gateway` on every request; identity headers are believed only alongside it. |
+| `OPHQ_TEAM_MODE` | `1` for one farm shared by a team, with printers per person (below). |
 | `OPHQ_OWNER_GROUP`, `OPHQ_USER_GROUP` | Authentik groups for owners and users (default `openprinthq-owners`, `openprinthq-users`). |
 
 The per-tenant settings (`OPHQ_ENGINE_IMAGE`, `OPHQ_SPOOLMAN_IMAGE`, `OPHQ_DOCKER_NETWORK`, `OPHQ_VAULT_IMAGE`,
@@ -46,6 +47,34 @@ downloads); the owner can change that in the admin settings.
 
 The engine reaches printers from its own container. Add printers by address; network discovery needs the engine
 on the host's network, which this compose file does not do.
+
+## Team mode: one farm for a team, printers per person
+
+`OPHQ_TEAM_MODE=1`, with `OPHQ_ENGINE_URL` set, makes the farm one farm for one team, as an ArtisanHub
+installation is:
+
+- The owner's account holds the printers, the queue and the files. Everyone else signed in works on that same
+  farm and never gets a farm of their own. A person the team knows (see below) gets an account on their first
+  visit, with no invite.
+- Which printers each person may see and use comes from ArtisanHub, which pushes the whole list with the owner's
+  API key (scope `control`) whenever it changes:
+
+  ```
+  PUT /api/team/printer-access
+  {"version": 1, "people": {"ana@example.com": "all", "ben@example.com": [2, 3]}, "owners": ["owner@example.com"]}
+  ```
+
+  It answers 204. Owners always have every printer. A person missing from the list has none. `GET` on the same
+  path returns the list to an owner.
+- Everything about a printer follows the list: the printers page and overview, status, cameras, the queue,
+  archives, batches, commands, the print host's printer list and its per-printer addresses, and the engine
+  gateway (`/api/engine/...`), which refuses a printer outside the list with 404 and filters it out of every
+  answer. A job sent with no printer by someone limited to some printers goes to their one printer, or is
+  refused when they have several, so the scheduler never places it elsewhere.
+- Adding a printer, changing or removing one, connectors, cameras' setup, circuits, automation, the integration
+  token, logging and the look are for owners.
+
+Without `OPHQ_TEAM_MODE` nothing of this applies.
 
 ## The proxy in front
 

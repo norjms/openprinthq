@@ -6,7 +6,7 @@ import cookie from '@fastify/cookie';
 import websocket from '@fastify/websocket';
 import { readFileSync } from 'node:fs';
 import { randomBytes, createPublicKey, createHmac, timingSafeEqual } from 'node:crypto';
-import { migrate, upsertUser, getUserByEmail, getUserById, getInstanceForUser, getCompatiblePresets,
+import { migrate, upsertUser, getUserByEmail, getUserById, getInstanceForUser as getInstanceForUserRaw, getCompatiblePresets,
   getCircuits, setCircuit, getAutomation, setAutomation,
   createConnector, listConnectors, deleteConnector, setConnectorClientKey,
   getModelName, learnModelName, listModelNames, upsertModelNameForce, setModelNameLock, deleteModelName,
@@ -41,6 +41,8 @@ import { ensureStream, iceServers, turnCredentials, mintTurn, supportsRtsp, GO2R
 import { setSink, sinkConfigured, shipServer } from './logship.js';
 import { dbg } from './debuglog.js';
 import { engineBaseOf, singleTenant, engineUrl } from './tenancy.js';
+import { teamMode, ACCESS_SETTING, parseAccessMap, accessFor, inTeam, allows, onlyPrinter, isAll,
+  checkEngineRequest, filterEngineAnswer, filterPrinters, answerHidden } from './team.js';
 import {
   migrateCameras, cameraList, forApi, scopeFor as cameraScope, validSource, addCamera, updateCamera, deleteCamera,
   setOwnCamera, registerStream, frame as cameraFrame, resync as resyncCameras, startCameraSync
@@ -130,8 +132,13 @@ async function requireUser(req, reply) {
   // must claim one with an invite (POST /api/instance/claim). This closes the
   // social-login bypass where any Google/Microsoft/Facebook sign-in silently
   // created (and could self-promote to owner) an account with no invite.
-  if (!user) { reply.code(403).send({ error: 'no-account', needsInvite: (await countUsers()) > 0 }); return null; }
-  return user;
+  if (!user) {
+    const made = await teamAutoAccount(req, email);
+    if (made) return teamView(made);
+    reply.code(403).send({ error: 'no-account', needsInvite: (await countUsers()) > 0 && !teamMode(), team: teamMode() });
+    return null;
+  }
+  return teamView(user);
 }
 
 // Roles come from Authentik groups, forwarded by the reverse proxy as X-authentik-groups
@@ -146,7 +153,8 @@ function groupsOf(req) {
 // Owner = the bootstrapped first account (users.is_owner) OR a current member of
 // the Authentik owner group.
 function isOwner(req, user) {
-  if (user?.is_owner) return true;
+  if (actorOf(user)?.is_owner) return true;
+  if (!req) return false;
   return groupsOf(req).includes(OWNER_GROUP);
 }
 async function requireOwner(req, reply) {
@@ -155,6 +163,101 @@ async function requireOwner(req, reply) {
   if (!isOwner(req, user)) { reply.code(403).send({ error: 'owner access required' }); return null; }
   return user;
 }
+
+
+// ---- team mode (team.js) ---------------------------------------------------
+// In team mode the farm is the owner's farm, shared by the team: every person's
+// requests act on the owner's account (their printers, queue, library), while
+// `actor` keeps who is asking, for their own keys and their printer access.
+async function getInstanceForUser(userId) {
+  if (teamMode()) {
+    const ownerId = await getOwnerUserId();
+    if (ownerId) return getInstanceForUserRaw(ownerId);
+  }
+  return getInstanceForUserRaw(userId);
+}
+function actorOf(user) { return user?.actor || user; }
+async function teamView(user) {
+  if (!teamMode() || !user || user.actor) return user;
+  const ownerId = await getOwnerUserId();
+  if (!ownerId || ownerId === user.id) return user;
+  return { ...user, id: ownerId, actor: user };
+}
+let teamAccessCache = { at: 0, map: null };
+async function teamAccessMap() {
+  if (teamAccessCache.at && Date.now() - teamAccessCache.at < 3000) return teamAccessCache.map;
+  let map = null;
+  try {
+    const raw = await getAppSetting(ACCESS_SETTING, null);
+    map = raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : null;
+  } catch { map = null; }
+  teamAccessCache = { at: Date.now(), map };
+  return map;
+}
+// A person signed in through the installation's sign-in who the hub has listed
+// (or who is an owner) gets an account on first visit: no invite in team mode.
+// They never get an engine of their own; the owner's farm is theirs to use.
+async function teamAutoAccount(req, email) {
+  if (!teamMode() || !email) return null;
+  if (!(await getOwnerUserId())) return null; // the owner's account comes first, as before
+  const listed = inTeam(await teamAccessMap(), email) || groupsOf(req).includes(OWNER_GROUP);
+  if (!listed) return null;
+  const name = req.headers['x-authentik-name'] || null;
+  return upsertUser(email, name);
+}
+// The printers this caller may use: 'all' or a Set of printer ids. A key caller
+// is judged by its own account only, never by headers.
+async function printerAccess(req, user) {
+  if (!teamMode()) return 'all';
+  const a = actorOf(user);
+  const owner = req && !req.apiKey ? isOwner(req, user) : !!a?.is_owner;
+  return accessFor(await teamAccessMap(), a?.email, owner);
+}
+async function printerAccessForUserId(userId) {
+  if (!teamMode()) return 'all';
+  const u = await getUserById(userId);
+  return u ? accessFor(await teamAccessMap(), u.email, !!u.is_owner) : new Set();
+}
+async function denyPrinter(req, reply, user, printerId) {
+  const access = await printerAccess(req, user);
+  if (allows(access, printerId)) return false;
+  reply.code(404).send({ error: 'printer not found' });
+  return true;
+}
+function ownerOnlyInTeam(req, reply, user) {
+  if (!teamMode() || isOwner(req.apiKey ? null : req, user)) return false;
+  reply.code(403).send({ error: 'only an owner changes this' });
+  return true;
+}
+
+// The hub owns who may use which printer and pushes the whole list here
+// whenever it changes. Owners only: a signed-in owner, or an owner's API key
+// (the hub's control key).
+app.put('/api/team/printer-access', async (req, reply) => {
+  if (!teamMode()) return reply.code(404).send({ error: 'team mode is off' });
+  let ok = false;
+  if (presentedKey(req)) {
+    const got = await keyCaller(req, reply, 'control', { resolveToken: resolvePrintHostToken, getUser: getUserById });
+    if (!got) return;
+    ok = !!got.user?.is_owner;
+  } else {
+    const user = await requireUser(req, reply); if (!user) return;
+    ok = isOwner(req, user);
+  }
+  if (!ok) return reply.code(403).send({ error: 'owner access required' });
+  const parsed = parseAccessMap(req.body);
+  if (parsed.error) return reply.code(400).send({ error: parsed.error });
+  await setAppSetting(ACCESS_SETTING, JSON.stringify(parsed.map));
+  teamAccessCache = { at: 0, map: null };
+  req.log.info({ people: Object.keys(parsed.map.people).length }, 'team printer access updated');
+  return reply.code(204).send();
+});
+app.get('/api/team/printer-access', async (req, reply) => {
+  if (!teamMode()) return reply.code(404).send({ error: 'team mode is off' });
+  const user = await callerFor(req, reply, 'read'); if (!user) return;
+  if (!isOwner(req.apiKey ? null : req, user)) return reply.code(403).send({ error: 'owner access required' });
+  return (await teamAccessMap()) || { version: 1, people: {}, owners: [] };
+});
 
 // ---- OrcaSlicer ------------------------------------------------------------
 // ArtisanHub Farm has one slicer, OrcaSlicer: its command line runs headless in
@@ -184,7 +287,7 @@ app.get('/api/slicer/info', async (req, reply) => {
     desktop_url: DESKTOP_URL ? DESKTOP_URL + '/' : null,
     print_host: PUBLIC_URL ? PUBLIC_URL + '/printhost' : null,
     desktop_print_host: DESKTOP_URL ? (DESKTOP_PRINTHOST || null) : null,
-    print_host_keys: await countPrintHostTokens(user.id, 'slicer').catch(() => 0)
+    print_host_keys: await countPrintHostTokens(actorOf(user).id, 'slicer').catch(() => 0)
   };
 });
 
@@ -194,9 +297,9 @@ app.get('/api/slicer/info', async (req, reply) => {
 app.post('/api/slicer/printhost-key', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
   if (!PUBLIC_URL) { reply.code(503).send({ error: 'OPHQ_PUBLIC_URL is not set' }); return; }
-  await purgePrintHostTokens(user.id);
+  await purgePrintHostTokens(actorOf(user).id);
   const token = randomBytes(24).toString('base64url');
-  await createPrintHostToken(user.id, token, 'orcaslicer', null);
+  await createPrintHostToken(actorOf(user).id, token, 'orcaslicer', null);
   return { url: PUBLIC_URL + '/printhost', api_key: token, host_type: 'octoprint' };
 });
 
@@ -217,6 +320,9 @@ async function printHostUser(req, reply) {
   if (!key) { reply.code(401).send({ error: 'missing API key' }); return null; }
   const who = await resolvePrintHostToken(String(key).trim());
   if (!who) { reply.code(401).send({ error: 'invalid or expired API key' }); return null; }
+  who.access = await printerAccessForUserId(who.userId);
+  const scoped = req.params?.pid;
+  if (scoped !== undefined && !allows(who.access, scoped)) { reply.code(404).send({ error: 'printer not found' }); return null; }
   return who;
 }
 
@@ -248,7 +354,7 @@ async function printHostPrinters(req, reply) {
     const arr = Array.isArray(d) ? d : (d.printers || d.items || []);
     return {
       host: PUBLIC_URL + '/printhost',
-      printers: arr.filter((pr) => pr.is_active !== false).map((pr) => ({
+      printers: arr.filter((pr) => pr.is_active !== false && allows(who.access, pr.id)).map((pr) => ({
         id: pr.id,
         name: pr.name,
         model: pr.model || null,
@@ -379,9 +485,10 @@ const printHostUpload = async (req, reply) => {
 
   // A scoped host pins the job to its printer; the generic host leaves it
   // unassigned for the scheduler, which is what it has always done.
-  const printerId = scopedPrinterId(req);
+  const printerId = scopedPrinterId(req) ?? (isAll(who.access) ? null : onlyPrinter(who.access));
   let queued = false, queueError = null;
-  if (fileId && wantsPrint) {
+  if (fileId && wantsPrint && !printerId && !isAll(who.access)) queueError = 'choose one of your printers for this job';
+  else if (fileId && wantsPrint) {
     try {
       const qr = await fetch(base + '/api/v1/library/files/add-to-queue', {
         method: 'POST',
@@ -457,9 +564,10 @@ const printHostUploadMoonraker = async (req, reply) => {
     return !!m && /^(true|1|yes)$/i.test(m[1].trim());
   })();
 
-  const printerId = scopedPrinterId(req);
+  const printerId = scopedPrinterId(req) ?? (isAll(who.access) ? null : onlyPrinter(who.access));
   let queued = false, queueError = null;
-  if (fileId && wantsPrint) {
+  if (fileId && wantsPrint && !printerId && !isAll(who.access)) queueError = 'choose one of your printers for this job';
+  else if (fileId && wantsPrint) {
     try {
       const qr = await fetch(base + '/api/v1/library/files/add-to-queue', {
         method: 'POST',
@@ -949,10 +1057,13 @@ app.get('/api/me', async (req, reply) => {
   }
   const email = currentEmail(req);
   if (!email) { reply.code(401).send({ error: 'not authenticated' }); return; }
-  const user = await getUserByEmail(email);
-  if (!user) return { email, hasAccount: false, needsInvite: (await countUsers()) > 0, isOwner: false, role: 'guest' };
+  let user = await getUserByEmail(email);
+  if (!user) user = await teamAutoAccount(req, email);
+  if (!user) return { email, hasAccount: false, needsInvite: (await countUsers()) > 0 && !teamMode(), isOwner: false, role: 'guest', team: teamMode() };
   const owner = isOwner(req, user);
-  return { id: user.id, email: user.email, displayName: user.display_name, role: owner ? 'owner' : 'user', isOwner: owner, hasAccount: true };
+  const access = await printerAccess(req, user);
+  return { id: user.id, email: user.email, displayName: user.display_name, role: owner ? 'owner' : 'user', isOwner: owner, hasAccount: true,
+           team: teamMode(), printerAccess: isAll(access) ? 'all' : [...access] };
 });
 
 // ---- per-tenant log destination -----------------------------------------
@@ -964,6 +1075,7 @@ app.get('/api/settings/logging', async (req, reply) => {
 });
 app.put('/api/settings/logging', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
+  if (ownerOnlyInTeam(req, reply, user)) return;
   const url = await setUserLogSink(user.id, (req.body || {}).log_url);
   setSink(`tenant:${user.id}`, url, { job: 'openprinthq-instance', scope: 'tenant', instance: String(user.id) });
   return { ok: true, log_url: url };
@@ -1048,7 +1160,8 @@ app.get('/api/instance/stats', async (req, reply) => {
       fetch(base + '/api/v1/queue/').then(r => r.ok ? r.json() : []).catch(() => []),
       fetch(base + '/api/v1/archives/stats').then(r => r.ok ? r.json() : null).catch(() => null)
     ]);
-    const parr = asArray(printers), qarr = asArray(queue);
+    const access = await printerAccess(req, user);
+    const parr = filterPrinters(access, asArray(printers)), qarr = filterEngineAnswer(access, '/api/v1/queue/', asArray(queue));
     // The /printers/ list carries only static config — live state (connected,
     // printing) is only on the per-printer /status endpoint, so fetch those.
     const statuses = await Promise.all(
@@ -1333,10 +1446,11 @@ app.post('/api/pub/signup', async (req, reply) => {
 // Which breaker circuit each printer sits on, used by staggered batch printing.
 app.get('/api/printer-circuits', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
-  return await getCircuits(user.id);
+  return filterEngineAnswer(await printerAccess(req, user), '/api/printer-circuits', await getCircuits(user.id));
 });
 app.put('/api/printer-circuits', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
+  if (ownerOnlyInTeam(req, reply, user)) return;
   const map = req.body || {};
   if (typeof map !== 'object' || Array.isArray(map)) return reply.code(400).send({ error: 'expected an object' });
   for (const [pid, circuit] of Object.entries(map)) {
@@ -1350,10 +1464,11 @@ app.put('/api/printer-circuits', async (req, reply) => {
 // ---- printer automation (bed ejection / continuous printing, #20) -------
 app.get('/api/printer-automation', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
-  return await getAutomation(user.id);
+  return filterEngineAnswer(await printerAccess(req, user), '/api/printer-automation', await getAutomation(user.id));
 });
 app.put('/api/printer-automation', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
+  if (ownerOnlyInTeam(req, reply, user)) return;
   const map = req.body || {};
   if (typeof map !== 'object' || Array.isArray(map)) return reply.code(400).send({ error: 'expected an object' });
   const routeResults = {};
@@ -1394,6 +1509,7 @@ app.get('/api/connectors', async (req, reply) => {
 });
 app.post('/api/connectors', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
+  if (ownerOnlyInTeam(req, reply, user)) return;
   const name = (req.body?.name || 'connector').toString().slice(0, 60);
   // Provision the command-signing key pair alongside the connector. Without
   // this, a fresh account holds a connector it cannot send signed commands to,
@@ -1404,6 +1520,7 @@ app.post('/api/connectors', async (req, reply) => {
 });
 app.delete('/api/connectors/:id', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
+  if (ownerOnlyInTeam(req, reply, user)) return;
   const id = Number(req.params.id);
   if (Number.isInteger(id)) await deleteConnector(user.id, id);
   return { ok: true };
@@ -1412,6 +1529,7 @@ app.delete('/api/connectors/:id', async (req, reply) => {
 // Register (or clear) a connector's own public key for mutual auth (SSH-style).
 app.patch('/api/connectors/:id', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
+  if (ownerOnlyInTeam(req, reply, user)) return;
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return reply.code(400).send({ error: 'bad id' });
   const pem = (req.body?.client_public_key ?? '').toString();
@@ -1428,6 +1546,7 @@ app.patch('/api/connectors/:id', async (req, reply) => {
 // cloud engine, so it can see LAN-only printers the cloud never could.
 app.post('/api/connectors/:id/discover', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
+  if (ownerOnlyInTeam(req, reply, user)) return;
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return reply.code(400).send({ error: 'bad id' });
   if (!connectorOnline(user.id, id)) {
@@ -1506,6 +1625,7 @@ app.delete('/api/admin/model-names', async (req, reply) => {
 
 app.post('/api/connectors/test', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
+  if (ownerOnlyInTeam(req, reply, user)) return;
   const b = req.body || {};
   const host = (b.host || '').toString();
   const port = Number(b.port) || 80;
@@ -1520,6 +1640,7 @@ app.post('/api/connectors/test', async (req, reply) => {
 
 app.post('/api/connectors/tcp-test', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
+  if (ownerOnlyInTeam(req, reply, user)) return;
   const b = req.body || {};
   const host = (b.host || '').toString();
   const port = Number(b.port) || 0;
@@ -1552,6 +1673,7 @@ app.get('/api/connector/signing-key', async (req, reply) => {
 });
 app.post('/api/connector/signing-key', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
+  if (ownerOnlyInTeam(req, reply, user)) return;
   const { publicPem, privatePem } = generateKeyPair();
   await setSigningKey(user.id, publicPem, encryptPrivate(privatePem));
   invalidateSigningCache(user.id);
@@ -1562,6 +1684,7 @@ app.post('/api/connector/signing-key', async (req, reply) => {
 });
 app.delete('/api/connector/signing-key', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
+  if (ownerOnlyInTeam(req, reply, user)) return;
   await deleteSigningKey(user.id);
   invalidateSigningCache(user.id);
   return { ok: true };
@@ -1576,6 +1699,8 @@ app.post('/api/batch', async (req, reply) => {
     .map((p) => ({ id: Number(p.id), name: p.name })).filter((p) => Number.isInteger(p.id)) : [];
   if (!Number.isInteger(fileId)) return reply.code(400).send({ error: 'file_id required' });
   if (printers.length === 0) return reply.code(400).send({ error: 'select at least one printer' });
+  { const access = await printerAccess(req, user);
+    if (printers.some((p) => !allows(access, p.id))) return reply.code(404).send({ error: 'printer not found' }); }
   try {
     const batch = await startBatch(user, {
       fileId, fileName: b.file_name || null, printers,
@@ -1700,6 +1825,7 @@ app.get('/api/integration-token', async (req, reply) => {
 });
 app.post('/api/integration-token/regenerate', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
+  if (ownerOnlyInTeam(req, reply, user)) return;
   const token = await setIntegrationToken(user.id, 'ophq_' + randomBytes(24).toString('hex'));
   return { token };
 });
@@ -1723,7 +1849,7 @@ const MAX_EXT_KEYS = 10;
 app.get('/api/access-keys', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
   // API keys have their own list (/api/api-keys) with scopes; this one is the extension, slicer and library keys.
-  const rows = (await listPrintHostTokens(user.id)).filter((r) => r.kind !== 'api');
+  const rows = (await listPrintHostTokens(actorOf(user).id)).filter((r) => r.kind !== 'api');
   return rows.map((r) => ({
     id: r.token_id,
     label: r.label,
@@ -1740,7 +1866,7 @@ app.post('/api/access-keys', async (req, reply) => {
   const label = String(req.body?.label || '').trim().slice(0, 80) || 'Browser extension';
   // A cap, because there is no reason for an account to hold dozens and an
   // unbounded list is how a leaked session quietly mints a permanent foothold.
-  if (await countPrintHostTokens(user.id, 'extension') >= MAX_EXT_KEYS) {
+  if (await countPrintHostTokens(actorOf(user).id, 'extension') >= MAX_EXT_KEYS) {
     return reply.code(409).send({ error: 'key limit reached, revoke one first' });
   }
   // Optional expiry in days. No default: a key the user has to re-issue on a
@@ -1748,7 +1874,7 @@ app.post('/api/access-keys', async (req, reply) => {
   const days = Number(req.body?.expiresInDays || 0);
   const expiresAt = days > 0 ? new Date(Date.now() + days * 86400000) : null;
   const secret = 'ophqx_' + randomBytes(24).toString('base64url');
-  const { token, tokenId } = await createPrintHostToken(user.id, secret, label, expiresAt, 'extension');
+  const { token, tokenId } = await createPrintHostToken(actorOf(user).id, secret, label, expiresAt, 'extension');
   req.log.info({ userId: user.id, label }, 'access key minted');
   // The only time the secret is ever returned.
   return reply.code(201).send({
@@ -1761,7 +1887,7 @@ app.post('/api/access-keys', async (req, reply) => {
 
 app.delete('/api/access-keys/:id', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
-  const ok = await revokePrintHostToken(user.id, String(req.params.id));
+  const ok = await revokePrintHostToken(actorOf(user).id, String(req.params.id));
   if (!ok) return reply.code(404).send({ error: 'no such key' });
   req.log.info({ userId: user.id }, 'access key revoked');
   return { revoked: true };
@@ -1773,7 +1899,7 @@ const MAX_API_KEYS = 20;
 
 app.get('/api/api-keys', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
-  const rows = (await listPrintHostTokens(user.id)).filter((r) => r.kind === 'api');
+  const rows = (await listPrintHostTokens(actorOf(user).id)).filter((r) => r.kind === 'api');
   return rows.map((r) => ({
     id: r.token_id, label: r.label, scope: r.scope, prefix: r.token_prefix,
     createdAt: r.created_at, lastUsedAt: r.last_used_at, expiresAt: r.expires_at
@@ -1785,21 +1911,21 @@ app.post('/api/api-keys', async (req, reply) => {
   const scope = normalizeScope(req.body?.scope);
   if (!scope) return reply.code(400).send({ error: `scope is one of ${SCOPES.join(', ')}` });
   const label = String(req.body?.label || '').trim().slice(0, 80) || 'API key';
-  if (await countPrintHostTokens(user.id, 'api') >= MAX_API_KEYS) {
+  if (await countPrintHostTokens(actorOf(user).id, 'api') >= MAX_API_KEYS) {
     return reply.code(409).send({ error: 'key limit reached, revoke one first' });
   }
   const days = Number(req.body?.expiresInDays || 0);
   if (days && !(days >= 1 && days <= 3650)) return reply.code(400).send({ error: 'expiresInDays is 1 to 3650, or 0 for none' });
   const expiresAt = days > 0 ? new Date(Date.now() + days * 86400000) : null;
   const secret = API_KEY_PREFIX + randomBytes(32).toString('base64url');
-  const { token, tokenId } = await createPrintHostToken(user.id, secret, label, expiresAt, 'api', scope);
+  const { token, tokenId } = await createPrintHostToken(actorOf(user).id, secret, label, expiresAt, 'api', scope);
   req.log.info({ userId: user.id, label, scope }, 'api key minted');
   return reply.code(201).send({ token, id: tokenId, label, scope, expiresAt: expiresAt ? expiresAt.toISOString() : null });
 });
 
 app.delete('/api/api-keys/:id', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
-  const ok = await revokePrintHostToken(user.id, String(req.params.id));
+  const ok = await revokePrintHostToken(actorOf(user).id, String(req.params.id));
   if (!ok) return reply.code(404).send({ error: 'no such key' });
   req.log.info({ userId: user.id }, 'api key revoked');
   return { revoked: true };
@@ -1816,7 +1942,7 @@ async function callerFor(req, reply, need) {
   const got = await keyCaller(req, reply, need, { resolveToken: resolvePrintHostToken, getUser: getUserById });
   if (!got) return null;
   req.apiKey = got.key;
-  return got.user;
+  return teamView(got.user);
 }
 
 // ---- appearance (Look & Feel) ------------------------------------------
@@ -1834,6 +1960,7 @@ app.get('/api/appearance', async (req, reply) => {
 });
 app.put('/api/appearance', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
+  if (ownerOnlyInTeam(req, reply, user)) return;
   const config = req.body;
   if (!config || typeof config !== 'object' || Array.isArray(config)) {
     return reply.code(400).send({ error: 'config object required' });
@@ -1925,6 +2052,7 @@ app.get('/api/internal/camera-relay/:userId/:printerId/frame', async (req, reply
 // Browser-facing (authed): direct frame fetch for the logged-in user.
 app.get('/api/camera-relay/:printerId/frame', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
+  if (await denyPrinter(req, reply, user, String(req.params.printerId).replace(/[^0-9]/g, ''))) return;
   const pid = Number(String(req.params.printerId).replace(/[^0-9]/g, ''));
   if (!pid) return reply.code(400).send({ error: 'bad printer id' });
   return relayCameraFrame(user.id, pid, reply);
@@ -1932,6 +2060,7 @@ app.get('/api/camera-relay/:printerId/frame', async (req, reply) => {
 
 app.post('/api/camera/webrtc/:printerId', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
+  if (await denyPrinter(req, reply, user, String(req.params.printerId).replace(/[^0-9]/g, ''))) return;
   const pid = String(req.params.printerId).replace(/[^0-9]/g, '');
   if (!pid) return reply.code(400).send({ error: 'bad printer id' });
   const inst = await getInstanceForUser(user.id);
@@ -2064,7 +2193,8 @@ app.get('/api/cameras', async (req, reply) => {
   const ctx = await cameraCtx(user);
   if (!ctx.base) return reply.code(409).send({ error: 'no running instance for this account' });
   try {
-    return { streams: forApi(await cameraList(ctx)) };
+    const access = await printerAccess(req.apiKey ? null : req, user);
+    return { streams: forApi(await cameraList(ctx)).filter((c) => c.printer_id == null || allows(access, c.printer_id)) };
   } catch (e) {
     return reply.code(502).send({ error: 'engine unreachable: ' + e.message });
   }
@@ -2082,7 +2212,7 @@ app.get('/api/cameras/frame.jpeg', async (req, reply) => {
   let mine;
   try { mine = (await cameraList(ctx, { withSource: true })).find((c) => c.stream_name === src); }
   catch (e) { return reply.code(502).send({ error: 'engine unreachable: ' + e.message }); }
-  if (!mine) return reply.code(404).send({ error: 'no such camera' });
+  if (!mine || (mine.printer_id != null && !allows(await printerAccess(req.apiKey ? null : req, user), mine.printer_id))) return reply.code(404).send({ error: 'no such camera' });
   if (!mine.enabled) return reply.code(409).send({ error: 'this camera is switched off' });
   // Registering is idempotent and cheap, and covers a go2rtc that restarted since the last sync.
   await registerStream(mine.stream_name, mine._source).catch(() => {});
@@ -2095,6 +2225,7 @@ app.get('/api/cameras/frame.jpeg', async (req, reply) => {
 
 app.post('/api/cameras', async (req, reply) => {
   const user = await callerFor(req, reply, 'control'); if (!user) return;
+  if (ownerOnlyInTeam(req, reply, user)) return;
   const inst = await getInstanceForUser(user.id);
   const scope = cameraScope(inst);
   if (!scope) return reply.code(409).send({ error: 'no running instance for this account' });
@@ -2111,6 +2242,7 @@ app.post('/api/cameras', async (req, reply) => {
 
 app.patch('/api/cameras/:id', async (req, reply) => {
   const user = await callerFor(req, reply, 'control'); if (!user) return;
+  if (ownerOnlyInTeam(req, reply, user)) return;
   const scope = cameraScope(await getInstanceForUser(user.id));
   if (!scope) return reply.code(409).send({ error: 'no running instance for this account' });
   const b = req.body || {};
@@ -2126,6 +2258,7 @@ app.patch('/api/cameras/:id', async (req, reply) => {
 
 app.delete('/api/cameras/:id', async (req, reply) => {
   const user = await callerFor(req, reply, 'control'); if (!user) return;
+  if (ownerOnlyInTeam(req, reply, user)) return;
   const scope = cameraScope(await getInstanceForUser(user.id));
   if (!scope) return reply.code(409).send({ error: 'no running instance for this account' });
   const row = await deleteCamera(scope, Number(req.params.id));
@@ -2137,6 +2270,7 @@ app.delete('/api/cameras/:id', async (req, reply) => {
 // Rename or switch off a printer's own camera ('builtin') or the engine's ('engine').
 app.put('/api/cameras/printer/:printerId/:kind', async (req, reply) => {
   const user = await callerFor(req, reply, 'control'); if (!user) return;
+  if (ownerOnlyInTeam(req, reply, user)) return;
   const scope = cameraScope(await getInstanceForUser(user.id));
   if (!scope) return reply.code(409).send({ error: 'no running instance for this account' });
   const kind = String(req.params.kind);
@@ -2154,6 +2288,7 @@ app.put('/api/cameras/printer/:printerId/:kind', async (req, reply) => {
 // between the peer-to-peer player and the snapshot fallback without probing.
 app.get('/api/camera/capability/:printerId', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
+  if (await denyPrinter(req, reply, user, String(req.params.printerId).replace(/[^0-9]/g, ''))) return;
   const pid = Number(String(req.params.printerId).replace(/[^0-9]/g, ''));
   if (!pid) return reply.code(400).send({ error: 'bad printer id' });
   const inst = await getInstanceForUser(user.id);
@@ -2198,6 +2333,15 @@ app.all('/api/engine/*', async (req, reply) => {
   touchSpoolman(inst.subdomain, req.log);
   const enginePath = req.url.replace(/^\/api\/engine/, '') || '/';
   const method = req.method;
+  // Team mode: only the printers the hub lets this person use (team.js).
+  const access = await printerAccess(req, user);
+  if (!isAll(access)) {
+    const [pathOnly, search = ''] = enginePath.split('?');
+    const chk = checkEngineRequest(access, { method, path: pathOnly, search, body: req.body,
+      isMultipart: /multipart/i.test(String(req.headers['content-type'] || '')) });
+    if (!chk.ok) return reply.code(chk.status).send({ error: chk.error });
+    if (chk.body) req.body = chk.body;
+  }
   // Trace: engine calls go to the user's CLOUD engine, not their LAN connector.
   // A LAN-discovery scan hitting this route (e.g. /discovery/scan) is therefore
   // scanning the cloud engine's network, not the user's — visible here.
@@ -2223,8 +2367,21 @@ app.all('/api/engine/*', async (req, reply) => {
     // A printer added, changed or removed changes the camera list: register its
     // cameras now rather than at the next background pass.
     if (res.ok && method !== 'GET' && /^\/api\/v1\/printers\/?(\d+\/?)?(\?|$)/.test(enginePath)) resyncSoon(req.log);
-    reply.code(res.status);
     const ct = res.headers.get('content-type');
+    if (!isAll(access) && /json/i.test(String(ct || ''))) {
+      const text = await res.text();
+      let json; try { json = text ? JSON.parse(text) : null; } catch { json = undefined; }
+      if (json !== undefined) {
+        if (res.ok && answerHidden(access, json)) return reply.code(404).send({ error: 'printer not found' });
+        reply.code(res.status);
+        reply.header('content-type', 'application/json');
+        return reply.send(JSON.stringify(filterEngineAnswer(access, enginePath.split('?')[0], json)));
+      }
+      reply.code(res.status);
+      if (ct) reply.header('content-type', ct);
+      return reply.send(text);
+    }
+    reply.code(res.status);
     if (ct) reply.header('content-type', ct);
     return reply.send(Buffer.from(await res.arrayBuffer()));
   } catch (e) {
