@@ -125,6 +125,87 @@ def _gone() -> HTMLResponse:
                  " new one.</p>", 410)
 
 
+# ---- Change your password, signed in (B35) --------------------------------------------------------------------------
+# Defined before /account/password/{token}, whose pattern would refuse "change" rather than let it through.
+
+CHANGE_PATH = "/account/password/change"
+
+
+def _signed_in_login(request: Request, db: Session):
+    """The signed-in person and their LLDAP login (the username Authelia gave the hub), or None if not signed in."""
+    from ..models import User
+    uid = request.session.get("uid")
+    user = db.get(User, uid) if uid else None
+    return user, ((user.username or "").strip() if user else "")
+
+
+def _change_form(uid: str, error: str = "", done: bool = False, status: int | None = None) -> HTMLResponse:
+    if done:
+        return _page("<h1>Password changed</h1><p>Your new password works everywhere you sign in as "
+                     f"<strong>{html.escape(uid)}</strong> with ArtisanHub.</p>"
+                     "<p class=\"back\"><a href=\"/\">Back to the hub</a></p>")
+    err = f'<p class="error" role="alert">{html.escape(error)}</p>' if error else ""
+    return _page(
+        "<h1>Change your password</h1>"
+        f"<p>For your ArtisanHub login, <strong>{html.escape(uid)}</strong>: the one password for everything you sign"
+        f" in to with ArtisanHub. At least {MIN_LENGTH} characters.</p>"
+        '<form method="post" autocomplete="on">'
+        f'<input type="text" name="username" value="{html.escape(uid)}" autocomplete="username" hidden>'
+        '<label for="cur">Current password'
+        '<input id="cur" name="current" type="password" autocomplete="current-password" required></label>'
+        '<label for="pw">New password'
+        f'<input id="pw" name="password" type="password" minlength="{MIN_LENGTH}" autocomplete="new-password" required></label>'
+        '<label for="pw2">The same again'
+        '<input id="pw2" name="again" type="password" autocomplete="new-password" required></label>'
+        f'{err}<button type="submit">Change password</button></form>'
+        '<p class="back"><a href="/">Back to the hub</a> &middot; <a href="/account/password">Forgot your current'
+        " password?</a></p>",
+        status or (400 if error else 200))
+
+
+def _no_login() -> HTMLResponse:
+    return _page("<h1>Passwords are not changed here</h1><p>This hub does not manage your login. Change your"
+                 " password where you sign in.</p><p class=\"back\"><a href=\"/\">Back to the hub</a></p>", 409)
+
+
+@router.get(CHANGE_PATH, include_in_schema=False)
+def change_page(request: Request, db: Session = Depends(get_db)):
+    with unscoped():
+        user, uid = _signed_in_login(request, db)
+    if user is None:
+        return RedirectResponse(f"/auth/login?next={CHANGE_PATH}", status_code=303)
+    if not uid or lldap_api.client() is None:
+        return _no_login()
+    return _change_form(uid)
+
+
+@router.post(CHANGE_PATH, include_in_schema=False)
+def change_set(request: Request, current: str = Form(""), password: str = Form(""), again: str = Form(""),
+               db: Session = Depends(get_db)):
+    with unscoped():
+        user, uid = _signed_in_login(request, db)
+    if user is None:
+        return RedirectResponse(f"/auth/login?next={CHANGE_PATH}", status_code=303)
+    ld = lldap_api.client()
+    if not uid or ld is None:
+        return _no_login()
+    # Limited per login, as asking for a link is: guessing the current password here is no easier than at sign-in.
+    if not _client_allowed(f"change:{uid}"):
+        return _change_form(uid, "Too many tries. Wait a few minutes and try again.", status=429)
+    if len(password) < MIN_LENGTH:
+        return _change_form(uid, f"Use at least {MIN_LENGTH} characters for the new password.")
+    if password != again:
+        return _change_form(uid, "The two new passwords are not the same.")
+    try:
+        if not ld.check_password(uid, current):
+            return _change_form(uid, "The current password is not right.")
+        ld.set_password(uid, password)
+    except ApiError:
+        return _change_form(uid, "The password could not be changed. Try again in a moment.", status=503)
+    log.info("password changed for %s", uid)
+    return _change_form(uid, done=True)
+
+
 @router.get("/account/password/{token}", include_in_schema=False)
 def password_page(token: str = Path(pattern=TOKEN), db: Session = Depends(get_db)):
     with unscoped():
