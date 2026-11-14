@@ -119,6 +119,8 @@
             <div class="ah-glass ah-menu" role="menu">
               <div style="padding:6px 10px"><b>{me.user.name || me.user.username}</b><div class="ah-muted">{ROLE_LABEL[me.team?.role] || 'API key'}{me.user.email ? `, ${me.user.email}` : ''}</div></div>
               <a href="/settings" onclick={() => (userMenu = false)}><Icon name="cog" size={16} />Appearance and settings</a>
+              <!-- B35: the one password for everything signed in to with ArtisanHub, changed on the hub's own page. -->
+              <a href="/account/password/change" data-sveltekit-reload>Change password</a>
               {#if me.links && Object.values(me.links).some(Boolean)}
                 <div class="ah-group-label" style="margin:10px 10px 4px">Systems</div>
                 {#each [['models', 'Models'], ['woo', 'WooCommerce'], ['farm', 'ArtisanHub Farm'], ['dam', 'DAM'], ['manyfold', 'Manyfold'], ['inventree', 'InvenTree'], ['spoolman', 'Spoolman']] as [k, l]}

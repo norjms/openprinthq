@@ -208,3 +208,80 @@ def test_the_hubs_owner_makes_a_link_from_people(people, real_auth, lldap, mail)
     # A team owner is not the hub's owner.
     team_owner = as_user(people["owner"])
     assert team_owner.post(f"/api/account/password-link/{people['outsider']}").status_code == 403
+
+
+# ---- Change your password, signed in (B35) -------------------------------------------------------------------------
+
+class CheckingLldap(Lldap):
+    def __init__(self):
+        super().__init__()
+        self.current = {}
+
+    def check_password(self, uid, password):
+        return self.current.get(uid) == password
+
+    def set_password(self, uid, password):
+        super().set_password(uid, password)
+        self.current[uid] = password
+
+
+@pytest.fixture
+def lldap_checking(monkeypatch):
+    from app.clients import lldap_api
+    from app.routers import account
+    fake = CheckingLldap()
+    monkeypatch.setattr(lldap_api, "client", lambda: fake)
+    account._client_hits.clear()
+    yield fake
+    account._client_hits.clear()
+
+
+def _with_login(user_id, uid):
+    from app.db import session_scope
+    from app.models import User
+    from app.tenant import unscoped
+    with session_scope() as db, unscoped():
+        db.get(User, user_id).username = uid
+
+
+def test_someone_signed_in_changes_their_password_with_the_current_one(people, real_auth, lldap_checking):
+    uid = f"maker-{secrets.token_hex(3)}"
+    lldap_checking.users[uid] = {"id": uid, "email": f"{uid}@shop.example", "groups": {"hub-users"}}
+    lldap_checking.current[uid] = "old-password-1"
+    _with_login(people["member"], uid)
+    c = as_user(people["member"])
+    page = c.get("/account/password/change")
+    assert page.status_code == 200 and "Change your password" in page.text and uid in page.text
+    bad = c.post("/account/password/change", data={"current": "wrong-one", "password": "new-password-22",
+                                                   "again": "new-password-22"})
+    assert bad.status_code == 400 and "not right" in bad.text
+    assert lldap_checking.current[uid] == "old-password-1"
+    short = c.post("/account/password/change", data={"current": "old-password-1", "password": "short", "again": "short"})
+    assert short.status_code == 400
+    differ = c.post("/account/password/change", data={"current": "old-password-1", "password": "new-password-22",
+                                                      "again": "new-password-23"})
+    assert differ.status_code == 400 and "not the same" in differ.text
+    ok = c.post("/account/password/change", data={"current": "old-password-1", "password": "new-password-22",
+                                                  "again": "new-password-22"})
+    assert ok.status_code == 200 and "Password changed" in ok.text
+    assert lldap_checking.current[uid] == "new-password-22"
+
+
+def test_changing_the_password_needs_a_sign_in_and_is_limited_per_login(people, real_auth, lldap_checking):
+    r = _client().get("/account/password/change")
+    assert r.status_code == 303 and r.headers["location"] == "/auth/login?next=/account/password/change"
+    uid = f"maker-{secrets.token_hex(3)}"
+    lldap_checking.users[uid] = {"id": uid, "email": f"{uid}@shop.example", "groups": {"hub-users"}}
+    lldap_checking.current[uid] = "old-password-1"
+    _with_login(people["viewer"], uid)
+    c = as_user(people["viewer"])
+    codes = [c.post("/account/password/change", data={"current": f"guess-{i}", "password": "new-password-22",
+                                                      "again": "new-password-22"}).status_code for i in range(6)]
+    assert codes[:5] == [400] * 5 and codes[5] == 429
+
+
+def test_a_person_without_a_login_the_hub_manages_is_told_so(people, real_auth, monkeypatch):
+    from app.clients import lldap_api
+    monkeypatch.setattr(lldap_api, "client", lambda: None)
+    r = as_user(people["owner"]).get("/account/password/change")
+    assert r.status_code == 409 and "does not manage your login" in r.text

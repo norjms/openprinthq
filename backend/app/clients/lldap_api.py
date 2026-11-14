@@ -2,7 +2,8 @@
 
 The hub uses an LLDAP account in the lldap_admin group: it looks people up by email, creates the login of someone
 invited who has none, adds people to or takes them out of the hub-users group, and sets the password a person
-chooses on the hub's own one-time page (/account/password/...). People and groups go through LLDAP's GraphQL API;
+chooses on the hub's own one-time page (/account/password/...) or changes on /account/password/change, after checking
+the current one with a bind as them. People and groups go through LLDAP's GraphQL API;
 passwords through LDAP's password modify operation, which LLDAP supports, so the password never passes anywhere
 else.
 """
@@ -141,6 +142,23 @@ class LldapClient:
             raise ApiError(self.service, None, f"LLDAP did not take the password: {type(e).__name__}") from None
         if not ok:
             raise ApiError(self.service, None, "LLDAP did not take the password")
+
+    def check_password(self, uid: str, password: str) -> bool:
+        """Whether this is the person's current password: a bind as them, which LLDAP answers for its own users."""
+        from ldap3 import Connection, Server
+        from ldap3.core.exceptions import LDAPException
+
+        if not password:
+            return False
+        user_dn = f"uid={uid},ou=people,{self.base_dn}"
+        try:
+            conn = Connection(Server(self.ldap_url, connect_timeout=10), user_dn, password, receive_timeout=15)
+            try:
+                return bool(conn.bind())
+            finally:
+                conn.unbind()
+        except LDAPException as e:
+            raise ApiError(self.service, None, f"LLDAP did not answer: {type(e).__name__}") from None
 
 
 def client() -> LldapClient | None:
