@@ -23,18 +23,101 @@
 
   let videoEl;
   let pc = null;
+  // Live video over the page's own HTTPS connection (B51): when WebRTC cannot connect (a farm on a cloud
+  // machine, reached only through its proxy), go2rtc's fragmented MP4 over a WebSocket, played with Media
+  // Source Extensions. A second or so behind real time, but at the camera's own frame rate.
+  let ws = null;
+  let mse = $state(false);    // the HTTPS stream is the one in use
+  const MSE_PREF = 'ahi.camera.mse';
   let live = $state(false);   // true once WebRTC media is playing
   let attempts = $state(0);   // how many times we've tried to go live
   let retryTimer = null;
   let destroyed = false;
 
   function cleanup() { try { pc && pc.close(); } catch { /* */ } pc = null; }
+  function cleanupMse() {
+    try { ws && ws.close(); } catch { /* */ }
+    ws = null;
+    if (videoEl && mse && videoEl.src) { try { URL.revokeObjectURL(videoEl.src); } catch { /* */ } videoEl.removeAttribute('src'); }
+    mse = false;
+  }
+
+  const MS = typeof window !== 'undefined' ? (window.ManagedMediaSource || window.MediaSource) : null;
+  // The codecs this browser plays, for go2rtc to choose from (its own list, video-rtc.js).
+  const CODECS = ['avc1.640029', 'avc1.64002A', 'avc1.640033', 'hvc1.1.6.L153.B0', 'mp4a.40.2', 'mp4a.40.5', 'flac', 'opus'];
+  function codecs() {
+    return CODECS.filter((c) => MS && MS.isTypeSupported(`video/mp4; codecs="${c}"`)).join();
+  }
+
+  function startMse() {
+    if (destroyed || live || !MS || !videoEl) return false;
+    cleanup();
+    cleanupMse();
+    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const socket = new WebSocket(`${proto}//${window.location.host}${basePath}/api/camera/mse/${printerId}`);
+    socket.binaryType = 'arraybuffer';
+    ws = socket;
+    mse = true;
+    const source = new MS();
+    let buffer = null;
+    const queue = [];
+    const feed = () => {
+      if (!buffer || buffer.updating || !queue.length) return;
+      try { buffer.appendBuffer(queue.shift()); } catch { socket.close(); }
+    };
+    // Keep near the live edge, and keep the buffer small: a camera is for now, not for scrubbing back.
+    const keepLive = () => {
+      if (!buffer || buffer.updating || !videoEl.buffered.length) return;
+      const end = videoEl.buffered.end(videoEl.buffered.length - 1);
+      if (end - videoEl.currentTime > 2.5) videoEl.currentTime = end - 0.4;
+      const start = videoEl.buffered.start(0);
+      if (videoEl.currentTime - start > 20) { try { buffer.remove(start, videoEl.currentTime - 10); } catch { /* */ } }
+    };
+    videoEl.disableRemotePlayback = true;
+    videoEl.src = URL.createObjectURL(source);
+    source.addEventListener('sourceopen', () => {
+      if (socket.readyState === 1) socket.send(JSON.stringify({ type: 'mse', value: codecs() }));
+      else socket.addEventListener('open', () => socket.send(JSON.stringify({ type: 'mse', value: codecs() })), { once: true });
+    }, { once: true });
+    socket.onmessage = (e) => {
+      if (typeof e.data === 'string') {
+        let msg = null;
+        try { msg = JSON.parse(e.data); } catch { return; }
+        if (msg.type === 'mse' && !buffer) {
+          try {
+            buffer = source.addSourceBuffer(msg.value);
+            buffer.mode = 'segments';
+            buffer.addEventListener('updateend', () => { feed(); keepLive(); });
+            startPlayback();
+          } catch { socket.close(); }
+        } else if (msg.type === 'error') {
+          socket.close();
+        }
+        return;
+      }
+      queue.push(e.data);
+      if (queue.length > 120) queue.splice(0, queue.length - 60); // never fall far behind
+      feed();
+    };
+    socket.onclose = () => {
+      if (ws !== socket) return;
+      const wasLive = live;
+      live = false;
+      cleanupMse();
+      if (!destroyed) {
+        try { if (!wasLive) sessionStorage.removeItem(MSE_PREF); } catch { /* */ }
+        scheduleRetry();
+      }
+    };
+    return true;
+  }
 
   // The element itself is the authority on whether video is playing. Anything
   // else is a guess, and a guess here is what put a LIVE badge over a still
   // picture.
   function onPlaying() {
     live = true;
+    if (mse) { try { sessionStorage.setItem(MSE_PREF, '1'); } catch { /* */ } }
     attempts = 0;                         // reset the backoff after success
     if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
   }
@@ -89,9 +172,11 @@
     retryTimer = setTimeout(() => { retryTimer = null; start(); }, delay);
   }
 
+  // WebRTC did not play: the HTTPS stream next, at once, before still frames.
   function giveUp() {
     if (live) return;
     cleanup();
+    if (!mse && startMse()) return;
     scheduleRetry();
   }
 
@@ -113,8 +198,14 @@
 
   async function start() {
     if (destroyed || live) return;
-    if (typeof RTCPeerConnection === 'undefined') return;   // no retry: never going to work
     attempts += 1;
+    // Where WebRTC failed and the HTTPS stream played before in this tab, go straight to it: no nine-second
+    // wait for a connection that will not come.
+    let preferMse = false;
+    try { preferMse = sessionStorage.getItem(MSE_PREF) === '1'; } catch { /* */ }
+    if ((preferMse || typeof RTCPeerConnection === 'undefined') && startMse()) return;
+    if (typeof RTCPeerConnection === 'undefined') return;   // no retry: never going to work
+    cleanupMse();
     cleanup();
     try {
       // Fresh ICE servers (STUN + short-lived TURN for remote/CGNAT) from the
@@ -170,12 +261,13 @@
       await pc.setRemoteDescription({ type: 'answer', sdp });
 
       // If media hasn't started shortly after negotiation, fall back.
-      setTimeout(giveUp, 9000);
+      const mine = pc;
+      setTimeout(() => { if (pc === mine) giveUp(); }, 9000);
     } catch { giveUp(); }
   }
 
   onMount(start);
-  onDestroy(() => { destroyed = true; if (retryTimer) clearTimeout(retryTimer); cleanup(); });
+  onDestroy(() => { destroyed = true; if (retryTimer) clearTimeout(retryTimer); cleanup(); cleanupMse(); });
 </script>
 
 <!-- svelte-ignore a11y_media_has_caption -->
@@ -188,8 +280,8 @@
   <!-- A still frame and a live stream look identical, so say which this is.
        Otherwise a snapshot up to a minute old reads as current video. -->
   <span class="badge" class:islive={live} title={live
-      ? 'Live video, streaming directly from your network'
-      : 'Still frames, refreshed every 60 seconds. A direct live connection could not be established.'}>
+      ? (mse ? 'Live video, through the farm over HTTPS' : 'Live video, streaming directly from your network')
+      : 'Still frames, refreshed every 60 seconds. A live connection could not be established.'}>
     {live ? 'Live' : 'Snapshot'}
   </span>
 </div>

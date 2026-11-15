@@ -2098,6 +2098,62 @@ app.get('/api/camera-relay/:printerId/frame', async (req, reply) => {
   return relayCameraFrame(user.id, pid, reply);
 });
 
+// Live video over the page's own HTTPS connection (B51): fragmented MP4 that the browser plays with Media Source
+// Extensions, carried on a WebSocket to go2rtc's /api/ws. WebRTC needs a UDP path or a TURN relay to the farm,
+// which a farm on a cloud machine behind its proxy does not have (only 80 and 443 reach it), so without this the
+// page fell back to a still frame a minute. The same sign-in and per-person printer access as the rest of the
+// farm, checked before the upgrade; the stream is one of the printer's own cameras, never a source from the
+// browser. go2rtc speaks its own small protocol on it ({"type":"mse",...}); this only carries it both ways.
+async function cameraStreamFor(req, user, pid) {
+  const inst = await getInstanceForUser(user.id);
+  if (!inst) return null;
+  const wanted = String(req.query?.stream || '');
+  if (!wanted) return ensureStream(inst, user.id, pid);
+  let cam = null;
+  try {
+    cam = (await cameraList({ base: engineBase(inst), inst, userId: user.id }, { withSource: true }))
+      .find((c) => c.stream_name === wanted && c.printer_id === Number(pid) && c.enabled);
+  } catch { /* engine down */ }
+  return cam && await registerStream(cam.stream_name, cam._source).catch(() => false) ? cam.stream_name : null;
+}
+
+app.get('/api/camera/mse/:printerId', {
+  websocket: true,
+  preValidation: async (req, reply) => {
+    const user = await requireUser(req, reply); if (!user) return;
+    const pid = String(req.params.printerId).replace(/[^0-9]/g, '');
+    if (!pid) return reply.code(400).send({ error: 'bad printer id' });
+    if (await denyPrinter(req, reply, user, pid)) return;
+    const name = await cameraStreamFor(req, user, pid);
+    if (!name) return reply.code(404).send({ error: 'no camera stream for this printer' });
+    req.cameraStream = name;
+  }
+}, (socket, req) => {
+  const upstream = new WebSocket(`${GO2RTC_URL.replace(/^http/, 'ws')}/api/ws?src=${encodeURIComponent(req.cameraStream)}`);
+  upstream.binaryType = 'arraybuffer';
+  const pending = [];
+  const close = () => { try { upstream.close(); } catch { /* */ } try { socket.close(); } catch { /* */ } };
+  upstream.onopen = () => { for (const m of pending.splice(0)) upstream.send(m); };
+  upstream.onmessage = (e) => {
+    if (socket.readyState !== 1) return;
+    // A slow browser must not make this server hold a growing backlog of video: past a few seconds of it,
+    // drop the connection and let the page connect again at the live edge.
+    if (socket.bufferedAmount > 8 * 1024 * 1024) return close();
+    socket.send(typeof e.data === 'string' ? e.data : Buffer.from(e.data));
+  };
+  upstream.onerror = close;
+  upstream.onclose = close;
+  socket.on('message', (data, isBinary) => {
+    // Only go2rtc's own control messages go up: small JSON text, never media.
+    if (isBinary || data.length > 4096) return;
+    const text = data.toString();
+    if (upstream.readyState === 1) upstream.send(text); else pending.push(text);
+  });
+  socket.on('close', close);
+  socket.on('error', close);
+  dbg('camera', 'mse stream', { stream: req.cameraStream });
+});
+
 app.post('/api/camera/webrtc/:printerId', async (req, reply) => {
   const user = await requireUser(req, reply); if (!user) return;
   if (await denyPrinter(req, reply, user, String(req.params.printerId).replace(/[^0-9]/g, ''))) return;
