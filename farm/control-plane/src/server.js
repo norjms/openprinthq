@@ -2104,17 +2104,21 @@ app.get('/api/camera-relay/:printerId/frame', async (req, reply) => {
 // page fell back to a still frame a minute. The same sign-in and per-person printer access as the rest of the
 // farm, checked before the upgrade; the stream is one of the printer's own cameras, never a source from the
 // browser. go2rtc speaks its own small protocol on it ({"type":"mse",...}); this only carries it both ways.
+// The camera a printer's viewer shows: the one ?stream= names, or else the printer's first camera that is
+// switched on (its own, then the engine's, then any added by URL). So switching a printer's own camera off,
+// say a 1080p MJPEG webcam, and adding its H.264 restream makes the restream what everyone sees.
 async function cameraStreamFor(req, user, pid) {
   const inst = await getInstanceForUser(user.id);
   if (!inst) return null;
   const wanted = String(req.query?.stream || '');
-  if (!wanted) return ensureStream(inst, user.id, pid);
   let cam = null;
   try {
-    cam = (await cameraList({ base: engineBase(inst), inst, userId: user.id }, { withSource: true }))
-      .find((c) => c.stream_name === wanted && c.printer_id === Number(pid) && c.enabled);
+    const mine = (await cameraList({ base: engineBase(inst), inst, userId: user.id }, { withSource: true }))
+      .filter((c) => c.printer_id === Number(pid) && c.enabled);
+    cam = wanted ? mine.find((c) => c.stream_name === wanted) : mine[0];
   } catch { /* engine down */ }
-  return cam && await registerStream(cam.stream_name, cam._source).catch(() => false) ? cam.stream_name : null;
+  if (!cam) return wanted ? null : ensureStream(inst, user.id, pid);
+  return await registerStream(cam.stream_name, cam._source).catch(() => false) ? cam.stream_name : null;
 }
 
 app.get('/api/camera/mse/:printerId', {
@@ -2238,17 +2242,8 @@ app.post('/api/camera/webrtc/:printerId', async (req, reply) => {
 
   // Local (same-network) printers: the cloud go2rtc can reach them directly.
   // ?stream= picks one of the printer's named cameras (GET /api/cameras); without
-  // it, the printer's own camera.
-  let name = null;
-  const wanted = String(req.query?.stream || '');
-  if (wanted) {
-    let cam = null;
-    try { cam = (await cameraList({ base: engineBase(inst), inst, userId: user.id }, { withSource: true }))
-      .find((c) => c.stream_name === wanted && c.printer_id === Number(pid) && c.enabled); } catch { /* engine down */ }
-    if (cam && await registerStream(cam.stream_name, cam._source).catch(() => false)) name = cam.stream_name;
-  } else {
-    name = await ensureStream(inst, user.id, pid);
-  }
+  // it, the printer's first camera that is switched on (cameraStreamFor).
+  const name = await cameraStreamFor(req, user, pid);
   if (!name) return reply.code(404).send({ error: 'no WebRTC camera stream for this printer' });
   try {
     const res = await fetch(`${GO2RTC_URL}/api/webrtc?src=${encodeURIComponent(name)}`, {
