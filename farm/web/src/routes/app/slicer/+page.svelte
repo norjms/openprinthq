@@ -53,7 +53,40 @@
 
   function onKey(e) { if (e.key === 'Escape') full = false; }
 
+  // The desktop in a window of its own (B49): moved there, not copied, as the desktop takes one screen at a
+  // time. The page shows it again when that window closes.
+  let popup = null;
+  let popped = $state(false);
+  let watchPopup = null;
+  function popOut() {
+    const w = Math.min(1600, window.screen?.availWidth || 1600);
+    const h = Math.min(1000, window.screen?.availHeight || 1000);
+    popup = window.open(info.desktop_url, 'artisanhub-orcaslicer', `popup=yes,width=${w},height=${h}`);
+    if (!popup) return; // a pop-up blocker: the page keeps it
+    popped = true; full = false;
+    clearInterval(watchPopup);
+    watchPopup = setInterval(() => { if (!popup || popup.closed) { popped = false; clearInterval(watchPopup); } }, 1000);
+  }
+  function bringBack() { try { popup?.close(); } catch { /* */ } popped = false; clearInterval(watchPopup); }
+
+  // Its height on the page, dragged at its bottom edge, kept for next time in this browser.
+  let frameHeight = $state(null);
+  const HEIGHT_KEY = 'ahi.slicer.desktopHeight';
+  function rememberHeight(el) {
+    try { const h = Number(localStorage.getItem(HEIGHT_KEY)); if (h >= 320) frameHeight = h; } catch { /* */ }
+    const seen = new ResizeObserver(() => {
+      if (full || !el.offsetHeight) return;
+      try { localStorage.setItem(HEIGHT_KEY, String(el.offsetHeight)); } catch { /* */ }
+    });
+    seen.observe(el);
+    return { destroy: () => seen.disconnect() };
+  }
+
+  // Sent from a file's "Open in OrcaSlicer" (B49): say so while the desktop opens it.
+  let sent = $state('');
+
   onMount(() => {
+    try { sent = new URLSearchParams(window.location.search).get('sent') || ''; } catch { /* */ }
     load();
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -84,11 +117,25 @@
           {#if info.version}<span class="muted small">{info.version}</span>{/if}
         </div>
         <div class="flex center gap">
-          <a class="btn btn-ghost btn-sm" href={info.desktop_url} target="_blank" rel="noopener"><Icon name="external" size={15} />Open in a new tab</a>
-          <button class="btn btn-ghost btn-sm" onclick={() => (full = !full)}><Icon name="expand" size={15} />{full ? 'Exit full screen' : 'Full screen'}</button>
+          {#if popped}
+            <button class="btn btn-ghost btn-sm" onclick={bringBack}><Icon name="back" size={15} />Bring it back here</button>
+          {:else}
+            <button class="btn btn-ghost btn-sm" onclick={popOut} data-testid="pop-out"><Icon name="external" size={15} />Pop out</button>
+            <a class="btn btn-ghost btn-sm" href={info.desktop_url} target="_blank" rel="noopener"><Icon name="external" size={15} />Open in a new tab</a>
+            <button class="btn btn-ghost btn-sm" onclick={() => (full = !full)}><Icon name="expand" size={15} />{full ? 'Exit full screen' : 'Full screen'}</button>
+          {/if}
         </div>
       </div>
-      <iframe title="OrcaSlicer desktop" src={info.desktop_url} allow="clipboard-read; clipboard-write; fullscreen"></iframe>
+      {#if sent}
+        <p class="sent muted small" data-testid="desktop-sent">Opening <b>{sent}</b> in OrcaSlicer. It also stays in Files, From the farm.</p>
+      {/if}
+      {#if popped}
+        <p class="popped muted">OrcaSlicer is open in its own window. Resize it as you like; close it to have it here again.</p>
+      {:else}
+        <div class="frame" use:rememberHeight style={frameHeight && !full ? `height:${frameHeight}px` : ''} data-testid="desktop-frame">
+          <iframe title="OrcaSlicer desktop" src={info.desktop_url} allow="clipboard-read; clipboard-write; fullscreen"></iframe>
+        </div>
+      {/if}
     </div>
   {/if}
 
@@ -154,9 +201,13 @@
 <style>
   .workspace { margin-bottom: 1.2rem; overflow: hidden; }
   .wsbar { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; padding: 0.7rem 1rem; border-bottom: 1px solid var(--ah-row-line); }
-  .workspace iframe { display: block; width: 100%; height: 72vh; min-height: 460px; border: 0; background: var(--ah-solid-panel); }
+  /* Drag the bottom right corner to change its height (B49); the desktop fits itself to the new size. */
+  .workspace .frame { height: 72vh; min-height: 320px; max-height: 2400px; resize: vertical; overflow: hidden; }
+  .workspace iframe { display: block; width: 100%; height: 100%; border: 0; background: var(--ah-solid-panel); }
   .workspace.full { position: fixed; inset: 0; z-index: 200; margin: 0; border-radius: 0; display: flex; flex-direction: column; }
-  .workspace.full iframe { flex: 1; height: auto; min-height: 0; }
+  .workspace.full .frame { flex: 1; height: auto !important; min-height: 0; resize: none; }
+  .workspace .popped { padding: 1.4rem 1rem; margin: 0; }
+  .workspace .sent { padding: 0.5rem 1rem 0; margin: 0; }
   .send { margin-bottom: 1.2rem; }
   .send p { margin: 0.4rem 0; }
   .send code { font-family: var(--ah-font-mono); font-size: 0.88em; padding: 0.1rem 0.35rem;

@@ -1,5 +1,6 @@
 <script>
   import { base as basePath } from '$app/paths';
+  import { goto } from '$app/navigation';
   import Icon from '$lib/components/AppIcon.svelte';
   import PageHead from '$lib/components/PageHead.svelte';
   import { onMount } from 'svelte';
@@ -286,6 +287,24 @@
   }
   function closeSlice() { sliceFile = null; }
 
+  // Open in OrcaSlicer (B49): the file goes to the person's OrcaSlicer desktop, which opens it, and the page
+  // goes to the desktop. Offered when the installer added the desktop.
+  let desktopOpen = $state(false);
+  let opening = $state(false);
+  onMount(async () => {
+    try { desktopOpen = Boolean((await api.slicerInfo())?.desktop_open); } catch { desktopOpen = false; }
+  });
+  async function openInDesktop() {
+    opening = true; sliceErr = null;
+    try {
+      const r = await api.desktopOpen(sliceFile.id, sliceFile.name);
+      const name = r?.sent || sliceFile.name;
+      closeSlice();
+      goto(basePath + '/app/slicer?sent=' + encodeURIComponent(name));
+    } catch (e) { sliceErr = e.message || 'could not send it to OrcaSlicer'; }
+    finally { opening = false; }
+  }
+
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   async function doSlice() {
@@ -566,6 +585,11 @@
           <button class="btn btn-primary" onclick={doSlice} disabled={slicing}>
             {slicing ? 'Slicing' : (addQueueWhenDone ? 'Slice & queue' : 'Slice')}
           </button>
+          {#if desktopOpen}
+            <button class="btn" onclick={openInDesktop} disabled={slicing || opening} data-testid="open-in-orcaslicer">
+              <Icon name="external" size={15} />{opening ? 'Opening' : 'Open in OrcaSlicer'}
+            </button>
+          {/if}
           <button class="btn btn-ghost" onclick={closeSlice} disabled={slicing}>Cancel</button>
         </div>
       {/if}

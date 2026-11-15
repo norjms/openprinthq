@@ -157,6 +157,34 @@
   let existing = $state([]);
   let hiddenCount = $state(0);
 
+  // ---- ArtisanHub Link (B48) ----
+  // A farm away from its printers (a cloud machine) cannot scan their network; ArtisanHub Link at the printers'
+  // site already knows them. Its printers of the chosen kind are offered here, and with a scan's results when
+  // they were found on the network scanned.
+  const LINK_FAMILY = { bambu: 'bambu', klipper: 'moonraker', prusalink: 'prusalink', octoprint: 'octoprint' };
+  let linkAll = $state([]);
+  let linkChecked = $state(false);
+  async function loadLink() {
+    if (linkChecked) return;
+    linkChecked = true;
+    try { existing = await api.printers() || []; } catch { /* keep prior */ }
+    try { const r = await api.linkPrinters(); linkAll = r?.enabled ? (r.printers || []) : []; } catch { linkAll = []; }
+  }
+  const linkFound = $derived(
+    selected ? linkAll.filter((p) => p.family === LINK_FAMILY[selected.ct] && !alreadyAdded(p)) : []
+  );
+  function inSubnet(ip, cidr) {
+    const m = String(cidr || '').trim().match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)\/(\d+)$/);
+    const a = String(ip || '').split('.').map(Number);
+    if (!m || a.length !== 4 || a.some((x) => !(x >= 0 && x <= 255))) return false;
+    const bits = Number(m[5]);
+    if (bits < 0 || bits > 32) return false;
+    const toInt = (q) => ((q[0] << 24) >>> 0) + (q[1] << 16) + (q[2] << 8) + q[3];
+    const mask = bits === 0 ? 0 : (0xffffffff << (32 - bits)) >>> 0;
+    return ((toInt(a) & mask) >>> 0) === ((toInt(m.slice(1, 5).map(Number)) & mask) >>> 0);
+  }
+  const where = (p) => p.link ? `at ${p.site}${p.found_at ? ' (' + p.found_at + ')' : ''}` : p.ip_address;
+
   // ---- sites (local connectors) ----
   let deploymentMode = $state('both');
   let connectors = $state([]);           // [{id,name,online}]
@@ -179,6 +207,7 @@
   }
 
   function pick(v) {
+    loadLink();
     selected = v; err = null; values = {};
     discovered = []; scanned = false; scanErr = null; pickedIp = null;
     scanProgress = { scanned: 0, total: 0 };
@@ -209,8 +238,11 @@
         scanProgress = { scanned: s.scanned || 0, total: s.total || 0 };
         if (!s.running) break;
       }
-      const raw = await (klip ? api.discoveredKlipperPrinters() : api.discoveredPrinters());
-      const fresh = (raw || []).filter((p) => !alreadyAdded(p));
+      const scannedHere = await (klip ? api.discoveredKlipperPrinters() : api.discoveredPrinters());
+      // ArtisanHub Link's printers found on the network scanned, by their address there (B48).
+      const viaLink = linkAll.filter((p) => p.family === LINK_FAMILY[selected.ct] && inSubnet(p.found_at, subnet));
+      const raw = [...(scannedHere || []), ...viaLink];
+      const fresh = raw.filter((p) => !alreadyAdded(p));
       hiddenCount = (raw || []).length - fresh.length;
       discovered = fresh;
     } catch (e) {
@@ -436,7 +468,7 @@
             {#each discovered as p}
               <button type="button" class="foundrow" class:sel={pickedIp === p.ip_address} onclick={() => pickDiscovered(p)}>
                 <span class="fn">{p.name || prettyModel(p.model) || (isKlipper ? 'Klipper printer' : 'Bambu printer')}{#if p.model && !isKlipper}<span class="muted mono"> · {prettyModel(p.model)}</span>{/if}</span>
-                <span class="muted mono tiny">{p.ip_address}{#if !isKlipper} · {p.serial}{/if}</span>
+                <span class="muted mono tiny">{where(p)}{#if !isKlipper && p.serial} · {p.serial}{/if}{#if p.link} · through ArtisanHub Link{/if}</span>
               </button>
             {/each}
           </div>
@@ -450,6 +482,21 @@
             <p class="muted tiny">No printers found. Confirm LAN-only mode is on, or enter details manually below.</p>
           {/if}
         {/if}
+      </div>
+    {/if}
+
+    {#if linkFound.length}
+      <div class="discover" data-testid="link-printers">
+        <div class="dtitle"><b>Printers ArtisanHub Link sees</b></div>
+        <p class="muted tiny">At your printer sites, reached through ArtisanHub Link. Pick one to fill in its details{selected.ct === 'bambu' ? ', then add its access code' : ''}.</p>
+        <div class="found">
+          {#each linkFound as p}
+            <button type="button" class="foundrow" class:sel={pickedIp === p.ip_address} onclick={() => pickDiscovered(p)}>
+              <span class="fn">{p.name || prettyModel(p.model) || 'Printer'}{#if p.model}<span class="muted mono"> · {prettyModel(p.model)}</span>{/if}{#if !p.online}<span class="muted"> · offline</span>{/if}</span>
+              <span class="muted mono tiny">{where(p)}{#if p.serial} · {p.serial}{/if}</span>
+            </button>
+          {/each}
+        </div>
       </div>
     {/if}
 

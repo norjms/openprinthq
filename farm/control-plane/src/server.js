@@ -40,6 +40,8 @@ import { generateKeyPair, encryptPrivate, invalidateSigningCache, ensureKeyPair,
 import { ensureStream, iceServers, turnCredentials, mintTurn, supportsRtsp, GO2RTC_URL } from './go2rtc.js';
 import { setSink, sinkConfigured, shipServer } from './logship.js';
 import { dbg } from './debuglog.js';
+import { fetchLinkPrinters, linkConfigured } from './link.js';
+import { desktopSettings, inboxFor, inboxName, sendToInbox } from './desktop.js';
 import { engineBaseOf, singleTenant, engineUrl } from './tenancy.js';
 import { teamMode, ACCESS_SETTING, parseAccessMap, accessFor, inTeam, allows, onlyPrinter, isAll,
   checkEngineRequest, filterEngineAnswer, filterPrinters, answerHidden } from './team.js';
@@ -287,6 +289,8 @@ app.get('/api/slicer/info', async (req, reply) => {
     desktop_url: DESKTOP_URL ? DESKTOP_URL + '/' : null,
     print_host: PUBLIC_URL ? PUBLIC_URL + '/printhost' : null,
     desktop_print_host: DESKTOP_URL ? (DESKTOP_PRINTHOST || null) : null,
+    // Whether "Open in OrcaSlicer" can send a file to the desktop (B49).
+    desktop_open: Boolean(DESKTOP_URL && desktopSettings().inbox),
     print_host_keys: await countPrintHostTokens(actorOf(user).id, 'slicer').catch(() => 0)
   };
 });
@@ -301,6 +305,42 @@ app.post('/api/slicer/printhost-key', async (req, reply) => {
   const token = randomBytes(24).toString('base64url');
   await createPrintHostToken(actorOf(user).id, token, 'orcaslicer', null);
   return { url: PUBLIC_URL + '/printhost', api_key: token, host_type: 'octoprint' };
+});
+
+// Open in OrcaSlicer (B49, desktop.js): a file from the library goes to the person's OrcaSlicer desktop, which
+// opens it. The desktop is the one the proxy's sign-in says is theirs (X-authentik-username), or the shared one.
+app.post('/api/slicer/desktop-open', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  const settings = desktopSettings();
+  if (!DESKTOP_URL || !settings.inbox) return reply.code(404).send({ error: 'there is no OrcaSlicer desktop here' });
+  const gatewayOk = !GATEWAY_SECRET || req.headers['x-ophq-gateway'] === GATEWAY_SECRET;
+  const login = gatewayOk ? req.headers['x-authentik-username'] : null;
+  const dir = inboxFor(settings, login);
+  if (!dir) return reply.code(409).send({ error: 'no OrcaSlicer desktop of yours to open it in' });
+  const id = Number(req.body?.file_id);
+  if (!Number.isInteger(id) || id <= 0) return reply.code(400).send({ error: 'file_id is required' });
+  const name = inboxName(req.body?.name);
+  if (!name) return reply.code(400).send({ error: 'OrcaSlicer opens 3MF, STL, OBJ, STEP, AMF, SVG and G-code files' });
+  const inst = await getInstanceForUser(user.id);
+  const base = engineBase(inst);
+  if (!base) return reply.code(409).send({ error: 'no running instance for this account' });
+  const r = await fetch(base + '/api/v1/library/files/' + id + '/download');
+  if (!r.ok) return reply.code(r.status === 404 ? 404 : 502).send({ error: 'the library did not give the file' });
+  await sendToInbox(dir, name, Buffer.from(await r.arrayBuffer()));
+  dbg('slicer', 'file sent to the OrcaSlicer desktop', { userId: user.id, fileId: id, shared: !settings.perPerson });
+  return { sent: name, desktop_url: DESKTOP_URL + '/' };
+});
+
+// ArtisanHub Link's printers (B48, link.js), for the add-printer page: what a scan from here cannot find when
+// the farm runs away from its printers. Owners only, as adding printers is.
+app.get('/api/link/printers', async (req, reply) => {
+  const user = await requireOwner(req, reply); if (!user) return;
+  if (!linkConfigured()) return { enabled: false, printers: [] };
+  try {
+    return await fetchLinkPrinters();
+  } catch (e) {
+    return reply.code(502).send({ error: 'ArtisanHub Link did not answer: ' + (e.message || e) });
+  }
 });
 
 // ---- print host (OctoPrint-compatible) ----------------------------------
