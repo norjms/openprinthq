@@ -104,3 +104,14 @@ test('a frame is a JPEG, and its result is the camera health', async () => {
     assert.equal(c.healthOf('never').state, 'UNKNOWN');
   } finally { globalThis.fetch = realFetch; }
 });
+
+test('an added camera on host "printer" follows its printer\'s address; any other host stays', () => {
+  const p = { connection_type: 'octoprint', ip_address: '198.18.0.3' };
+  assert.equal(c.onPrinter('rtsp://printer:8554/mk3s01', p), 'rtsp://198.18.0.3:8554/mk3s01');
+  assert.equal(c.onPrinter('rtsp://user:pw@PRINTER:8554/cam', p), 'rtsp://user:pw@198.18.0.3:8554/cam');
+  assert.equal(c.onPrinter('http://printer/webcam/?action=stream', { ip_address: '198.18.0.9' }),
+    'http://198.18.0.9/webcam/?action=stream');
+  assert.equal(c.onPrinter('rtsp://192.0.2.50:554/s', p), 'rtsp://192.0.2.50:554/s');
+  assert.equal(c.onPrinter('rtsp://printer:8554/cam', { ip_address: '' }), 'rtsp://printer:8554/cam');
+  assert.equal(c.validSource('rtsp://printer:8554/mk3s01'), 'rtsp://printer:8554/mk3s01');
+});

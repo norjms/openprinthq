@@ -108,6 +108,23 @@ export function validSource(url) {
   return u;
 }
 
+/**
+ * An added camera's source with its printer's address put in: a URL whose host is just "printer" (as
+ * rtsp://printer:8554/cam) means the printer's own machine, wherever it is now. So a camera served on the
+ * printer's machine follows the printer, as when ArtisanHub Link gives it a new address; a fixed address would
+ * go stale. Any other host is left as it is.
+ */
+export function onPrinter(source, p) {
+  const host = hostOf(p);
+  if (!host) return source;
+  try {
+    const u = new URL(source);
+    if (u.hostname.toLowerCase() !== 'printer') return source;
+    u.hostname = bracket(host);
+    return u.toString();
+  } catch { return source; }
+}
+
 /** A source as it may be shown: the scheme, host and path, never a user name or password. */
 export function redact(url) {
   try {
@@ -248,7 +265,7 @@ export async function cameraList({ base, inst, userId }, { withSource = false } 
       out.push(entry('engine', engineCameraStreamName(userId, pid), s?.name || defaultName('engine'), e, s ? s.enabled : true));
     }
     for (const r of mine.filter((x) => x.kind === 'extra')) {
-      out.push(entry('extra', extraStreamName(userId, pid, r.id), r.name, r.source, r.enabled, r.id));
+      out.push(entry('extra', extraStreamName(userId, pid, r.id), r.name, onPrinter(r.source, p), r.enabled, r.id));
     }
   }
   return out;
