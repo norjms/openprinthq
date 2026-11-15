@@ -33,6 +33,8 @@
   import EjectPanel from '$lib/components/EjectPanel.svelte';
   import PrinterSettingsModal from '$lib/components/PrinterSettingsModal.svelte';
   import LocatePrinter from '$lib/components/LocatePrinter.svelte';
+  // ArtisanHub Link gives printers at other sites an address in 198.18.0.0/15 (benchmarking, never a home network).
+  const viaLink = (ip) => /^198\.1[89]\./.test(String(ip ?? ''));
   import PageTitle from '$lib/components/PageTitle.svelte';
   import SectionFrame from '$lib/components/SectionFrame.svelte';
   import PrinterLayoutBar from '$lib/components/PrinterLayoutBar.svelte';
@@ -482,7 +484,17 @@
       {/each}
     </div>
   {/if}
-  {#if isOffline && printerForLocate}
+  {#if isOffline && printerForLocate && viaLink(printerForLocate.ip_address)}
+    <!-- A printer at another site, reached through ArtisanHub Link (198.18.0.0/15): its address there is Link's to
+         keep, so there is nothing to scan for here. -->
+    <div class="offline-locate ah-banner" data-testid="offline-link">
+      <Icon name="alert" size={18} />
+      <div class="ol-body">
+        <div class="ol-head"><b>{printerForLocate.name} is offline</b></div>
+        <span class="muted tiny">It is reached through ArtisanHub Link. Check the printer is on, and that ArtisanHub Link is running at its site; the installer's Printers page says whether the site is connected.</span>
+      </div>
+    </div>
+  {:else if isOffline && printerForLocate}
     <div class="offline-locate ah-banner">
       <Icon name="alert" size={18} />
       <div class="ol-body">
