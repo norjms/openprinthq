@@ -54,7 +54,7 @@ Make keys in the hub (Settings, API keys) or with `POST /keys`:
 | Store sources | `GET /sources/status`, `GET /sources/search`, `GET /sources/preview`, `POST /sources/import`, `GET /jobs/{id}` |
 | Quotes | `GET /quotes`, `POST /quotes/{id}/approve`, `POST /quotes/{id}/refuse` |
 | Maintenance | `GET /maintenance`, `POST /maintenance/tasks/{id}/done` |
-| Alarms | `GET /alarms`, `GET /alarms/summary`, `POST /alarms/{id}/ack`, `POST /printers/{name}/alarms/ack` (below) |
+| Alarms | `GET /alarms`, `GET /alarms/summary`, `POST /alarms/{id}/ack`, `/dismiss`, `/suppress`, `POST /printers/{name}/alarms/ack`, `GET /alarm-suppressions`, `DELETE /alarm-suppressions/{id}` (below) |
 | Activity | `GET /events?since_id=` (poll for new hub events) |
 | Push | `GET /push`, `POST /push/test` |
 | Keys | `GET /keys`, `POST /keys`, `DELETE /keys/{id}`, `POST /keys/{id}/unbind` |
@@ -393,9 +393,19 @@ minutes).
 | `GET /alarms/summary` | view | `active`, `unacknowledged`, `by_severity`, `printers` (engine ids) and `printer_names` |
 | `POST /alarms/{id}/ack` | farm | Acknowledge one |
 | `POST /printers/{name}/alarms/ack` | farm | Acknowledge every unacknowledged alarm on that printer |
+| `POST /alarms/{id}/dismiss` | farm | Take it off the active list now (and mark it seen) |
+| `POST /alarms/{id}/suppress` | farm | No more alerts for this code on this printer, and dismiss it; `{"ok", "suppression"}` |
+| `GET /alarm-suppressions?printer=<name>` | view | `{"suppressions": [...]}`, newest first |
+| `DELETE /alarm-suppressions/{id}` | farm | Alert about that code again |
 
 Each alarm: `id`, `printer_id`, `printer_name`, `source` (bambu, klipper, prusalink, octoprint, ...), `code`,
-`severity`, `message`, `first_seen`, `last_seen`, `cleared_at`, `active`, `acknowledged_at`, `acknowledged_by`.
-An alarm clears by itself 30 seconds after the printer stops reporting it; acknowledging only marks it seen. The
+`severity`, `message`, `first_seen`, `last_seen`, `cleared_at`, `active`, `acknowledged_at`, `acknowledged_by`,
+and from engines with suppressions `full_code`, `hms_code` (as Bambu writes it, `HMS_0C00-0100-0002-0017`),
+`dismissed_at`, `dismissed_by`. Each suppression: `id`, `printer_id`, `printer_name`, `source`, `code`, `message`,
+`created_at`, `created_by`.
+An alarm clears by itself 30 seconds after the printer stops reporting it; acknowledging only marks it seen.
+Dismissing hides it until the printer clears it and reports it again. Suppressing stops the engine recording that
+code on that printer, and stops its notifications, until the suppression is removed. Only alarms and suppressions
+on the caller's own printers can be acted on (404 otherwise). The
 web Farm page has the same feed on its Alarms tab (`/api/farm/alarms`, same parameters).
 

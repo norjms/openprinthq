@@ -1317,12 +1317,36 @@ def alarm_summary(db: Session = Depends(get_db), p: Principal = Depends(need("vi
         raise HTTPException(502, str(getattr(e, "message", e))[:300])
 
 
+def _alarm_error(e: Exception, what: str = "Alarm"):
+    if getattr(e, "status", None) == 404:
+        raise HTTPException(404, f"{what} not found")
+    raise HTTPException(502, str(getattr(e, "message", e))[:300])
+
+
+def _my_alarm(db: Session, p: Principal, alarm_id: int) -> dict:
+    """The alarm, if it is on one of the caller's printers (404 otherwise)."""
+    try:
+        a = _farm().alarm(alarm_id)
+    except HTTPException:
+        raise
+    except Exception as e:  # noqa: BLE001
+        _alarm_error(e)
+    if not a or not printer_access.visible_items(db, p, [a]):
+        raise HTTPException(404, "Alarm not found")
+    return a
+
+
+def _alarm_label(a: dict) -> str:
+    return f"{a.get('printer_name') or 'printer ' + str(a.get('printer_id'))} {a.get('code') or ''}".strip()
+
+
 @router.post("/alarms/{alarm_id}/ack")
 def alarm_ack(alarm_id: int, db: Session = Depends(get_db), p: Principal = Depends(need("farm"))):
+    _my_alarm(db, p, alarm_id)
     try:
         out = _farm().ack_alarm(alarm_id, _actor(p))
     except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, str(getattr(e, "message", e))[:300])
+        _alarm_error(e)
     event(db, "farm", f"Alarm {alarm_id} acknowledged (mobile API)", actor=_actor(p))
     db.commit()
     return {"ok": True, **(out or {})}
@@ -1338,3 +1362,59 @@ def printer_alarms_ack(name: str, db: Session = Depends(get_db), p: Principal = 
     event(db, "farm", f"{name}: alarms acknowledged (mobile API)", actor=_actor(p))
     db.commit()
     return {"ok": True, **(out or {})}
+
+
+@router.post("/alarms/{alarm_id}/dismiss")
+def alarm_dismiss(alarm_id: int, db: Session = Depends(get_db), p: Principal = Depends(need("farm"))):
+    """Take the alarm off the active list now. If the printer clears it and reports it again, it shows again."""
+    a = _my_alarm(db, p, alarm_id)
+    try:
+        out = _farm().dismiss_alarm(alarm_id, _actor(p))
+    except Exception as e:  # noqa: BLE001
+        _alarm_error(e)
+    event(db, "farm", f"Alarm dismissed: {_alarm_label(a)} (mobile API)", actor=_actor(p))
+    db.commit()
+    return {"ok": True, **(out or {})}
+
+
+@router.post("/alarms/{alarm_id}/suppress")
+def alarm_suppress(alarm_id: int, db: Session = Depends(get_db), p: Principal = Depends(need("farm"))):
+    """No more alerts for this alarm's code on its printer (no alarm, no notification); dismisses this one."""
+    a = _my_alarm(db, p, alarm_id)
+    try:
+        out = _farm().suppress_alarm(alarm_id, _actor(p))
+    except Exception as e:  # noqa: BLE001
+        _alarm_error(e)
+    event(db, "farm", f"Alerts suppressed: {_alarm_label(a)} (mobile API)", actor=_actor(p))
+    db.commit()
+    return {"ok": True, "suppression": out}
+
+
+@router.get("/alarm-suppressions")
+def alarm_suppressions(printer: str | None = None, db: Session = Depends(get_db),
+                       p: Principal = Depends(need("view"))):
+    """The alarm codes someone chose not to be alerted about, per printer, newest first."""
+    printer_access.require(db, p, printer)
+    try:
+        rows = _farm().alarm_suppressions(printer)
+    except Exception as e:  # noqa: BLE001
+        _alarm_error(e)
+    return {"suppressions": printer_access.visible_items(db, p, rows)}
+
+
+@router.delete("/alarm-suppressions/{suppression_id}")
+def alarm_unsuppress(suppression_id: int, db: Session = Depends(get_db), p: Principal = Depends(need("farm"))):
+    """Alert about that code again."""
+    try:
+        mine = printer_access.visible_items(db, p, _farm().alarm_suppressions())
+        row = next((x for x in mine if x.get("id") == suppression_id), None)
+        if row is None:
+            raise HTTPException(404, "Suppression not found")
+        _farm().unsuppress_alarm(suppression_id)
+    except HTTPException:
+        raise
+    except Exception as e:  # noqa: BLE001
+        _alarm_error(e, "Suppression")
+    event(db, "farm", f"Alerts back on: {_alarm_label(row)} (mobile API)", actor=_actor(p))
+    db.commit()
+    return {"ok": True}

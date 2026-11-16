@@ -21,7 +21,7 @@ class AlarmFake(FakeOPHQ):
 
     def handler(self, request):
         p, m = request.url.path, request.method
-        if p.startswith(API + "/alarms") or "/alarms/ack" in p:
+        if p.startswith(API + "/alarm") or "/alarms/ack" in p:
             self.calls.append((m, p, request.content.decode() or None, dict(request.url.params)))
             if not self.has_alarms:
                 return httpx.Response(404, json={"detail": "Not Found"})
@@ -30,6 +30,16 @@ class AlarmFake(FakeOPHQ):
                                                  "printers": [3]})
             if p == API + "/alarms" and m == "GET":
                 return httpx.Response(200, json=self.alarm_rows)
+            if p == API + "/alarms/7" and m == "GET":
+                return httpx.Response(200, json=self.alarm_rows[0])
+            if p == API + "/alarm-suppressions" and m == "GET":
+                return httpx.Response(200, json=[{"id": 2, "printer_id": 3, "code": "attention"}])
+            if p.endswith("/dismiss"):
+                return httpx.Response(200, json={"dismissed": 1})
+            if p.endswith("/suppress"):
+                return httpx.Response(200, json={"id": 2, "printer_id": 3, "code": "attention"})
+            if m == "DELETE":
+                return httpx.Response(200, json={"removed": 1})
             return httpx.Response(200, json={"acknowledged": 1})
         return super().handler(request)
 
@@ -85,6 +95,20 @@ def test_alarm_feed_capability_and_calls():
     assert c.ack_alarm(7, "james") == {"acknowledged": 1}
     assert c.ack_printer_alarms("MK4S", "james") == {"acknowledged": 1}
     assert fake.calls[-1][1] == API + "/printers/3/alarms/ack"
+
+
+def test_dismiss_and_suppress_calls():
+    fake = AlarmFake()
+    c = _client(fake)
+    assert c.alarm(7)["code"] == "attention"
+    assert c.dismiss_alarm(7, "james") == {"dismissed": 1}
+    assert fake.calls[-1][:3] == ("POST", API + "/alarms/7/dismiss", '{"by":"james"}')
+    assert c.suppress_alarm(7, "james")["id"] == 2
+    assert fake.calls[-1][1] == API + "/alarms/7/suppress"
+    assert c.alarm_suppressions("MK4S")[0]["code"] == "attention"
+    assert fake.calls[-1][3] == {"printer_id": "3"}
+    assert c.unsuppress_alarm(2) == {"removed": 1}
+    assert fake.calls[-1][:2] == ("DELETE", API + "/alarm-suppressions/2")
 
 
 def test_older_engine_has_no_alarms():

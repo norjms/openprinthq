@@ -211,3 +211,18 @@ class FarmBackend:
 
     def ack_printer_alarms(self, printer: str, by: str | None = None) -> dict:
         self._no("alarms")
+
+    def alarm(self, alarm_id: int) -> dict:
+        self._no("alarms")
+
+    def dismiss_alarm(self, alarm_id: int, by: str | None = None) -> dict:
+        self._no("alarms")
+
+    def suppress_alarm(self, alarm_id: int, by: str | None = None) -> dict:
+        self._no("alarms")
+
+    def alarm_suppressions(self, printer: str | None = None) -> list:
+        self._no("alarms")
+
+    def unsuppress_alarm(self, suppression_id: int) -> dict:
+        self._no("alarms")
