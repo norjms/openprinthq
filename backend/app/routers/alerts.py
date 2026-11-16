@@ -38,6 +38,10 @@ class SlotIn(BaseModel):
     color: str = Field(pattern="^#?[0-9A-Fa-f]{6}$")
 
 
+class DoIn(BaseModel):
+    values: dict = Field(default_factory=dict)
+
+
 class WantIn(BaseModel):
     material: str = Field(min_length=2, max_length=40)
     color: str = Field(default="", max_length=9)
@@ -78,6 +82,9 @@ def _context(db: Session, a: Alert) -> dict:
                                                 FarmJob.printer_name == name)).scalars().all()
         return {"kind": kind, "printer": name, "check": farm.check_dict(check, {}) if check else None,
                 "waiting": [farm.job_dict(j, {}) for j in jobs]}
+    if kind == "guided":
+        from ..services import alert_fixes
+        return alert_fixes.describe(db, a)
     return {"kind": None}
 
 
@@ -117,6 +124,22 @@ def _fixed(aid: int, body: FixedIn, db: Session = Depends(get_db), p: Principal 
     event(db, f"alert:{a.id}", f"Alert fixed: {a.title}" + (f" ({body.how})" if body.how else ""), actor=_actor(p))
     db.commit()
     return inbox.view(a, full=True)
+
+
+def _do(aid: int, pid: str, body: DoIn, db: Session = Depends(get_db), p: Principal = Depends(need("farm"))):
+    """Carry out one of the ways a guided fix offers (services/alert_fixes.py)."""
+    from ..services import alert_fixes, printer_access
+    a = _alert(db, aid)
+    name = (a.subject or {}).get("printer")
+    if name and not printer_access.may_use(db, p, name):
+        raise HTTPException(404, "no such alert")
+    try:
+        out = alert_fixes.run(db, a, pid, body.values or {}, _actor(p))
+    except alert_fixes.FixError as e:
+        db.rollback()
+        raise HTTPException(400, str(e)) from None
+    db.commit()
+    return {**out, "alert": {**inbox.view(a, full=True), "context": _context(db, a)}}
 
 
 def _choices(db: Session = Depends(get_db), p: Principal = Depends(need("view"))):
@@ -220,6 +243,7 @@ for _pre in PREFIXES:
     router.add_api_route(_pre + "/alerts/{aid}/dismiss", _dismiss, methods=["POST"])
     router.add_api_route(_pre + "/alerts/{aid}/fixed", _fixed, methods=["POST"])
     router.add_api_route(_pre + "/alerts/{aid}/want-filament", _want, methods=["POST"])
+    router.add_api_route(_pre + "/alerts/{aid}/do/{pid}", _do, methods=["POST"])
     router.add_api_route(_pre + "/farm/jobs/{job_id}/why", _why, methods=["GET"])
     router.add_api_route(_pre + "/farm/jobs/{job_id}/move", _move, methods=["POST"])
     router.add_api_route(_pre + "/farm/printers/{name}/slots/{gid}/filament", _slot, methods=["POST"])

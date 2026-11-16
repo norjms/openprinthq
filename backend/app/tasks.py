@@ -654,7 +654,12 @@ def _farm_sync(db, job):
 def _farm_ready_check(db, job):
     """Jobs waiting on a printer that isn't ready (plate to clear): one alert per printer (services/farm.py)."""
     from .services import farm
-    return farm.ready_alerts(db)
+    out = farm.ready_alerts(db)
+    try:
+        out["back_online"] = farm.offline_resolve(db)
+    except Exception as e:  # noqa: BLE001
+        out["offline_check"] = str(e)[:200]
+    return out
 
 
 @handler("farm.event")

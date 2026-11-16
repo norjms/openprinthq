@@ -161,7 +161,7 @@ def check_plans(db: Session) -> dict:
         opened.append(t.id)
         event(db, "farm", f"Maintenance due on {p.printer_name}: {p.title} ({' and '.join(why)} since last time)")
         notify(db, "maintenance_due", f"{p.printer_name}: {p.title}", f"Due after {' and '.join(why)} since last time.",
-               link=_link())
+               link=_link(), ref=f"alert:maint:{t.id}", subject={"task": t.id, "printer": p.printer_name})
     return {"opened": opened, "farm": linked}
 
 
@@ -187,6 +187,8 @@ def complete(db: Session, t: MaintTask, actor: str, notes: str | None = None, pa
     from .inventory import remove_part
     if t.state != "open":
         raise ValueError(f"this task is already {t.state}")
+    from .alert_inbox import resolve
+    resolve(db, f"alert:maint:{t.id}", "maintenance done")
     use = clean_parts(parts) if parts is not None else list(t.parts or [])
     used, errs = [], []
     for p in use:

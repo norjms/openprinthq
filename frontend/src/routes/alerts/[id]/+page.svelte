@@ -8,6 +8,7 @@
   import Page from '$lib/Page.svelte';
   import FilamentFix from '$lib/alerts/FilamentFix.svelte';
   import ReadyFix from '$lib/alerts/ReadyFix.svelte';
+  import GuidedFix from '$lib/alerts/GuidedFix.svelte';
 
   const id = $derived(page.params.id);
   let a = $state(null);
@@ -46,6 +47,8 @@
         {:else}<FilamentFix alert={a} ctx={a.context} onfixed={done} />{/if}
       {:else if a.context?.kind === 'ready'}
         <ReadyFix alert={a} ctx={a.context} onfixed={done} />
+      {:else if a.context?.kind === 'guided'}
+        <GuidedFix alert={a} ctx={a.context} onchanged={(x) => { a = x; if (x.state !== 'open') fixing = false; }} />
       {/if}
     {/if}
   {/if}

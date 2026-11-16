@@ -177,7 +177,8 @@ def check_late(db: Session) -> dict:
         when = datetime.fromisoformat(o["projected"]).strftime("%a %b %d %H:%M UTC") if o["projected"] else "?"
         notify(db, "order_late", f"Order #{o['number']} may ship late",
                f"Projected to finish printing {when}; due {datetime.fromisoformat(o['due_at']).strftime('%a %b %d')}. "
-               "Prioritise it on the Farm timeline.", link=farm._link("/farm"))
+               "Prioritise it on the Farm timeline.", link=farm._link("/farm"), ref=f"alert:late:{row.id}",
+               subject={"order": row.id})
         sent.append(o["number"])
     return {"alerted": sent, "orders": len(tl["orders"])}
 

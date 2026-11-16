@@ -321,13 +321,16 @@ def attach_order(db: Session, order, line, token: str):
     from .alerts import notify
     notify(db, "quote_ordered", f"Custom print ordered: {q.filename}",
            f"Order #{order.number}: {q.quantity} x {(q.breakdown or {}).get('material', '')} {q.colour or ''}. "
-           "Review it before it prints.", link=settings().public_url.rstrip("/") + "/quotes")
+           "Review it before it prints.", link=settings().public_url.rstrip("/") + "/quotes",
+           ref=f"alert:quote:{q.id}", subject={"quote": q.id, "order": order.id})
 
 
 def approve(db: Session, q: Quote, actor: str) -> Quote:
     if q.status != "ordered":
         raise ValueError(f"this quote is {q.status}, not waiting for review")
     q.status, q.reviewed_by, q.reviewed_at = "approved", actor, now()
+    from .alert_inbox import resolve
+    resolve(db, f"alert:quote:{q.id}", "approved")
     enqueue(db, "quote.produce", ref=f"quote:{q.id}", payload={"quote_id": q.id}, priority=9, max_attempts=2)
     return q
 
@@ -339,6 +342,8 @@ def refuse(db: Session, q: Quote, actor: str, reason: str) -> Quote:
     if not (reason or "").strip():
         raise ValueError("give the customer a reason")
     q.status, q.review_note, q.reviewed_by, q.reviewed_at = "refused", reason.strip()[:1000], actor, now()
+    from .alert_inbox import resolve
+    resolve(db, f"alert:quote:{q.id}", "refused")
     o = db.get(Order, q.order_id) if q.order_id else None
     if o:
         enqueue(db, "quote.refuse_note", ref=f"quote:{q.id}", payload={"quote_id": q.id, "woo_order_id": o.woo_order_id})
