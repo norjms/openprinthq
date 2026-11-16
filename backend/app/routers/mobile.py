@@ -225,6 +225,55 @@ def printer_snapshot(name: str, db: Session = Depends(get_db), p: Principal = De
     return Response(content=data, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
 
 
+LIVE_FILES = re.compile(r"^(playlist\.m3u8|init\.mp4|segment\.(m4s|ts))$")
+LIVE_PARAM = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
+@router.get("/printers/{name}/live.m3u8")
+def printer_live(name: str, db: Session = Depends(get_db), p: Principal = Depends(need("view"))):
+    """The printer's camera as live video: an HLS playlist (fragmented MP4) that iOS and Android players open
+    directly, at the camera's own quality. The farm holds one connection to the camera while it is watched. The
+    playlist's links are relative, so the player fetches the rest from /printers/{name}/hls/ with the same key."""
+    printer_access.require(db, p, name)
+    try:
+        fc = _farm()
+        sources = fc.camera_sources(name)
+    except Exception as e:  # noqa: BLE001
+        _err(e)
+    for src in sources[:2]:
+        body = fc.live_playlist(src)
+        if body:
+            return Response(content=body, media_type="application/vnd.apple.mpegurl",
+                            headers={"Cache-Control": "no-store"})
+    raise HTTPException(404, f"no live video for {name}")
+
+
+@router.get("/printers/{name}/hls/{file}")
+def printer_live_part(name: str, file: str, request: Request, db: Session = Depends(get_db),
+                      p: Principal = Depends(need("view"))):
+    """A part of a live view from /printers/{name}/live.m3u8: its playlist, init segment or media segments."""
+    printer_access.require(db, p, name)
+    if not LIVE_FILES.match(file):
+        raise HTTPException(404, "no such file")
+    params = {}
+    for k in ("id", "n"):
+        v = request.query_params.get(k)
+        if v is None:
+            continue
+        if not LIVE_PARAM.match(v):
+            raise HTTPException(400, f"bad {k}")
+        params[k] = v
+    if "id" not in params:
+        raise HTTPException(400, "id is required")
+    try:
+        part = _farm().live_part(file, params)
+    except Exception as e:  # noqa: BLE001
+        _err(e)
+    if not part:
+        raise HTTPException(404, "this live view has ended; open it again")
+    return Response(content=part[0], media_type=part[1], headers={"Cache-Control": "no-store"})
+
+
 STREAM_SECONDS = 600       # one live view at most; the app reopens it
 
 

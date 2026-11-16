@@ -136,6 +136,14 @@ class FarmBackend:
         """One JPEG from one of camera_sources()."""
         return None
 
+    def live_playlist(self, source: str) -> bytes | None:
+        """Live video of one of camera_sources() as an HLS playlist (fragmented MP4), or None without it."""
+        return None
+
+    def live_part(self, file: str, params: dict) -> tuple[bytes, str] | None:
+        """One part of a live view started by live_playlist(): its playlist, init or media segment."""
+        return None
+
     def filament_assignments(self):
         self._no("filament")
 

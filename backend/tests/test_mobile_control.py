@@ -81,6 +81,20 @@ class FakeEngine:
         self.calls.append((m, p, body, params))
         assert request.headers["authorization"] == "Bearer ophqk_test"
         J = lambda d, s=200: httpx.Response(s, json=d)  # noqa: E731
+        if p == "/api/cameras":
+            return J({"streams": [{"printer_id": 3, "camera_name": "Printer camera", "stream_name": "p3",
+                                   "enabled": True, "state": "ONLINE"}]})
+        if p == "/api/cameras/stream.m3u8":
+            if params.get("src") != "p3":
+                return J({"error": "no such camera"}, 404)
+            return httpx.Response(200, content=b"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=192000\nhls/playlist.m3u8?id=AbC123\n",
+                                  headers={"content-type": "application/vnd.apple.mpegurl"})
+        if p.startswith("/api/cameras/hls/"):
+            if params.get("id") != "AbC123":
+                return J({"error": "go2rtc HTTP 404"}, 404)
+            f = p.rsplit("/", 1)[1]
+            return httpx.Response(200, content=b"seg:" + f.encode() + b":" + params.get("n", "").encode(),
+                                  headers={"content-type": "video/mp4"})
         if p == API + "/printers/":
             return J(self.printers)
         if p.endswith("/status") and p.startswith(API + "/printers/"):
@@ -551,6 +565,26 @@ def test_printer_detail_hardware_and_cover(farm, key):
     assert r.status_code == 200 and r.json()["track_switch"]["mode"] == "installed"
     assert c.get("/api/mobile/v1/printers/Nope/nozzles", headers=H(key)).status_code == 404
     assert c.get("/api/mobile/v1/printers/H2D/loaded", headers=H(key)).json()["printer_name"] == "H2D"
+
+
+def test_live_video_relays_the_farms_hls_with_the_phone_key(farm, key):
+    c = _client()
+    r = c.get("/api/mobile/v1/printers/H2D/live.m3u8", headers=H(key))
+    assert r.status_code == 200 and r.headers["content-type"].startswith("application/vnd.apple.mpegurl")
+    assert b"hls/playlist.m3u8?id=AbC123" in r.content  # relative: the player comes back to /printers/H2D/hls/
+    r = c.get("/api/mobile/v1/printers/H2D/hls/segment.m4s?id=AbC123&n=4", headers=H(key))
+    assert r.status_code == 200 and r.content == b"seg:segment.m4s:4" and r.headers["content-type"] == "video/mp4"
+    assert c.get("/api/mobile/v1/printers/H2D/hls/init.mp4?id=AbC123", headers=H(key)).status_code == 200
+    # Only the live view's own files and parameters reach the farm.
+    assert c.get("/api/mobile/v1/printers/H2D/hls/..%2Fstreams?id=AbC123", headers=H(key)).status_code == 404
+    assert c.get("/api/mobile/v1/printers/H2D/hls/segment.m4s?id=a/b", headers=H(key)).status_code == 400
+    assert c.get("/api/mobile/v1/printers/H2D/hls/segment.m4s", headers=H(key)).status_code == 400
+    assert c.get("/api/mobile/v1/printers/H2D/hls/segment.m4s?id=Gone99", headers=H(key)).status_code == 404
+    # A printer without a camera, and a key that is not the hub's.
+    assert c.get("/api/mobile/v1/printers/MK4S/live.m3u8", headers=H(key)).status_code == 404
+    bogus = {"Authorization": "Bearer ahk_00000000_notakeyatallnotakeyatall"}
+    assert c.get("/api/mobile/v1/printers/H2D/live.m3u8", headers=bogus).status_code == 401
+    assert c.get("/api/mobile/v1/printers/H2D/hls/segment.m4s?id=AbC123", headers=bogus).status_code == 401
 
 
 def test_driver_maps_more_printer_commands(farm):
