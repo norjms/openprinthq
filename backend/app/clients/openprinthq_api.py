@@ -82,7 +82,24 @@ class OpenPrintHQClient(BaseClient, FarmBackend):
     @property
     def CAPABILITIES(self):  # noqa: N802 - same name as the class attribute on FarmBackend
         caps = self.BASE_CAPABILITIES | (self.PARITY_CAPABILITIES if self.engine_parity() else frozenset())
-        return caps | ({"alarms"} if self.engine_alarms() else frozenset())
+        caps = caps | ({"alarms"} if self.engine_alarms() else frozenset())
+        return caps | ({"filament_matching"} if self.engine_filament_matching() else frozenset())
+
+    def engine_filament_matching(self) -> bool:
+        """Whether the engine checks filament against jobs and takes mappings (GET /filament-matching/settings).
+        Cached like engine_alarms()."""
+        now = time.monotonic()
+        if self._fmatch is not None and now - self._fmatch_at < ENGINE_PROBE_TTL:
+            return self._fmatch
+        try:
+            self.e("GET", "/filament-matching/settings", retries=1)
+            self._fmatch, self._fmatch_at = True, now
+        except ApiError as e:
+            if e.status in (404, 405, 422):
+                self._fmatch, self._fmatch_at = False, now
+            else:
+                return False
+        return self._fmatch
 
     def engine_alarms(self) -> bool:
         """Whether the engine has the alarm feed (GET /alarms/summary). Cached like engine_parity()."""
@@ -125,6 +142,8 @@ class OpenPrintHQClient(BaseClient, FarmBackend):
         self._parity_at = 0.0
         self._alarms: bool | None = None
         self._alarms_at = 0.0
+        self._fmatch: bool | None = None
+        self._fmatch_at = 0.0
 
     def e(self, method, path, **kw):
         """One engine call through the control plane."""
@@ -633,6 +652,52 @@ class OpenPrintHQClient(BaseClient, FarmBackend):
         if not self.engine_alarms():
             self._no("alarms")
         return self.e("DELETE", f"/alarm-suppressions/{int(suppression_id)}", retries=1) or {}
+
+    # ---- filament matching (engine /filament-matching) ----
+    def _fm(self):
+        if not self.engine_filament_matching():
+            self._no("filament_matching")
+
+    def filament_settings(self) -> dict:
+        self._fm()
+        return self.e("GET", "/filament-matching/settings") or {}
+
+    def set_filament_settings(self, level: str | None = None, material_groups: dict | None = None) -> dict:
+        self._fm()
+        body = {k: v for k, v in {"level": level, "material_groups": material_groups}.items() if v is not None}
+        return self.e("PUT", "/filament-matching/settings", json=body, retries=1) or {}
+
+    def filament_unmatched(self) -> list:
+        """Waiting jobs that can't start because of filament, with why on each printer (engine ids and names)."""
+        self._fm()
+        return self.e("GET", "/filament-matching/unmatched") or []
+
+    def filament_options(self, job_id, all_printers: bool = False) -> dict:
+        """What a job needs and, per printer, what is loaded and the best mapping."""
+        self._fm()
+        params = {"all_printers": "true"} if all_printers else None
+        return self.e("GET", f"/filament-matching/queue/{int(job_id)}", params=params) or {}
+
+    def filament_map(self, job_id, printer_id: int, slots: list[dict], remember: bool = True,
+                     file_ref=None, by: str | None = None) -> dict:
+        """Pin a job to a printer with the chosen filament mapping (and a resliced file when given)."""
+        self._fm()
+        body = {"printer_id": int(printer_id), "remember": bool(remember), "by": (by or None),
+                "slots": [{"slot_id": int(s["slot_id"]), "global_tray_id": int(s["global_tray_id"])} for s in slots]}
+        if file_ref is not None:
+            body["library_file_id"] = int(file_ref)
+        return self.e("POST", f"/filament-matching/queue/{int(job_id)}/mapping", json=body, retries=1) or {}
+
+    def filament_aliases(self) -> list:
+        self._fm()
+        return self.e("GET", "/filament-matching/aliases") or []
+
+    def delete_filament_alias(self, alias_id: int) -> dict:
+        self._fm()
+        return self.e("DELETE", f"/filament-matching/aliases/{int(alias_id)}", retries=1) or {}
+
+    def set_job_match_level(self, job_id, level: str | None) -> dict:
+        return self.e("PATCH", f"/queue/{int(job_id)}", json={"match_level": level}, retries=1) or {}
 
     # ---- webhooks (a signed webhook notification provider) ----
     def webhooks(self):

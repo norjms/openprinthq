@@ -319,6 +319,12 @@ def _farm_plate_scan(db, job):
     return plate_reslice.scan(db)
 
 
+@handler("farm.filament_reslice")
+def _farm_filament_reslice(db, job):
+    from .services import filament_mapping
+    return filament_mapping.run_reslice(db, job.payload or {})
+
+
 @handler("farm.plate_reslice")
 def _farm_plate_reslice(db, job):
     from .services import plate_reslice

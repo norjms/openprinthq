@@ -380,6 +380,12 @@ JSON `{"detail": "..."}` with 400 (bad input), 401 (key missing, expired, wrong 
 permission), 404, 409 (a conflict; slot assignment adds `allowed`), 413 (too large), 422 (validation), 502 (the farm,
 engine or other app did not answer or refused; the detail carries its message).
 
+## Filament mapping (OpenPrintHQ, capability `filament_matching`)
+
+A waiting job whose filament doesn't match what is loaded: `GET /farm/jobs/{id}/filament`, `POST
+/farm/jobs/{id}/filament`, `PUT /farm/jobs/{id}/match-level`, `GET /farm/filament-matching/unmatched`,
+`/farm/filament-matching/settings` and `/farm/filament-matching/aliases`. Shapes and rules: `docs/filament-mapping.md`.
+
 ## Alarms (OpenPrintHQ, capability `alarms`)
 
 What every printer is reporting right now, from the engine's alarm feed: Bambu HMS codes (fatal, serious,

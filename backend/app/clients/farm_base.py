@@ -31,6 +31,7 @@ CAPABILITIES = {
     "nozzles": "Nozzles per extruder, filament paths and what each slot has loaded",
     "pin_printer": "Send a job to one named printer (Print now on a model's Print tab)",
     "alarms": "The farm's alarm feed: what every printer reports right now, with acknowledgement",
+    "filament_matching": "Checks loaded filament against each job and takes a mapping when it doesn't match",
 }
 
 # Printer commands the hub knows. A printer dict may carry "commands", the ones its connection supports; a
@@ -214,6 +215,32 @@ class FarmBackend:
 
     def alarm(self, alarm_id: int) -> dict:
         self._no("alarms")
+
+    # ---- filament matching ----
+    def filament_settings(self) -> dict:
+        self._no("filament_matching")
+
+    def set_filament_settings(self, level=None, material_groups=None) -> dict:
+        self._no("filament_matching")
+
+    def filament_unmatched(self) -> list:
+        self._no("filament_matching")
+
+    def filament_options(self, job_id, all_printers: bool = False) -> dict:
+        self._no("filament_matching")
+
+    def filament_map(self, job_id, printer_id: int, slots: list[dict], remember: bool = True, file_ref=None,
+                     by: str | None = None) -> dict:
+        self._no("filament_matching")
+
+    def filament_aliases(self) -> list:
+        self._no("filament_matching")
+
+    def delete_filament_alias(self, alias_id: int) -> dict:
+        self._no("filament_matching")
+
+    def set_job_match_level(self, job_id, level) -> dict:
+        self._no("filament_matching")
 
     def dismiss_alarm(self, alarm_id: int, by: str | None = None) -> dict:
         self._no("alarms")

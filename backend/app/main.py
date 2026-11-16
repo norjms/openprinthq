@@ -9,7 +9,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from .config import settings
 from .db import init_db
 from . import auth
-from .routers import account, catalog, ops, sourcing, slicing, mcp, oauth, teams, farm, quotes, plugin, mobile, mobile_control, phone_pages, plates, manual_orders, clipper, setup, nav, shares
+from .routers import account, catalog, ops, sourcing, slicing, mcp, oauth, teams, farm, quotes, plugin, mobile, mobile_control, phone_pages, plates, manual_orders, clipper, setup, nav, shares, filament_mapping
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 
@@ -27,6 +27,7 @@ app.include_router(mcp.router)
 app.include_router(oauth.router)
 app.include_router(teams.router)
 app.include_router(shares.router)     # shared folders for OrcaSlicer in the browser
+app.include_router(filament_mapping.router)   # before farm: /api/farm/jobs/{id}/filament
 app.include_router(farm.router)
 app.include_router(plates.router)
 app.include_router(manual_orders.router)
