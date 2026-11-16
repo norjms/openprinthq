@@ -28,6 +28,7 @@ EVENTS = {
     "alarm": ("Printer alarm", True),
     "printer_offline": ("Printer went offline", False),
     "waiting_filament": ("Job waiting for filament", False),
+    "waiting_ready": ("Job waiting for a printer to be ready (plate to clear)", False),
     "order_printed": ("Order fully printed", False),
     "order_problem": ("Order couldn't go to the farm", True),
     "order_late": ("Order may miss its ship date", False),

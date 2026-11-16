@@ -650,6 +650,13 @@ def _farm_sync(db, job):
     return farm.sync(db)
 
 
+@handler("farm.ready_check")
+def _farm_ready_check(db, job):
+    """Jobs waiting on a printer that isn't ready (plate to clear): one alert per printer (services/farm.py)."""
+    from .services import farm
+    return farm.ready_alerts(db)
+
+
 @handler("farm.event")
 def _farm_event(db, job):
     from .services import farm
@@ -1037,6 +1044,7 @@ every("license.grants_check", 6 * 3600, needs=_has_models)
 every("slicing.check_stale", 6 * 3600, needs=_has_slices)
 every("slicing.nightly", 1800, needs=_has_slices)
 every("farm.sync", 120, needs=_farm)
+every("farm.ready_check", 120, needs=_farm)
 every("farm.sync_locations", 300, needs=_ophq_farm)
 every("farm.plate_scan", 60, needs=_ophq_farm)
 every("maint.check", 3600, needs=_has_maint)

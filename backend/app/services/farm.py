@@ -329,6 +329,56 @@ def sync(db: Session) -> dict:
     return {"jobs": len(seen), "new": new, "changed": changed, "deleted": gone}
 
 
+# ---------- jobs waiting on a printer that isn't ready ----------
+
+READY_GRACE = 300   # seconds a printer stays not ready, with work waiting for it, before the alert
+
+
+def ready_alerts(db: Session, at: float | None = None) -> dict:
+    """Queued jobs waiting on an idle printer that isn't ready: its plate needs clearing, or it was never set Ready.
+    One alert per printer once it has been like that for READY_GRACE; another only after it has been ready again.
+    Jobs for no printer in particular count against every printer when none is ready."""
+    import time
+    from .alerts import notify
+    t = time.time() if at is None else at
+    jobs = db.execute(select(FarmJob).where(FarmJob.status.in_(("queued", "assigned")))).scalars().all()
+    state = dict(setting(db, "farm_ready_alerts") or {})
+    if not jobs:
+        if state:
+            set_setting(db, "farm_ready_alerts", {})
+        return {"waiting": 0}
+    printers = (_client().printers() or {}).get("printers") or []
+    any_ready = any(p.get("ready") for p in printers)
+    sent = []
+    for p in printers:
+        name = p.get("name")
+        if not name or not p.get("online") or p.get("busy") or p.get("ready"):
+            state.pop(name, None)
+            continue
+        waiting = [j for j in jobs if j.printer_name == name]
+        if not waiting and not any_ready:
+            waiting = [j for j in jobs if not j.printer_name]
+        if not waiting:
+            state.pop(name, None)
+            continue
+        st = state.setdefault(name, {"since": t, "sent": False})
+        if st.get("sent") or t - float(st.get("since") or t) < READY_GRACE:
+            continue
+        check = db.execute(select(PlateCheck).where(PlateCheck.printer_name == name,
+                                                    PlateCheck.state == "waiting")).first()
+        why = ("its plate needs clearing. Clear it and pass the plate check." if check
+               else "it isn't set Ready. Clear the plate and set it Ready.")
+        n = len(waiting)
+        first = waiting[0].name or "a job"
+        notify(db, "waiting_ready", f"{name}: {n} job{'s' if n != 1 else ''} waiting",
+               f"{first}{f' and {n - 1} more' if n > 1 else ''} can't start on {name}: {why}",
+               link=_link("/farm"), ref=f"alert:ready:{name}")
+        st["sent"] = True
+        sent.append(name)
+    set_setting(db, "farm_ready_alerts", state)
+    return {"waiting": len(jobs), "alerted": sent}
+
+
 # ---------- plate checks ----------
 
 def _set_ready(c: PlateCheck):
