@@ -304,6 +304,26 @@ class OpenPrintHQClient(BaseClient, FarmBackend):
             return None
         return r.content if r.content[:2] == b"\xff\xd8" else None
 
+    def live_playlist(self, source: str) -> bytes | None:
+        """Live video from one of the farm's camera streams as HLS in fragmented MP4 (OpenPrintHQ's
+        GET /api/cameras/stream.m3u8): go2rtc holds one connection to the camera while it is watched and passes
+        the camera's own H.264 through. None from an OpenPrintHQ without it, or when the camera did not start."""
+        try:
+            r = self.request("GET", "/api/cameras/stream.m3u8", params={"src": source}, retries=1, expect_json=False,
+                             timeout=25)
+        except ApiError:
+            return None
+        return r.content if r.content.startswith(b"#EXTM3U") else None
+
+    def live_part(self, file: str, params: dict) -> tuple[bytes, str] | None:
+        """A playlist, init segment or media segment of a live view (OpenPrintHQ's GET /api/cameras/hls/<file>)."""
+        try:
+            r = self.request("GET", f"/api/cameras/hls/{file}", params=params, retries=1, expect_json=False,
+                             timeout=25)
+        except ApiError:
+            return None
+        return r.content, r.headers.get("content-type") or "application/octet-stream"
+
     def snapshot(self, printer: str) -> bytes | None:
         """One camera frame for a printer, preferring a chamber camera; the engine's own snapshot when OpenPrintHQ
         has no named cameras for it, or none of them answered."""
