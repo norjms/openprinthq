@@ -153,7 +153,7 @@ def test_the_alert_opens_the_mapping_screen(monkeypatch):
     from app.models import FarmJob
     from app.services import alerts, farm
     sent = []
-    monkeypatch.setattr(alerts, "notify", lambda db, kind, title, message, link=None, photo=None, ref=None:
+    monkeypatch.setattr(alerts, "notify", lambda db, kind, title, message, link=None, photo=None, ref=None, subject=None:
                         sent.append((kind, title, message, link)) or ["ntfy"])
     with session_scope() as db:
         fj = FarmJob(external_id="77", name="Gear housing", status="waiting_filament",

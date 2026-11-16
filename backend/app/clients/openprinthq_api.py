@@ -450,6 +450,20 @@ class OpenPrintHQClient(BaseClient, FarmBackend):
         return self.e("PATCH", f"/queue/{int(job_id)}", retries=1,
                       json={"library_file_id": int(file_ref), "printer_id": int(printer_id), "target_model": None})
 
+    def move_job(self, job_id, printer_id: int):
+        """Pin a waiting queue item to another printer (the engine rechecks its filament there)."""
+        return self.e("PATCH", f"/queue/{int(job_id)}", retries=1,
+                      json={"printer_id": int(printer_id), "target_model": None})
+
+    def configure_slot(self, printer: str, ams_id: int, tray_id: int, material: str, color_hex: str,
+                       temp_min: int, temp_max: int):
+        """Tell a Bambu printer what is loaded in an AMS slot (as if set on its screen). The engine picks the
+        generic filament preset for the material."""
+        return self.e("POST", f"/printers/{self.printer_id(printer)}/slots/{int(ams_id)}/{int(tray_id)}/configure",
+                      retries=1, params={"tray_info_idx": "", "tray_type": material, "tray_sub_brands": material,
+                                         "tray_color": f"{color_hex}FF", "nozzle_temp_min": temp_min,
+                                         "nozzle_temp_max": temp_max})
+
     def set_installed_plate(self, printer: str, slicer_type: str | None):
         """The engine's record of the plate on a printer (its plate check compares jobs against it)."""
         return self.e("PATCH", f"/printers/{self.printer_id(printer)}", json={"installed_plate": slicer_type},

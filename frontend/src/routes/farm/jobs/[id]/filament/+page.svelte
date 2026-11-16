@@ -60,6 +60,9 @@
       const r = await attempt(() => api.post(`/api/farm/jobs/${id}/filament`, { printer_id: pid, slots, remember }));
       if (r) {
         done = r;
+        // Opened from an alert's Fix it: that alert is fixed.
+        const aid = page.url.searchParams.get('alert');
+        if (aid) api.post(`/api/alerts/${aid}/fixed`, { how: r.reslice ? `resliced for ${r.printer} with the loaded filament` : `mapped to the filament loaded on ${r.printer}` }).catch(() => {});
         toast(r.reslice ? `Reslicing for ${r.printer}; it starts when the slice is ready` : `Starting on ${r.printer}`);
       }
     } finally { busy = false; }
