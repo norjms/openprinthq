@@ -940,6 +940,28 @@ class Quote(TenantMixin, Base):
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class PushDevice(TenantMixin, Base):
+    """A phone that gets alerts through the push relay (services/push.py). The hub keeps the phone's public key and
+    its push token; the private key never leaves the phone. Removed when the person turns notifications off, removes
+    the phone, or the push service says the token is gone."""
+    __tablename__ = "push_device"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("hub_user.id", ondelete="CASCADE"), index=True)
+    api_key_id: Mapped[int | None] = mapped_column(ForeignKey("api_key.id", ondelete="CASCADE"), index=True)
+    platform: Mapped[str] = mapped_column(String(8))                 # apns | fcm
+    token: Mapped[str] = mapped_column(Text)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    public_key: Mapped[str] = mapped_column(String(64))              # X25519, base64url
+    apns_env: Mapped[str | None] = mapped_column(String(12))         # production | sandbox
+    apns_topic: Mapped[str | None] = mapped_column(String(200))
+    label: Mapped[str | None] = mapped_column(String(120))
+    app_version: Mapped[str | None] = mapped_column(String(40))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error: Mapped[str | None] = mapped_column(String(200))
+
+
 class PhonePairing(Base):
     """A one-time QR pairing for a phone (2026-10-22). The QR carries a random code (only its hash is stored); the phone
     shows what it will connect to, and only when the person confirms does the hub make a key tied to that phone.
