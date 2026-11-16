@@ -223,8 +223,13 @@
           <div class="flex items-center gap-[10px]"><span class="ah-card-title" style="flex:1">{p.name}</span>
             <span class="chip {p.busy ? 'live' : p.online ? 'ok' : ''}">{p.busy ? `Printing${p.progress != null ? ` ${Math.round(p.progress)}%` : ''}` : p.online ? 'Idle' : 'Offline'}</span></div>
           <div class="panel" style="padding:0;overflow:hidden;aspect-ratio:16/9;display:grid;place-items:center">
-            {#if noCam[p.name]}<span class="ah-muted">No camera frame from {p.name}</span>
-            {:else}<img src={shot(p)} alt="Camera on {p.name}" style="width:100%;height:100%;object-fit:cover" onerror={() => (noCam = { ...noCam, [p.name]: true })} />{/if}
+            <!-- The picture keeps reloading every 10 s even after a miss (a camera that is slow to wake fails its
+                 first frame), and shows again as soon as one arrives. -->
+            {#if noCam[p.name]}<span class="ah-muted" style="grid-area:1/1">No camera frame from {p.name}</span>{/if}
+            <img src={shot(p)} alt="Camera on {p.name}" style="grid-area:1/1;width:100%;height:100%;object-fit:cover"
+              style:visibility={noCam[p.name] ? 'hidden' : 'visible'}
+              onload={() => { if (noCam[p.name]) { const { [p.name]: _, ...rest } = noCam; noCam = rest; } }}
+              onerror={() => (noCam = { ...noCam, [p.name]: true })} />
           </div>
         </section>
       {:else}<div class="panel ah-muted" style="padding:24px;grid-column:1/-1;text-align:center">The farm reports no printers yet.</div>{/each}
