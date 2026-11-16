@@ -339,6 +339,7 @@ def ready_alerts(db: Session, at: float | None = None) -> dict:
     One alert per printer once it has been like that for READY_GRACE; another only after it has been ready again.
     Jobs for no printer in particular count against every printer when none is ready."""
     import time
+    from urllib.parse import quote
     from .alerts import notify
     t = time.time() if at is None else at
     jobs = db.execute(select(FarmJob).where(FarmJob.status.in_(("queued", "assigned")))).scalars().all()
@@ -372,7 +373,7 @@ def ready_alerts(db: Session, at: float | None = None) -> dict:
         first = waiting[0].name or "a job"
         notify(db, "waiting_ready", f"{name}: {n} job{'s' if n != 1 else ''} waiting",
                f"{first}{f' and {n - 1} more' if n > 1 else ''} can't start on {name}: {why}",
-               link=_link("/farm"), ref=f"alert:ready:{name}")
+               link=_link(f"/farm/printers/{quote(name, safe='')}/ready"), ref=f"alert:ready:{name}")
         st["sent"] = True
         sent.append(name)
     set_setting(db, "farm_ready_alerts", state)

@@ -19,7 +19,7 @@ def setup(monkeypatch):
     from app.models import FarmJob
     from app.services import alerts, farm
     sent = []
-    monkeypatch.setattr(alerts, "notify", lambda db, kind, title, message, **kw: sent.append((kind, title, message)))
+    monkeypatch.setattr(alerts, "notify", lambda db, kind, title, message, **kw: sent.append((kind, title, message, kw.get("link"))))
     printers = [{"name": "H2D", "online": True, "busy": False, "ready": False},
                 {"name": "H2C", "online": True, "busy": True, "ready": False}]
     monkeypatch.setattr(farm, "_client", lambda: FakeFarm(printers))
@@ -50,7 +50,8 @@ def test_one_alert_after_the_grace_then_quiet(setup):
     assert sent == []                          # not yet: only just not ready
     run(1000 + 301)
     assert len(sent) == 1
-    kind, title, message = sent[0]
+    kind, title, message, link = sent[0]
+    assert link.endswith("/farm/printers/H2D/ready")      # tapping it opens the Get ready screen
     assert kind == "waiting_ready" and title == "H2D: 2 jobs waiting"
     assert "Planter and 1 more" in message and "can't start on H2D" in message
     assert "plate" in message
