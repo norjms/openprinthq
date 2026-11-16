@@ -13,6 +13,7 @@
   import Plates from '$lib/farm/Plates.svelte';
   import Filament from '$lib/farm/Filament.svelte';
   import Alarms from '$lib/farm/Alarms.svelte';
+  import PhonePush from '$lib/farm/PhonePush.svelte';
 
   const VIEWS = { printers: ['Printers', 'Every printer in the farm. Click one to control it.'], cameras: ['Cameras', "A frame from each printer's camera, every 10 seconds."],
     queue: ['Print queue', 'Jobs waiting and printing, as the hub sees them.'], filament: ['Filament', 'What is loaded in each printer, and the spools the farm knows.'] };
@@ -167,6 +168,8 @@
 
   onMount(() => {
     load();
+    if (view === 'settings') loadSettings();     // opened straight at ?view=settings
+    if (view === 'history') loadStats();
     const t = setInterval(load, 30000);
     const c = setInterval(() => { if (view === 'cameras') tick = Date.now(); }, 10000);
     return () => { clearInterval(t); clearInterval(c); };
@@ -448,6 +451,7 @@
         </div>
         <p class="text-xs muted mt-2">Print-finished and print-failed alerts carry a photo from the printer's camera when it has one (ntfy and Telegram; Slack and email get a link).</p>
       </div>
+      <PhonePush />
     {/if}
 
   {:else if view === 'queue' || view === 'history' || view === 'search'}

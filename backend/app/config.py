@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     vision_model: str = "gemma4:e4b"
     vision_timeout: float = 90.0
     upc_lookup_url: str = "https://api.upcitemdb.com/prod/trial/lookup"   # free trial API, no key, about 100 a day
+    # Phone app notifications (services/push.py): the push relay, unless a team sets its own. Empty = none.
+    push_relay_url: str = ""
 
     # People auth (OpenID Connect, for example Authentik)
     oidc_issuer: str = ""

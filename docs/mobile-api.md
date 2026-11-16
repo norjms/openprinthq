@@ -415,3 +415,13 @@ code on that printer, and stops its notifications, until the suppression is remo
 on the caller's own printers can be acted on (404 otherwise). The
 web Farm page has the same feed on its Alarms tab (`/api/farm/alarms`, same parameters).
 
+
+## Phone app notifications (end to end encrypted)
+
+The app's own notifications go through a push relay and are sealed for each phone by the hub; see
+[push.md](push.md) for how, and for the full list of routes. In short, under `/api/mobile/v1/push`:
+`GET /state` (the disclaimer to show before turning them on, your choice, your phones, `mapping_in_app`),
+`POST /devices` (this phone's push token and X25519 public key; turns your notifications on), `PUT /choice`
+(`on`, `off` for email instead, or null), `DELETE /devices/{id}` and `POST /devices/test`. When `mapping_in_app`
+is false the person chose email, and the app opens filament mapping on the hub's web page instead of its own
+screen.

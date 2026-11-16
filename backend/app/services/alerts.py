@@ -1,4 +1,5 @@
-"""Farm alerts: email plus phone channels (ntfy, Telegram, Slack), event rules and quiet hours.
+"""Farm alerts: email, the phone app (push, end to end encrypted: services/push.py) and other phone channels
+(ntfy, Telegram, Slack), event rules and quiet hours.
 
 Channel credentials live in the team's "Phone alerts" connection (encrypted). Which events go to which channel,
 and the quiet hours, are the team setting `alert_rules`. During quiet hours only urgent events go out (or none,
@@ -18,7 +19,7 @@ from ..kv import setting
 
 log = logging.getLogger("hub.alerts")
 
-CHANNELS = ("email", "ntfy", "telegram", "slack")
+CHANNELS = ("push", "email", "ntfy", "telegram", "slack")
 # event: (label, urgent)
 EVENTS = {
     "print_done": ("Print finished, plate waiting", False),
@@ -32,10 +33,18 @@ EVENTS = {
     "order_late": ("Order may miss its ship date", False),
     "maintenance_due": ("Maintenance due", False),
     "quote_ordered": ("Custom print ordered, needs review", False),
+    "print_started": ("Print started", False),
+    "print_paused": ("Print paused", False),
+    "order_new": ("New paid order", False),
+    "order_shipped": ("Order shipped", False),
+    "order_cancelled": ("Order cancelled or refunded", False),
 }
+# Updates rather than problems: only to the phone app by default.
+APP_ONLY = ("print_started", "print_paused", "order_new", "order_shipped", "order_cancelled")
 PHONE = ["ntfy", "telegram", "slack"]
 DEFAULT_RULES = {
-    "events": {k: PHONE + (["email"] if urgent or k == "order_problem" else []) for k, (_, urgent) in EVENTS.items()},
+    "events": {k: ["push"] + ([] if k in APP_ONLY else PHONE + (["email"] if urgent or k == "order_problem" else []))
+               for k, (_, urgent) in EVENTS.items()},
     "quiet_start": "22:00", "quiet_end": "07:00", "timezone": "America/Chicago",
     "quiet_mode": "urgent",       # urgent: only urgent events; none: nothing; off: no quiet hours
 }
@@ -46,9 +55,12 @@ def rules(db) -> dict:
     saved = setting(db, "alert_rules") or {}
     r.update({k: v for k, v in saved.items() if k in DEFAULT_RULES and k != "events"})
     ev = {k: list(v) for k, v in DEFAULT_RULES["events"].items()}
+    known = saved.get("channels_known") or []
     for k, v in (saved.get("events") or {}).items():
         if k in EVENTS:
             ev[k] = [c for c in v if c in CHANNELS]
+            if "push" not in known and "push" not in ev[k]:     # saved before the app channel existed: on
+                ev[k].insert(0, "push")
     r["events"] = ev
     return r
 
@@ -75,6 +87,7 @@ def clean_rules(body: dict) -> dict:
         out["quiet_mode"] = body["quiet_mode"]
     if "events" in body:
         out["events"] = {k: [c for c in (v or []) if c in CHANNELS] for k, v in (body["events"] or {}).items() if k in EVENTS}
+        out["channels_known"] = list(CHANNELS)
     return out
 
 
@@ -94,7 +107,8 @@ def _conn():
 
 def configured() -> list[str]:
     c = _conn()
-    out = ["email"] if settings().smtp_host else []
+    # The app channel is always there: services/push.py sends to whoever turned it on, or emails them instead.
+    out = ["push"] + (["email"] if settings().smtp_host else [])
     if c.get("ntfy_url"):
         out.append("ntfy")
     if c.get("telegram_bot_token") and c.get("telegram_chat_id"):
@@ -118,7 +132,8 @@ def notify(db, kind: str, title: str, message: str, link: str | None = None, pho
     if not chans:
         return []
     enqueue(db, "alerts.send", ref=ref, payload={"kind": kind, "title": title, "message": message, "link": link,
-                                                 "photo": photo, "channels": chans, "urgent": urgent}, max_attempts=2)
+                                                 "photo": photo, "channels": chans, "urgent": urgent, "ref": ref},
+            max_attempts=2)
     return chans
 
 
@@ -137,6 +152,10 @@ def deliver(db, p: dict) -> dict:
     out = {}
     for ch in p.get("channels") or []:
         try:
+            if ch == "push":
+                from .push import deliver as push_deliver
+                out[ch] = push_deliver(db, p)
+                continue
             if ch == "email":
                 from ..config import settings
                 from ..tasks import send_mail
@@ -153,7 +172,7 @@ def deliver(db, p: dict) -> dict:
         except Exception as e:  # noqa: BLE001
             out[ch] = f"failed: {str(e)[:200]}"
             log.warning("alert via %s failed: %s", ch, e)
-    bad = {k: v for k, v in out.items() if v != "sent"}
+    bad = {k: v for k, v in out.items() if v != "sent" and k != "push" or (k == "push" and v.startswith("failed"))}
     if bad:
         event(db, "farm", f"Alert '{title}' not delivered: {bad}", level="warn")
     return out
@@ -198,7 +217,7 @@ def _slack(c, title, msg, link):
 
 def send_test() -> tuple[bool, str]:
     from ..db import SessionLocal
-    chans = [c for c in configured() if c != "email"]
+    chans = [c for c in configured() if c not in ("email", "push")]
     if not chans:
         return False, "no phone channel is filled in"
     db = SessionLocal()

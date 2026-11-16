@@ -154,6 +154,15 @@ def transition(db: Session, fj: FarmJob, prev: str | None, live: bool):
             if c.external_job_id != fj.external_id and _aware(c.created_at) <= since:
                 c.state, c.note = "skipped", "The plate was cleared in the farm and another print started"
                 c.checked_at, c.checked_by = now(), "farm"
+    if fj.status in ("printing", "paused") and prev is not None and (live or prev in ACTIVE):
+        from .alerts import notify
+        who = fj.printer_name or "A printer"
+        if fj.status == "printing" and prev not in ("paused", "resuming"):
+            notify(db, "print_started", f"{who} started {fj.name or 'a print'}", "", link=_link("/farm"),
+                   ref=f"alert:job:{fj.external_id}")
+        elif fj.status == "paused":
+            notify(db, "print_paused", f"{who} paused {fj.name or 'a print'}", fj.waiting_reason or "",
+                   link=_link("/farm"), ref=f"alert:job:{fj.external_id}")
     if fj.status == "printing":
         set_setting(db, "farm_last_start", now().isoformat())
         if live or prev is not None:     # which spools it is using, while they are still loaded
@@ -616,8 +625,30 @@ def routing(db: Session) -> str:
     return r if r in ROUTING else "off"
 
 
+SHIPPED = ("completed", "shipped", "fulfilled")
+GONE = ("cancelled", "refunded")
+
+
+def order_alert(db: Session, order: Order, prev_status: str | None):
+    """New paid orders, shipped orders and cancelled ones, for the phone app (and any channel set for them)."""
+    if order.is_test or prev_status == order.status:
+        return
+    from .alerts import notify
+    who = f"Order #{order.number}" + (f" from {order.customer}" if order.customer else "")
+    money = f"{order.total:.2f} {order.currency or ''}".strip() if order.total is not None else ""
+    if order.status == "processing" and prev_status in (None, "pending", "on-hold"):
+        notify(db, "order_new", f"New order #{order.number}", ", ".join(x for x in (order.customer, money) if x),
+               link=_link("/orders"), ref=f"alert:order:{order.id}")
+    elif order.status in SHIPPED and prev_status not in SHIPPED:
+        notify(db, "order_shipped", f"{who} shipped", "", link=_link("/orders"), ref=f"alert:order:{order.id}")
+    elif order.status in GONE and prev_status not in GONE and prev_status is not None:
+        notify(db, "order_cancelled", f"{who} {order.status}", money, link=_link("/orders"),
+               ref=f"alert:order:{order.id}")
+
+
 def on_order(db: Session, order: Order, prev_status: str | None):
     """Called whenever an order is stored: route it, or pull its jobs when it is cancelled."""
+    order_alert(db, order, prev_status)
     if routing(db) != "hub":
         return
     if order.is_test and not setting(db, "route_test_orders", False):
