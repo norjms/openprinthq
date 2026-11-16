@@ -353,12 +353,19 @@ def _pick_filament(prof: PrinterProfile, material: str, process: str | None) -> 
     return sorted(gen or cands, key=len)[0]
 
 
-def filament_spec(model: Model, prof: PrinterProfile, process: str | None) -> tuple[list[str], list[str | None], str, list[int]]:
+def filament_spec(model: Model, prof: PrinterProfile, process: str | None,
+                  override: list[dict] | None = None) -> tuple[list[str], list[str | None], str, list[int]]:
     """Per colour: the filament preset, its colour, and which tool prints it.
-    Colour n prints on tool n; a printer with fewer tools than colours reuses tools (filament changes)."""
+    Colour n prints on tool n; a printer with fewer tools than colours reuses tools (filament changes).
+    override: [{material, color}] per colour, the filament someone mapped each colour to (filament mapping)."""
+    from types import SimpleNamespace
     tools = ensure_tools(prof)
     mapping = prof.filament_presets or {}
     slots = _slots(model)
+    if override:
+        slots = [SimpleNamespace(material=o.get("material") or (slots[i].material if i < len(slots) else None),
+                                 color_hex=o.get("color") or (slots[i].color_hex if i < len(slots) else None))
+                 for i, o in enumerate(override)]
     names, colors, tool_of = [], [], []
     for i, b in enumerate(slots or [None]):
         tool = tools[i % len(tools)] if tools else {}
@@ -440,7 +447,7 @@ def build_spec(db: Session, model: Model, prof: PrinterProfile, opts: dict, sour
     if opts.get("layer_height"):
         lh = float(opts["layer_height"])
     process = _process_for(prof, lh, opts.get("process"))
-    names, colors, material, tool_of = filament_spec(model, prof, process)
+    names, colors, material, tool_of = filament_spec(model, prof, process, opts.get("filament_materials"))
     cap = project_filament_count(sources)
     if cap and len(names) > cap:
         # the designer's project prints with fewer filaments than the materials list names (their note often lists
@@ -516,6 +523,8 @@ def inputs_hash(model: Model, prof: PrinterProfile, opts: dict, engine_version: 
                                           "ignore_designer", "orientation", "file_id")},
         # a plate reslice hashes its plate; the usual slice leaves the key out so its hash is unchanged
         **({"bed_type": opts["bed_type"]} if opts.get("bed_type") else {}),
+        # a filament-mapping reslice hashes the filaments it was given
+        **({"filament_materials": opts["filament_materials"]} if opts.get("filament_materials") else {}),
         "engine": engine_version,
     }
     return hashlib.sha256(json.dumps(data, sort_keys=True, default=str).encode()).hexdigest()

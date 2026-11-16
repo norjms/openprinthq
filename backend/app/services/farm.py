@@ -160,8 +160,11 @@ def transition(db: Session, fj: FarmJob, prev: str | None, live: bool):
             enqueue(db, "filament.snapshot", ref=f"fsnap:{fj.id}", payload={"job_id": fj.id}, delay=5)
     if fj.status == "waiting_filament" and prev is not None and prev != "waiting_filament":
         from .alerts import notify
-        notify(db, "waiting_filament", f"Waiting for filament: {fj.name}", fj.waiting_reason or "", link=_link(),
-               ref=f"alert:wf:{fj.external_id}")
+        unmatched = (fj.waiting_reason or "").startswith("Filament doesn't match")
+        notify(db, "waiting_filament",
+               f"{'Filament needs mapping' if unmatched else 'Waiting for filament'}: {fj.name}",
+               (fj.waiting_reason or "") + (" Tap to choose which loaded filament prints it." if unmatched else ""),
+               link=_link(f"/farm/jobs/{fj.external_id}/filament"), ref=f"alert:wf:{fj.external_id}")
     if fj.status in DONE and prev not in DONE:
         fresh = live or prev is not None or (fj.completed_at and now() - fj.completed_at < RECENT)
         started = fj.status != "cancelled" or fj.started_at is not None or prev in ("printing", "paused", "resuming")
