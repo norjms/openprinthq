@@ -38,6 +38,7 @@
   const initials = $derived((me?.user?.name || me?.user?.username || '?').split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase());
   // What needs someone's attention, for the bell: the same counts the sidebar badges carry, with where to go.
   const alerts = $derived([
+    [count('alerts_open'), 'alerts open', '/alerts'],
     [count('plate_checks'), 'plate checks waiting', '/farm'],
     [count('jobs_failed'), 'failed sync jobs', '/sync'],
     [count('quotes_waiting'), 'quotes waiting for a reply', '/quotes'],
@@ -109,6 +110,7 @@
           <div class="ah-glass ah-menu" role="menu">
             {#each alerts as [n, label, href]}<a {href} onclick={() => (bell = false)}><span class="chip warn">{n}</span>{label}</a>
             {:else}<span class="ah-muted" style="padding:8px 10px">Nothing needs you right now.</span>{/each}
+            <a href="/alerts" onclick={() => (bell = false)}>All alerts</a>
           </div>
         {/if}
       </div>

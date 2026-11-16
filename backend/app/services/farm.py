@@ -173,7 +173,11 @@ def transition(db: Session, fj: FarmJob, prev: str | None, live: bool):
         notify(db, "waiting_filament",
                f"{'Filament needs mapping' if unmatched else 'Waiting for filament'}: {fj.name}",
                (fj.waiting_reason or "") + (" Tap to choose which loaded filament prints it." if unmatched else ""),
-               link=_link(f"/farm/jobs/{fj.external_id}/filament"), ref=f"alert:wf:{fj.external_id}")
+               link=_link(f"/farm/jobs/{fj.external_id}/filament"), ref=f"alert:wf:{fj.external_id}",
+               subject={"job": fj.external_id, "printer": fj.printer_name})
+    if prev == "waiting_filament" and fj.status != "waiting_filament":
+        from .alert_inbox import resolve
+        resolve(db, f"alert:wf:{fj.external_id}", "the job is no longer waiting for filament")
     if fj.status in DONE and prev not in DONE:
         fresh = live or prev is not None or (fj.completed_at and now() - fj.completed_at < RECENT)
         started = fj.status != "cancelled" or fj.started_at is not None or prev in ("printing", "paused", "resuming")
@@ -344,8 +348,11 @@ def ready_alerts(db: Session, at: float | None = None) -> dict:
     t = time.time() if at is None else at
     jobs = db.execute(select(FarmJob).where(FarmJob.status.in_(("queued", "assigned")))).scalars().all()
     state = dict(setting(db, "farm_ready_alerts") or {})
+    from .alert_inbox import resolve
     if not jobs:
         if state:
+            for name in state:
+                resolve(db, f"alert:ready:{name}", "no jobs are waiting")
             set_setting(db, "farm_ready_alerts", {})
         return {"waiting": 0}
     printers = (_client().printers() or {}).get("printers") or []
@@ -354,13 +361,15 @@ def ready_alerts(db: Session, at: float | None = None) -> dict:
     for p in printers:
         name = p.get("name")
         if not name or not p.get("online") or p.get("busy") or p.get("ready"):
-            state.pop(name, None)
+            if state.pop(name, None) is not None and p.get("ready"):
+                resolve(db, f"alert:ready:{name}", f"{name} is ready")
             continue
         waiting = [j for j in jobs if j.printer_name == name]
         if not waiting and not any_ready:
             waiting = [j for j in jobs if not j.printer_name]
         if not waiting:
-            state.pop(name, None)
+            if state.pop(name, None) is not None:
+                resolve(db, f"alert:ready:{name}", "no jobs are waiting for it")
             continue
         st = state.setdefault(name, {"since": t, "sent": False})
         if st.get("sent") or t - float(st.get("since") or t) < READY_GRACE:
@@ -373,7 +382,8 @@ def ready_alerts(db: Session, at: float | None = None) -> dict:
         first = waiting[0].name or "a job"
         notify(db, "waiting_ready", f"{name}: {n} job{'s' if n != 1 else ''} waiting",
                f"{first}{f' and {n - 1} more' if n > 1 else ''} can't start on {name}: {why}",
-               link=_link(f"/farm/printers/{quote(name, safe='')}/ready"), ref=f"alert:ready:{name}")
+               link=_link(f"/farm/printers/{quote(name, safe='')}/ready"), ref=f"alert:ready:{name}",
+               subject={"printer": name, "jobs": [j.external_id for j in waiting]})
         st["sent"] = True
         sent.append(name)
     set_setting(db, "farm_ready_alerts", state)

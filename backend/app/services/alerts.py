@@ -120,10 +120,14 @@ def configured() -> list[str]:
 
 
 def notify(db, kind: str, title: str, message: str, link: str | None = None, photo: str | None = None,
-           ref: str | None = None) -> list[str]:
-    """Queue an alert. Answers the channels it will go to (empty: muted, quiet hours or nothing configured)."""
+           ref: str | None = None, subject: dict | None = None) -> list[str]:
+    """Record an alert in the inbox (services/alert_inbox.py) and queue it to its channels. Answers the channels it
+    will go to (empty: muted, quiet hours or nothing configured); the inbox gets it either way."""
     if kind not in EVENTS:
         raise ValueError(kind)
+    from . import alert_inbox
+    rec = alert_inbox.record(db, kind, title, message, link, ref, subject, EVENTS[kind][1])
+    link = settings().public_url.rstrip("/") + f"/alerts/{rec.id}"
     r = rules(db)
     chans = [c for c in r["events"].get(kind, []) if c in configured()]
     urgent = EVENTS[kind][1]
@@ -133,7 +137,8 @@ def notify(db, kind: str, title: str, message: str, link: str | None = None, pho
     if not chans:
         return []
     enqueue(db, "alerts.send", ref=ref, payload={"kind": kind, "title": title, "message": message, "link": link,
-                                                 "photo": photo, "channels": chans, "urgent": urgent, "ref": ref},
+                                                 "photo": photo, "channels": chans, "urgent": urgent, "ref": ref,
+                                                 "alert_id": rec.id},
             max_attempts=2)
     return chans
 

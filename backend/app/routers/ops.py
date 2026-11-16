@@ -119,6 +119,7 @@ def stats(db: Session = Depends(get_db), _: Principal = Depends(need("read"))):
             "jobs_pending": queued, "live_out_of_supplies": blocked,
             "licenses_attention": _license_attention(db),
             "plate_checks": _plate_checks(db),
+            "alerts_open": _alerts_open(db),
             "quotes_waiting": _quotes_waiting(db),
             "images": db.execute(select(func.count(Image.id))).scalar()}
 
@@ -126,6 +127,11 @@ def stats(db: Session = Depends(get_db), _: Principal = Depends(need("read"))):
 def _quotes_waiting(db: Session) -> int:
     from ..models import Quote
     return db.execute(select(func.count(Quote.id)).where(Quote.status == "ordered")).scalar() or 0
+
+
+def _alerts_open(db: Session) -> int:
+    from ..services.alert_inbox import counts
+    return counts(db)["open"]
 
 
 def _plate_checks(db: Session) -> int:

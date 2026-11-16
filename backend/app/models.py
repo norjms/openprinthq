@@ -940,6 +940,27 @@ class Quote(TenantMixin, Base):
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class Alert(TenantMixin, Base):
+    """One problem or update the hub raised (services/alert_inbox.py): opened from a notification, an email or the
+    dashboard, then fixed or dismissed. `ref` ties repeats of the same problem to one record."""
+    __tablename__ = "alert"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kind: Mapped[str] = mapped_column(String(40), index=True)
+    ref: Mapped[str | None] = mapped_column(String(200), index=True)
+    title: Mapped[str] = mapped_column(String(300))
+    message: Mapped[str | None] = mapped_column(Text)
+    link: Mapped[str | None] = mapped_column(String(500))
+    subject: Mapped[dict | None] = mapped_column(JSON)        # what it is about: {"job": ..} or {"printer": ..}
+    urgent: Mapped[bool] = mapped_column(Boolean, default=False)
+    state: Mapped[str] = mapped_column(String(12), default="open", index=True)   # open | fixed | dismissed | resolved
+    count: Mapped[int] = mapped_column(Integer, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    closed_by: Mapped[str | None] = mapped_column(String(150))
+    fix: Mapped[str | None] = mapped_column(String(300))
+
+
 class PushDevice(TenantMixin, Base):
     """A phone that gets alerts through the push relay (services/push.py). The hub keeps the phone's public key and
     its push token; the private key never leaves the phone. Removed when the person turns notifications off, removes

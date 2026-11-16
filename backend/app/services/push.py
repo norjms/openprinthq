@@ -78,8 +78,10 @@ def seal(device_public: str, message: dict, *, _eph: X25519PrivateKey | None = N
     return b64e(b"\x01" + eph_pub + nonce + ct)
 
 
-def message(kind: str, title: str, body: str, link: str | None, ref: str | None) -> dict:
+def message(kind: str, title: str, body: str, link: str | None, ref: str | None, alert_id: int | None = None) -> dict:
     m = {"k": kind, "t": (title or "")[:200], "b": body or "", "l": link or "", "id": ref or "", "ts": int(time.time())}
+    if alert_id:
+        m["a"] = alert_id
     while len(json.dumps(m, separators=(",", ":")).encode()) > MAX_PLAIN and m["b"]:
         m["b"] = m["b"][: max(0, len(m["b"]) - 100)].rstrip() + "…" if len(m["b"]) > 100 else ""
     return m
@@ -230,8 +232,10 @@ def deliver(db: Session, p: dict) -> str:
     nothing reached anyone."""
     url, m = relay_url(db), mode(db)
     title, body, link = p.get("title") or "", p.get("message") or "", p.get("link")
-    msg = message(p.get("kind") or "", title, body, link, p.get("ref"))
-    users = _members(db)
+    msg = message(p.get("kind") or "", title, body, link, p.get("ref"), p.get("alert_id"))
+    from .alert_inbox import wants
+    kind = p.get("kind") or ""
+    users = [u for u in _members(db) if not kind or kind == "test" or wants(u, kind)]
     on = {u.id for u in users if choice(u) == "on"}
     email_to = {u.email for u in users if u.email and choice(u) == "off"}
     sent = gone = failed = 0
