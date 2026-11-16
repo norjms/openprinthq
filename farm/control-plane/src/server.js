@@ -2294,24 +2294,75 @@ app.get('/api/cameras', async (req, reply) => {
 // One JPEG from one of the caller's own camera streams. Only streams in the
 // caller's list are served, so this can never be used to make go2rtc pull an
 // arbitrary source.
-app.get('/api/cameras/frame.jpeg', async (req, reply) => {
-  const user = await callerFor(req, reply, 'read'); if (!user) return;
+// The caller's own camera called `src`, registered with go2rtc, or null after
+// answering the request. Only streams in the caller's list are served, so no
+// endpoint can make go2rtc pull an arbitrary source.
+async function ownCamera(req, reply, user) {
   const src = String(req.query?.src || '');
-  if (!/^[a-z0-9_]{1,80}$/i.test(src)) return reply.code(400).send({ error: 'src is a stream name from /api/cameras' });
+  if (!/^[a-z0-9_]{1,80}$/i.test(src)) { reply.code(400).send({ error: 'src is a stream name from /api/cameras' }); return null; }
   const ctx = await cameraCtx(user);
-  if (!ctx.base) return reply.code(409).send({ error: 'no running instance for this account' });
+  if (!ctx.base) { reply.code(409).send({ error: 'no running instance for this account' }); return null; }
   let mine;
   try { mine = (await cameraList(ctx, { withSource: true })).find((c) => c.stream_name === src); }
-  catch (e) { return reply.code(502).send({ error: 'engine unreachable: ' + e.message }); }
-  if (!mine || (mine.printer_id != null && !allows(await printerAccess(req.apiKey ? null : req, user), mine.printer_id))) return reply.code(404).send({ error: 'no such camera' });
-  if (!mine.enabled) return reply.code(409).send({ error: 'this camera is switched off' });
+  catch (e) { reply.code(502).send({ error: 'engine unreachable: ' + e.message }); return null; }
+  if (!mine || (mine.printer_id != null && !allows(await printerAccess(req.apiKey ? null : req, user), mine.printer_id))) { reply.code(404).send({ error: 'no such camera' }); return null; }
+  if (!mine.enabled) { reply.code(409).send({ error: 'this camera is switched off' }); return null; }
   // Registering is idempotent and cheap, and covers a go2rtc that restarted since the last sync.
   await registerStream(mine.stream_name, mine._source).catch(() => {});
+  return mine;
+}
+
+// One JPEG from one of the caller's own camera streams.
+app.get('/api/cameras/frame.jpeg', async (req, reply) => {
+  const user = await callerFor(req, reply, 'read'); if (!user) return;
+  const mine = await ownCamera(req, reply, user); if (!mine) return;
   const jpeg = await cameraFrame(mine.stream_name);
   if (!jpeg) return reply.code(502).send({ error: 'the camera did not return a frame' });
   reply.header('content-type', 'image/jpeg');
   reply.header('cache-control', 'no-cache, no-store, must-revalidate');
   return reply.send(jpeg);
+});
+
+// Live video of one of the caller's own cameras as HLS in fragmented MP4, which
+// iOS and Android play natively at the camera's own quality: go2rtc holds one
+// connection to the camera while anyone watches and passes the H.264 through.
+// The playlist's links are relative (hls/playlist.m3u8?id=...), so a player
+// that opened /api/cameras/stream.m3u8 fetches them from /api/cameras/hls/.
+app.get('/api/cameras/stream.m3u8', async (req, reply) => {
+  const user = await callerFor(req, reply, 'read'); if (!user) return;
+  const mine = await ownCamera(req, reply, user); if (!mine) return;
+  let r;
+  try { r = await fetch(`${GO2RTC_URL}/api/stream.m3u8?src=${encodeURIComponent(mine.stream_name)}&mp4`, { signal: AbortSignal.timeout(20000) }); }
+  catch (e) { return reply.code(502).send({ error: 'the camera did not start: ' + e.message }); }
+  if (!r.ok) return reply.code(502).send({ error: `the camera did not start (go2rtc HTTP ${r.status})` });
+  reply.header('content-type', 'application/vnd.apple.mpegurl');
+  reply.header('cache-control', 'no-cache, no-store, must-revalidate');
+  return reply.send(Buffer.from(await r.arrayBuffer()));
+});
+
+// The parts of a live view: its playlist, init segment and media segments.
+// go2rtc names each viewer's session with an unguessable id; only these files
+// and only id/n query parameters are passed on.
+const HLS_FILES = /^(playlist\.m3u8|init\.mp4|segment\.(m4s|ts))$/;
+app.get('/api/cameras/hls/:file', async (req, reply) => {
+  const user = await callerFor(req, reply, 'read'); if (!user) return;
+  const file = String(req.params.file || '');
+  if (!HLS_FILES.test(file)) return reply.code(404).send({ error: 'no such file' });
+  const q = new URLSearchParams();
+  for (const k of ['id', 'n']) {
+    const v = req.query?.[k];
+    if (v == null) continue;
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(String(v))) return reply.code(400).send({ error: `bad ${k}` });
+    q.set(k, String(v));
+  }
+  if (!q.get('id')) return reply.code(400).send({ error: 'id is required' });
+  let r;
+  try { r = await fetch(`${GO2RTC_URL}/api/hls/${file}?${q}`, { signal: AbortSignal.timeout(20000) }); }
+  catch (e) { return reply.code(502).send({ error: 'go2rtc unreachable: ' + e.message }); }
+  if (!r.ok) return reply.code(r.status === 404 ? 404 : 502).send({ error: `go2rtc HTTP ${r.status}` });
+  reply.header('content-type', r.headers.get('content-type') || (file.endsWith('.m3u8') ? 'application/vnd.apple.mpegurl' : 'video/mp4'));
+  reply.header('cache-control', 'no-cache, no-store, must-revalidate');
+  return reply.send(Buffer.from(await r.arrayBuffer()));
 });
 
 app.post('/api/cameras', async (req, reply) => {
