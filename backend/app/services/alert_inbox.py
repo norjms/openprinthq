@@ -22,8 +22,11 @@ GROUPS = [
     ("orders", "Orders", ["order_new", "order_printed", "order_shipped", "order_cancelled"]),
 ]
 INFO = {"print_started", "print_paused", "order_new", "order_printed", "order_shipped", "order_cancelled"}
-# Alerts with a guided fix in the app and on the web; the others offer "Go to it".
-FIXES = {"waiting_filament": "filament", "waiting_ready": "ready"}
+# Alerts with a guided fix in the app and on the web; the others offer "Go to it". Filament and ready have their
+# own screens in the clients; "guided" ones are described by the hub (services/alert_fixes.py).
+FIXES = {"waiting_filament": "filament", "waiting_ready": "ready",
+         **{k: "guided" for k in ("print_done", "print_failed", "failure_detected", "alarm", "printer_offline",
+                                  "maintenance_due", "order_problem", "order_late", "quote_ordered")}}
 INFO_TTL = timedelta(days=1)
 OPEN_TTL = timedelta(days=14)
 
@@ -67,6 +70,12 @@ def close(db: Session, a: Alert, state: str, actor: str | None = None, how: str 
 def resolve(db: Session, ref: str, how: str):
     """The problem behind `ref` has gone away: close its open alert."""
     for a in db.execute(select(Alert).where(Alert.ref == ref, Alert.state == "open")).scalars():
+        close(db, a, "resolved", "hub", how)
+
+
+def resolve_prefix(db: Session, prefix: str, how: str):
+    """Close every open alert whose ref starts with `prefix` (all of a printer's alarms, say)."""
+    for a in db.execute(select(Alert).where(Alert.ref.startswith(prefix), Alert.state == "open")).scalars():
         close(db, a, "resolved", "hub", how)
 
 

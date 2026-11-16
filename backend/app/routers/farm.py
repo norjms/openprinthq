@@ -423,6 +423,8 @@ def maint_task_dismiss(tid: int, db: Session = Depends(get_db), p: Principal = D
         raise HTTPException(400, f"this task is already {t.state}")
     t.state, t.done_at, t.done_by = "dismissed", maintenance.now(), _actor(p)
     maintenance._release(db, t)
+    from ..services.alert_inbox import resolve
+    resolve(db, f"alert:maint:{t.id}", "task dismissed")
     db.commit()
     return maintenance.task_dict(t)
 

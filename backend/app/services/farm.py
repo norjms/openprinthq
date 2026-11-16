@@ -163,6 +163,9 @@ def transition(db: Session, fj: FarmJob, prev: str | None, live: bool):
         elif fj.status == "paused":
             notify(db, "print_paused", f"{who} paused {fj.name or 'a print'}", fj.waiting_reason or "",
                    link=_link("/farm"), ref=f"alert:job:{fj.external_id}")
+    if prev in ("printing", "paused", "resuming") and fj.status not in ("printing", "paused", "resuming") and fj.printer_name:
+        from .alert_inbox import resolve
+        resolve(db, f"alert:failure_detected:{fj.printer_name}", f"the print {fj.status}")
     if fj.status == "printing":
         set_setting(db, "farm_last_start", now().isoformat())
         if live or prev is not None:     # which spools it is using, while they are still loaded
@@ -238,6 +241,10 @@ def ingest_event(db: Session, name: str, data: dict) -> dict:
             printer_status.alarm_raised(db, who_, code_, data.get("message"))
         else:
             printer_status.alarm_cleared(db, who_, code_)
+            from .alert_inbox import resolve_prefix
+            if who_:
+                resolve_prefix(db, f"alert:alarm:{who_}" + (f":{printer_status.norm(code_)}" if printer_status.norm(code_) else ""),
+                               "the printer cleared the alarm")
     if name == "alarm.raised" and _quiet_alarm(db, data):
         return {"event": name, "quiet": True}
     if name in ("printer.offline", "alarm.raised", "vision.failure_detected"):
@@ -249,7 +256,12 @@ def ingest_event(db: Session, name: str, data: dict) -> dict:
         kind = {"printer.offline": "printer_offline", "alarm.raised": "alarm", "vision.failure_detected": "failure_detected"}[name]
         busy = db.execute(select(FarmJob).where(FarmJob.printer_name == who, FarmJob.status == "printing")).first()
         if kind != "printer_offline" or busy:     # offline only matters mid-print
-            notify(db, kind, f"{who} {what}".strip(), data.get("message") or "", link=_link())
+            code = data.get("code") or data.get("event_code")
+            from .printer_status import norm
+            ref = f"alert:{kind}:{who}" + (f":{norm(code)}" if kind == "alarm" and norm(code) else "")
+            notify(db, kind, f"{who} {what}".strip(), data.get("message") or "", link=_link(), ref=ref,
+                   subject={"printer": who if who != "a printer" else None, "code": code,
+                            "message": data.get("message"), "confidence": data.get("confidence")})
         if kind == "alarm" and who != "a printer":
             from .maintenance import from_alarm
             from_alarm(db, who, data.get("code") or data.get("event_code"), data.get("message"))
@@ -291,12 +303,13 @@ def check_opened(db: Session, cid: int) -> dict:
         c.photo = name
     m = db.get(Model, c.model_id) if c.model_id else None
     what = f"{m.code} {m.name}" if m else (c.job_name or "a job")
+    subj = {"printer": c.printer_name, "check": c.id, "job": c.external_job_id, "job_name": c.job_name}
     if c.job_outcome == "completed":
         sent = notify(db, "print_done", f"{c.printer_name} finished {what}", "Clear the plate and pass the check.",
-                      link=_link(), photo=c.photo)
+                      link=_link(), photo=c.photo, ref=f"alert:check:{c.id}", subject=subj)
     else:
         sent = notify(db, "print_failed", f"{c.printer_name}: print {c.job_outcome}", f"{what}. Check the plate.",
-                      link=_link(), photo=c.photo)
+                      link=_link(), photo=c.photo, ref=f"alert:check:{c.id}", subject=subj)
     return {"photo": bool(img), "alerted": sent}
 
 
@@ -452,6 +465,7 @@ def pass_check(db: Session, c: PlateCheck, actor: str, set_ready: bool = True, n
     if c.state not in ("waiting",):
         raise ValueError(f"this plate check is already {c.state}")
     c.state, c.note, c.checked_by, c.checked_at = "passed", (note or None), actor, now()
+    _check_closed(db, c)
     if set_ready:
         request_ready(db, c)
     if c.model_id:
@@ -467,6 +481,7 @@ def fail_check(db: Session, c: PlateCheck, actor: str, reason: str, note: str | 
         raise ValueError("pick a reason")
     label = FAIL_REASONS[reason]
     c.state, c.reason, c.note, c.checked_by, c.checked_at = "failed", reason, (note or None), actor, now()
+    _check_closed(db, c)
     text = f"Plate check: {label}" + (f": {note}" if note else "")
     rec = db.execute(select(PrintRecord).where(PrintRecord.source == "farm",
                                                PrintRecord.external_id == str(c.external_job_id))).scalar()
@@ -514,7 +529,28 @@ def skip_check(db: Session, c: PlateCheck, actor: str) -> PlateCheck:
     if c.state != "waiting":
         raise ValueError(f"this plate check is already {c.state}")
     c.state, c.checked_by, c.checked_at, c.note = "skipped", actor, now(), "Dismissed without a check"
+    _check_closed(db, c)
     return c
+
+
+def _check_closed(db: Session, c: PlateCheck):
+    from .alert_inbox import resolve
+    resolve(db, f"alert:check:{c.id}", f"plate check {c.state}")
+
+
+def offline_resolve(db: Session) -> list[str]:
+    """Printers that came back online close their "went offline" alert (checked with the ready check)."""
+    from ..models import Alert
+    from .alert_inbox import resolve
+    names = {(a.subject or {}).get("printer") for a in db.execute(select(Alert).where(
+        Alert.kind == "printer_offline", Alert.state == "open")).scalars()} - {None}
+    if not names:
+        return []
+    back = [p.get("name") for p in (_client().printers() or {}).get("printers") or []
+            if p.get("online") and p.get("name") in names]
+    for n in back:
+        resolve(db, f"alert:printer_offline:{n}", f"{n} is back online")
+    return back
 
 
 # ---------- views ----------
@@ -781,7 +817,10 @@ def route_order(db: Session, order_id: int, force: bool = False) -> dict:
         from .alerts import notify
         event(db, f"order:{o.id}", f"Order #{o.number} not fully sent to the farm: {'; '.join(problems)}"[:900], level="warn")
         notify(db, "order_problem", f"Order #{o.number} couldn't go to the farm", "; ".join(problems)[:900],
-               link=_link("/orders"), ref=f"alert:route:{o.id}")
+               link=_link("/orders"), ref=f"alert:route:{o.id}", subject={"order": o.id})
+    else:
+        from .alert_inbox import resolve
+        resolve(db, f"alert:route:{o.id}", "sent to the farm")
     return {"jobs": sent, "problems": problems}
 
 
