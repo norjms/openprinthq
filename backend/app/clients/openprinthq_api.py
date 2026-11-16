@@ -606,6 +606,34 @@ class OpenPrintHQClient(BaseClient, FarmBackend):
         pid = self.printer_id(printer)
         return self.e("POST", f"/printers/{pid}/alarms/ack", json={"by": (by or None)}, retries=1) or {}
 
+    def alarm(self, alarm_id: int) -> dict:
+        if not self.engine_alarms():
+            self._no("alarms")
+        return self.e("GET", f"/alarms/{int(alarm_id)}") or {}
+
+    def dismiss_alarm(self, alarm_id: int, by: str | None = None) -> dict:
+        """Take an alarm out of the active list; it comes back as a new one if it clears and recurs."""
+        if not self.engine_alarms():
+            self._no("alarms")
+        return self.e("POST", f"/alarms/{int(alarm_id)}/dismiss", json={"by": (by or None)}, retries=1) or {}
+
+    def suppress_alarm(self, alarm_id: int, by: str | None = None) -> dict:
+        """No more alarms or notifications for this alarm's code on its printer (engine alarm-suppressions)."""
+        if not self.engine_alarms():
+            self._no("alarms")
+        return self.e("POST", f"/alarms/{int(alarm_id)}/suppress", json={"by": (by or None)}, retries=1) or {}
+
+    def alarm_suppressions(self, printer: str | None = None) -> list:
+        if not self.engine_alarms():
+            self._no("alarms")
+        params = [("printer_id", str(self.printer_id(printer)))] if printer else []
+        return self.e("GET", "/alarm-suppressions", params=params) or []
+
+    def unsuppress_alarm(self, suppression_id: int) -> dict:
+        if not self.engine_alarms():
+            self._no("alarms")
+        return self.e("DELETE", f"/alarm-suppressions/{int(suppression_id)}", retries=1) or {}
+
     # ---- webhooks (a signed webhook notification provider) ----
     def webhooks(self):
         out = []

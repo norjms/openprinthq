@@ -38,6 +38,24 @@ class FakeFarm:
     def alarm_summary(self):
         return {"active": 2, "printers": [1, 2], "printer_names": ["Alpha", "Beta"]}
 
+    def alarm(self, alarm_id):
+        return next(dict(a) for a in self.alarms() if a["id"] == alarm_id)
+
+    def dismiss_alarm(self, alarm_id, by=None):
+        self.commands.append(("dismiss", alarm_id))
+        return {"dismissed": 1}
+
+    def suppress_alarm(self, alarm_id, by=None):
+        self.commands.append(("suppress", alarm_id))
+        return {"id": 5, "printer_id": self.alarm(alarm_id)["printer_id"]}
+
+    def alarm_suppressions(self, printer=None):
+        return [{"id": 5, "printer_id": 1, "code": "A"}, {"id": 6, "printer_id": 2, "code": "B"}]
+
+    def unsuppress_alarm(self, sid):
+        self.commands.append(("unsuppress", sid))
+        return {"removed": 1}
+
     def push_printer_access(self, body):
         if self.push_status:
             raise ApiError("openprinthq", self.push_status, "nope")
@@ -89,6 +107,18 @@ def test_the_owner_chooses_printers_and_the_rest_disappear(farm, people, real_au
     s = mo.get("/api/farm/alarms/summary").json()
     assert s["printers"] == [2] and s["printer_names"] == ["Beta"]
     assert mo.get("/api/farm/alarms", params={"printer": "Alpha"}).status_code == 404
+    # Acting on an alarm or a suppression: only on her own printers.
+    m = "/api/mobile/v1"
+    assert mo.post(f"{m}/alarms/10/dismiss").status_code == 404
+    assert mo.post(f"{m}/alarms/10/suppress").status_code == 404
+    assert mo.post(f"{m}/alarms/10/ack").status_code == 404
+    assert mo.post(f"{m}/alarms/11/dismiss").status_code == 200
+    r = mo.post(f"{m}/alarms/11/suppress")
+    assert r.status_code == 200 and r.json()["suppression"]["printer_id"] == 2
+    assert [x["id"] for x in mo.get(f"{m}/alarm-suppressions").json()["suppressions"]] == [6]
+    assert mo.delete(f"{m}/alarm-suppressions/5").status_code == 404
+    assert mo.delete(f"{m}/alarm-suppressions/6").status_code == 200
+    assert farm.commands[-3:] == [("dismiss", 11), ("suppress", 11), ("unsuppress", 6)]
     # back to all
     boss.put(f"/api/team/members/{people['member']}/printers", json={"printers": "all"})
     assert _names(mo) == ["Alpha", "Beta", "Gamma"]
