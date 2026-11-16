@@ -2,9 +2,10 @@
   import Icon from '$lib/components/AppIcon.svelte';
   // Edit-mode chrome for one arrangeable section of the printer page.
   //
-  // Outside edit mode this renders its children and NOTHING else, no wrapper
-  // element, so an unarranged page has exactly the DOM and CSS it always had.
-  // Inside edit mode each section gains an outline, its catalogue name, movers
+  // Outside edit mode each section can be folded away: a small button on its
+  // top edge folds it to a one-line bar with its name, and the choice is kept
+  // in this browser. A section that draws nothing (Maintenance with nothing
+  // due, say) leaves no bar or button behind. Inside edit mode each section gains an outline, its catalogue name, movers
   // and a show/hide toggle. Hidden sections collapse to a stub rather than
   // rendering their (often live, often expensive) content, but stay in the list
   // so they can be brought back.
@@ -20,10 +21,42 @@
   } = $props();
 
   const locked = $derived(!!def?.lockHide);
+  // The header and the alerts carry identity and safety controls: never folded.
+  const foldable = $derived(!locked);
+
+  const FOLD_KEY = 'ahf.printer.folded';
+  function readFolded() {
+    try { return new Set(JSON.parse(localStorage.getItem(FOLD_KEY) || '[]')); } catch { return new Set(); }
+  }
+  let folded = $state(false);
+  $effect(() => { folded = !!def?.key && readFolded().has(def.key); });
+  function toggleFold() {
+    folded = !folded;
+    try {
+      const set = readFolded();
+      if (folded) set.add(def.key); else set.delete(def.key);
+      localStorage.setItem(FOLD_KEY, JSON.stringify([...set]));
+    } catch { /* private window: the fold lasts until the page reloads */ }
+  }
 </script>
 
 {#if !editing}
-  {#if !hidden}{@render children?.()}{/if}
+  {#if !hidden}
+    {#if !foldable}
+      {@render children?.()}
+    {:else if folded}
+      <button class="fold-bar" onclick={toggleFold} aria-expanded="false"
+              aria-label={`Show ${def?.label || def?.key}`}>
+        <span>{def?.label || def?.key}</span><Icon name="down" size={14} />
+      </button>
+    {:else}
+      <div class="fold">
+        <div class="fold-body">{@render children?.()}</div>
+        <button class="fold-btn" onclick={toggleFold} aria-expanded="true"
+                aria-label={`Fold ${def?.label || def?.key}`} title="Fold"><Icon name="up" size={13} /></button>
+      </div>
+    {/if}
+  {/if}
 {:else}
   <div class="secframe" class:off={hidden}>
     <div class="sf-bar">
@@ -52,6 +85,29 @@
 {/if}
 
 <style>
+  /* Folding. The button sits on the card's top edge, clear of its own title
+     row, and the whole wrapper disappears when the section draws nothing. */
+  .fold { position: relative; }
+  .fold:not(:has(.fold-body *)) { display: none; }
+  .fold-btn {
+    position: absolute; top: -0.55rem; right: 1.1rem; z-index: 2;
+    width: 1.6rem; height: 1.1rem; display: inline-flex; align-items: center; justify-content: center;
+    border: 1px solid var(--ophq-border); border-radius: 999px; padding: 0;
+    background: var(--ophq-bg-2); color: var(--ophq-muted); cursor: pointer;
+    opacity: 0.55; transition: opacity 0.15s;
+  }
+  .fold:hover .fold-btn, .fold-btn:focus-visible { opacity: 1; }
+  .fold-btn:hover { color: var(--ophq-text); }
+  .fold-bar {
+    display: flex; align-items: center; justify-content: space-between; width: 100%;
+    margin-bottom: 1rem; padding: 0.55rem 1rem; cursor: pointer;
+    border: 1px solid var(--ophq-border); border-radius: var(--radius);
+    background: color-mix(in srgb, var(--ophq-bg-2) 80%, transparent); color: var(--ophq-text-2);
+    font: inherit; font-size: 0.92rem; font-weight: 600;
+    backdrop-filter: blur(12px);
+  }
+  .fold-bar:hover { color: var(--ophq-text); }
+
   .secframe {
     position: relative;
     border: 1px dashed color-mix(in srgb, var(--ophq-primary) 55%, transparent);

@@ -31,19 +31,22 @@
     finally { busy = null; }
   }
   const items = $derived((ov?.maintenance_items || []).filter((i) => i.enabled !== false));
+  // The panel only appears when something is due; then it lists what is due,
+  // with the rest one click away.
+  const due = $derived(items.filter((i) => status(i) === 'due'));
+  let showAll = $state(false);
+  const shown = $derived(showAll ? items : due);
 </script>
 
-{#if !loading && ov}
+{#if !loading && ov && due.length > 0}
   <div class="card card-pad maint">
     <div class="mh">
       <h3>Maintenance</h3>
       <span class="muted tiny">{(ov.total_print_hours ?? 0).toFixed(0)} print-hours{#if ov.due_count > 0} · <span class="due-t">{ov.due_count} due</span>{/if}</span>
     </div>
-    {#if items.length === 0}
-      <p class="muted small">No maintenance schedule for this printer.</p>
-    {:else}
+    {#if items.length > 0}
       <div class="mlist">
-        {#each items as it (it.id)}
+        {#each shown as it (it.id)}
           {@const s = status(it)}
           <div class="mrow {s}">
             <span class="mn">{it.maintenance_type_name}</span>
@@ -57,6 +60,11 @@
           </div>
         {/each}
       </div>
+      {#if items.length > due.length}
+        <button class="btn btn-ghost btn-xs more" onclick={() => (showAll = !showAll)}>
+          {showAll ? 'Only what is due' : `All ${items.length} tasks`}
+        </button>
+      {/if}
     {/if}
     {#if msg}<p class={msg.kind === 'ok' ? 'ok-msg' : 'err'}>{msg.text}</p>{/if}
   </div>
@@ -74,6 +82,7 @@
   .mmeta { display: flex; align-items: center; gap: 0.7rem; font-size: 0.78rem; }
   .every { font-size: 0.72rem; }
   .small { font-size: 0.9rem; }
+  .more { margin-top: 0.6rem; }
   .btn-xs { padding: 0.12rem 0.5rem; font-size: 0.72rem; }
   .ok-msg { color: var(--ophq-success); font-size: 0.88rem; margin: 0.7rem 0 0; }
   .err { color: var(--ophq-danger); font-size: 0.88rem; margin: 0.7rem 0 0; }

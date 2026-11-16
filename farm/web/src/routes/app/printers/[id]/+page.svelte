@@ -579,7 +579,9 @@
         {#each pageList.filter((s) => !['header', 'alerts', 'camera', 'progress'].includes(s.key)) as s (s.key)}
           {@render pageSection(s)}
         {/each}
-        {#if pageKeys.has('camera')}<PrinterCameras printerId={id} />{/if}
+        {#if pageKeys.has('camera')}
+          <SectionFrame def={{ key: 'cameras', label: 'Cameras' }}><PrinterCameras printerId={id} /></SectionFrame>
+        {/if}
       </div>
     </div>
   {/if}

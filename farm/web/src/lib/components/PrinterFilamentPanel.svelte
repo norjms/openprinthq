@@ -235,8 +235,13 @@
                 <div class="slotwrap">
                   <div class="sbar">
                     <span class="scode">{s.code}</span>
-                    <button class="sic" onclick={() => reread(s)} disabled={!connected || busy === 'rfid' + s.code}
-                            data-tip="Re-read the RFID tag" aria-label={`Re-read the tag in ${s.code}`}><Icon name="refresh" size={13} /></button>
+                    <span class="sicons">
+                      <button class="sic" onclick={() => reread(s)} disabled={!connected || busy === 'rfid' + s.code}
+                              data-tip="Re-read the RFID tag" aria-label={`Re-read the tag in ${s.code}`}><Icon name="refresh" size={13} /></button>
+                      <button class="sic" onclick={() => (editing = { amsId: s.amsId, trayIdx: s.trayIdx, label: s.code, current: { ...s.raw, tray_type: s.type } })}
+                              disabled={!connected}
+                              data-tip="Set what's in this slot" aria-label={`Edit ${s.code}`}><Icon name="edit" size={13} /></button>
+                    </span>
                   </div>
                   <button class="slot" class:empty={s.empty} class:active={s.active} class:picked={picked === s.trayId}
                           style={s.color ? `--sc:${s.color}` : ''}
@@ -248,9 +253,6 @@
                     {#if s.remain != null && !s.empty}<span class="srem mono">{s.remain}%</span>{/if}
                     {#if s.active}<span class="sactive" aria-hidden="true"></span>{/if}
                   </button>
-                  <button class="sedit" onclick={() => (editing = { amsId: s.amsId, trayIdx: s.trayIdx, label: s.code, current: { ...s.raw, tray_type: s.type } })}
-                          disabled={!connected}
-                          data-tip="Set what's in this slot" aria-label={`Edit ${s.code}`}><Icon name="edit" size={13} /></button>
                 </div>
               {/each}
             </div>
@@ -366,10 +368,10 @@
 
 <style>
   .fp { padding: 0; overflow: hidden; }
-  .tabs { display: flex; justify-content: center; gap: 0; padding: 0.6rem; border-bottom: 1px solid var(--ophq-border-soft); }
+  .tabs { display: flex; justify-content: center; gap: 0; padding: 0.4rem; border-bottom: 1px solid var(--ophq-border-soft); }
   .tabs button {
     border: 1px solid var(--ophq-border); background: var(--ophq-bg-2); color: var(--ophq-text-2);
-    padding: 0.3rem 1.1rem; font-size: 0.85rem; cursor: pointer;
+    padding: 0.2rem 1rem; font-size: 0.82rem; cursor: pointer;
   }
   .tabs button:first-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
   .tabs button:last-child { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; border-left: 0; }
@@ -378,9 +380,9 @@
 
   .empty { margin: 0; padding: 1.2rem 0.9rem; color: var(--ophq-muted); font-size: 0.9rem; }
 
-  .groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 0.8rem; padding: 0.85rem; }
-  .grp { border: 1px solid var(--ophq-border); border-radius: var(--radius-sm); background: var(--ophq-bg-2); padding: 0.65rem 0.7rem; }
-  .ghead { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; margin-bottom: 0.55rem; }
+  .groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0.5rem; padding: 0.55rem; }
+  .grp { border: 1px solid var(--ophq-border); border-radius: var(--radius-sm); background: var(--ophq-bg-2); padding: 0.45rem 0.55rem; }
+  .ghead { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; margin-bottom: 0.35rem; }
   .gname { font-weight: 600; font-size: 0.9rem; display: inline-flex; align-items: center; gap: 0.4rem; }
   .side { font-size: 0.66rem; font-weight: 700; padding: 0.05rem 0.35rem; border-radius: 4px; background: var(--ophq-success); color: #06210f; }
   .side.l { background: var(--ophq-primary); color: var(--ah-on-accent); }
@@ -397,18 +399,19 @@
   /* Slots keep a sane width when there are only one or two of them, instead of
      one external spool stretching the width of the card. */
   .slots { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 0.45rem; max-width: calc(var(--n) * 8.5rem); }
-  .slotwrap { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; }
+  .slotwrap { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
   .sbar { display: flex; align-items: center; justify-content: space-between; gap: 0.2rem; }
   .scode { font-size: 0.68rem; color: var(--ophq-muted); font-weight: 700; letter-spacing: 0.04em; }
+  .sicons { display: inline-flex; gap: 0.1rem; }
   .sic { border: 0; background: none; color: var(--ophq-muted); cursor: pointer; font-size: 0.78rem; padding: 0 0.15rem; }
   .sic:hover:not(:disabled) { color: var(--ophq-primary-2); }
   .sic:disabled { opacity: 0.4; cursor: default; }
 
   .slot {
-    position: relative; min-height: 74px; border-radius: var(--radius-sm);
+    position: relative; min-height: 44px; border-radius: var(--radius-sm);
     border: 1px solid var(--ophq-border); background: var(--ophq-surface);
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.2rem;
-    padding: 0.4rem 0.25rem; cursor: pointer; overflow: hidden;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.05rem;
+    padding: 0.25rem 0.2rem; cursor: pointer; overflow: hidden;
   }
   /* The filament colour is the card, exactly as in the machine's own UI. The
      label flips to dark text on light spools so it stays readable. */
@@ -425,13 +428,10 @@
   .stype { font-size: 0.8rem; font-weight: 700; text-align: center; word-break: break-word; line-height: 1.15; }
   .srem { font-size: 0.7rem; opacity: 0.85; }
   .sactive { position: absolute; top: 3px; right: 4px; font-size: 0.6rem; color: var(--ophq-success); }
-  .sedit { border: 0; background: none; color: var(--ophq-muted); cursor: pointer; font-size: 0.8rem; padding: 0; }
-  .sedit:hover:not(:disabled) { color: var(--ophq-primary-2); }
-  .sedit:disabled { opacity: 0.4; cursor: default; }
 
   .foot {
     display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
-    padding: 0.6rem 0.85rem; border-top: 1px solid var(--ophq-border-soft); background: var(--ophq-bg-2);
+    padding: 0.4rem 0.6rem; border-top: 1px solid var(--ophq-border-soft); background: var(--ophq-bg-2);
   }
   .sp { flex: 1; }
   .refill { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; color: var(--ophq-text-2); cursor: pointer; }
