@@ -387,6 +387,10 @@ export const api = {
   resetSlot: (id, amsId, trayId) =>
     req('/engine/api/v1/printers/' + id + '/ams/' + amsId + '/tray/' + trayId + '/reset', { method: 'POST' }),
   queue: () => req('/engine/api/v1/queue/'),
+  // Filament matching: how close the loaded filament must be before a job starts.
+  filamentMatchSettings: () => req('/engine/api/v1/filament-matching/settings'),
+  setFilamentMatchSettings: (body) =>
+    req('/engine/api/v1/filament-matching/settings', { method: 'PUT', body: JSON.stringify(body) }),
   queueUpdate: (id, body) =>
     req('/engine/api/v1/queue/' + id, { method: 'PATCH', body: JSON.stringify(body) }),
   queueDelete: (id) => req('/engine/api/v1/queue/' + id, { method: 'DELETE' }),

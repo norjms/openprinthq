@@ -52,7 +52,7 @@ export const status = {
 };
 
 export const queue = [
-  { id: 11, position: 1, status: 'pending', library_file_name: 'Gear housing, plate 3 of 3', printer_id: 1, printer_name: 'H2D-01', print_time_seconds: 3 * 3600 + 20 * 60, required_filament_types: ['PLA'], quantity: 1 },
+  { id: 11, position: 1, status: 'pending', library_file_name: 'Gear housing, plate 3 of 3', printer_id: 1, printer_name: 'H2D-01', print_time_seconds: 3 * 3600 + 20 * 60, required_filament_types: ['PLA'], quantity: 1, match_level: null, filament_confirmed: false, filament_unmatched: { since: iso(20 * 60 * 1000), level: 'close', printers: [{ printer_id: 1, printer_name: 'H2D-01', summary: 'filament 2 PETG #FFFFFF (closest: PLA #FFFFFF)' }] } },
   { id: 12, position: 2, status: 'pending', library_file_name: 'Hex planter, small', printer_id: 4, printer_name: 'V24-01', print_time_seconds: 5 * 3600, required_filament_types: ['ASA'], quantity: 2 },
   { id: 13, position: 3, status: 'pending', library_file_name: 'Cable winder', printer_id: null, target_model: 'MK3S', print_time_seconds: 2 * 3600 + 5 * 60, required_filament_types: ['PETG'], quantity: 4 },
   { id: 14, position: 4, status: 'pending', library_file_name: 'Desk caddy', printer_id: 2, printer_name: 'MK4S-01', print_time_seconds: 4 * 3600 + 40 * 60, required_filament_types: ['PLA'], quantity: 1 },

@@ -6,6 +6,7 @@
   import EngineError from '$lib/components/EngineError.svelte';
   import PageTitle from '$lib/components/PageTitle.svelte';
   import PageHead from '$lib/components/PageHead.svelte';
+  import { loadHubNav } from '$lib/hubnav.js';
 
   let loading = $state(true);
   let error = $state(null);
@@ -16,6 +17,34 @@
   let toast = $state(null);
   let toastTimer = null;
   let filterPrinter = $state('all');   // 'all' | 'unassigned' | printer id
+  // Filament matching. Mapping a job's filament is a hub page, so the link shows
+  // only when the farm runs inside ArtisanHub.
+  let fromHub = $state(false);
+  let matchLevel = $state(null);
+  let levelSaving = $state(false);
+  const LEVELS = [
+    ['exact', 'Exact colour'],
+    ['close', 'Close colour'],
+    ['family', 'Same colour family'],
+    ['any', 'Any colour']
+  ];
+  onMount(() => {
+    loadHubNav().then((n) => (fromHub = !!n?.fromHub)).catch(() => {});
+    api.filamentMatchSettings().then((s) => (matchLevel = s?.level || 'close')).catch(() => {});
+  });
+  async function saveLevel(level) {
+    const before = matchLevel;
+    matchLevel = level; levelSaving = true;
+    try { await api.setFilamentMatchSettings({ level }); showToast('ok', 'Filament matching updated.'); }
+    catch (e) { matchLevel = before; showToast('err', e.message || 'Could not save.'); }
+    finally { levelSaving = false; }
+  }
+  function unmatchedOf(q) {
+    let u = q.filament_unmatched;
+    if (typeof u === 'string') { try { u = JSON.parse(u); } catch { u = null; } }
+    if (!u || !Array.isArray(u.printers) || u.printers.length === 0) return null;
+    return u.printers.map((p) => p.printer_name || ('Printer ' + p.printer_id)).join(', ');
+  }
   // Deep-link: /app/queue?printer=<id> pre-selects that printer's queue (used by
   // the per-printer "queue" quick action on the printers list).
   onMount(() => {
@@ -83,7 +112,8 @@
       filament: q.filament_type ?? '',
       timeSec: q.print_time_seconds ?? null,
       targetModel: q.target_model ?? null,
-      reqMaterials: Array.isArray(q.required_filament_types) ? q.required_filament_types.map((m) => String(m).toUpperCase()) : []
+      reqMaterials: Array.isArray(q.required_filament_types) ? q.required_filament_types.map((m) => String(m).toUpperCase()) : [],
+      unmatched: unmatchedOf(q)
     }));
   }
   function normPrinters(d) {
@@ -238,6 +268,12 @@
         {#each printers as p}<option value={String(p.id)}>{p.name}</option>{/each}
       </select>
     {/if}
+    {#if matchLevel}
+      <label class="sr-only" for="q-level">Filament must match</label>
+      <select id="q-level" class="input filt" value={matchLevel} onchange={(e) => saveLevel(e.target.value)} disabled={levelSaving} title="How close the loaded filament must be before a job starts">
+        {#each LEVELS as [v, label]}<option value={v}>Match: {label}</option>{/each}
+      </select>
+    {/if}
     <button class="btn" onclick={load}><Icon name="refresh" size={16} />Refresh</button>
     {#if !loading && !error && unassignedCount > 0}
       <button class="btn btn-primary" onclick={smartRoute} disabled={routing} title="Assign unassigned jobs to the best-matched printer (material, model, load)">
@@ -314,6 +350,11 @@
         <span class="name">
           {q.name}
           <span class="sub">{[q.qty > 1 ? `${q.qty} copies` : '', q.filament, fmtTime(q.timeSec) ? `about ${fmtTime(q.timeSec)}` : ''].filter(Boolean).join(' · ')}</span>
+          {#if q.unmatched}
+            <span class="fwarn">Filament doesn't match on {q.unmatched}.
+              {#if fromHub}<a href="/farm/jobs/{q.id}/filament" data-sveltekit-reload>Map filament</a>{:else}Load the right filament, or map it in ArtisanHub.{/if}
+            </span>
+          {/if}
         </span>
         <span>
           {#if isActive(q.status)}
@@ -364,6 +405,8 @@
   .ar { text-align: right; }
   .name { font-weight: 500; display: flex; flex-direction: column; gap: 0.15rem; }
   .name .sub { font-size: 12px; color: var(--ah-text-3); font-weight: 400; }
+  .fwarn { font-size: 12px; font-weight: 400; color: var(--ophq-accent); }
+  .fwarn a { color: inherit; text-decoration: underline; font-weight: 600; }
   .sel { min-height: 34px; font-size: 13px; }
   .acts { display: flex; gap: 0.35rem; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
   .ib { background: var(--ah-glass); border: 1px solid var(--ah-field-line); color: var(--ah-text); border-radius: var(--ah-radius-btn-sm); width: 32px; height: 32px; cursor: pointer; display: inline-grid; place-items: center; }

@@ -85,6 +85,7 @@ function route(method, p, q) {
   if ((r = e.match(/^\/printers\/(\d+)$/))) return F.printers.find((x) => x.id === Number(r[1])) || null;
   if ((r = e.match(/^\/printers\/(\d+)\/status$/))) return F.status[r[1]] || null;
   if (e === '/queue/') return F.queue;
+  if (e === '/filament-matching/settings') return { level: 'close', levels: ['exact', 'close', 'family', 'any'], material_groups: {} };
   if (e === '/library/files' || e.startsWith('/library/files?')) return F.files;
   if (e === '/projects/') return F.projects;
   if ((r = e.match(/^\/projects\/(\d+)\/(bom|queue|archives)$/))) return [];
