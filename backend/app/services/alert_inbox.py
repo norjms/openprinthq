@@ -20,13 +20,15 @@ GROUPS = [
                                 "order_late"]),
     ("prints", "Print updates", ["print_started", "print_paused"]),
     ("orders", "Orders", ["order_new", "order_printed", "order_shipped", "order_cancelled"]),
+    ("hub", "This hub", ["update_ready"]),
 ]
 INFO = {"print_started", "print_paused", "order_new", "order_printed", "order_shipped", "order_cancelled"}
 # Alerts with a guided fix in the app and on the web; the others offer "Go to it". Filament and ready have their
 # own screens in the clients; "guided" ones are described by the hub (services/alert_fixes.py).
 FIXES = {"waiting_filament": "filament", "waiting_ready": "ready",
          **{k: "guided" for k in ("print_done", "print_failed", "failure_detected", "alarm", "printer_offline",
-                                  "maintenance_due", "order_problem", "order_late", "quote_ordered")}}
+                                  "maintenance_due", "order_problem", "order_late", "quote_ordered",
+                                  "update_ready")}}
 INFO_TTL = timedelta(days=1)
 OPEN_TTL = timedelta(days=14)
 

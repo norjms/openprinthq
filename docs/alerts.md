@@ -22,6 +22,7 @@ anything left open after two weeks.
 | Order couldn't go to the farm (`order_problem`) | Try again; open the order |
 | Order may ship late (`order_late`) | Print it sooner (high or urgent priority); move the due date (1, 2, 3 or 7 days); open the farm timeline |
 | Custom print to review (`quote_ordered`) | Approve it; refuse it (with a reason for the customer); look at it first |
+| An update is ready (`update_ready`, from the installer) | Open the installer's update page (`/manage`, on a computer); not now |
 
 Filament and ready have their own screens in the web dashboard and the app. The others are described by the hub
 (`services/alert_fixes.py`): `GET /alerts/{id}` answers `context.kind = "guided"` with a summary, photos, the

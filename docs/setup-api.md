@@ -63,6 +63,14 @@ settings when it is no longer needed.
 
 For a hub whose logins are in LLDAP (`HUB_LLDAP_URL`). Body `{"email": "..."}`; answers `{"link": ..., "expires_in_minutes": 30, "user": ...}`: a one-time link to the hub's page where the person with that login chooses its password. Only the API key that `initialize` minted may ask (403 otherwise), since the link sets the password of any login; 404 when no login has that email, 409 without LLDAP. The installer uses it for the owner's login, which it makes but whose password it never sees.
 
+## `POST /api/setup/v1/updates`
+
+The installer says a part of the installation has a new version waiting on its update page (the OrcaSlicer
+desktop, say). Only the key made at setup may call it. Body: `part` (lowercase name), `version`, `title`,
+`message`, `ready` (default true). Ready opens one alert of kind `update_ready` per part (a newer version
+updates it), sent to the phone app only, whose guided fix opens the installer at `/manage` or puts it away;
+`ready: false`, sent once the update is installed, closes it.
+
 ## Reachability checks
 
 Whether the hub can be reached through its public address, checked from wherever it matters (outside the
