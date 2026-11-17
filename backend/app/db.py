@@ -137,6 +137,9 @@ FARM_RENAMES = [
     ("printer_profile", "wt_printer", "farm_printer"),
     ("model_file", "legacy_farm_uuid", "farm_file_ref"),
     ("model_file", "legacy_farm_error", "farm_file_error"),
+    # databases from before the hub's code was published still use the old farm app's own name for these two
+    ("model_file", "watchtower_uuid", "farm_file_ref"),
+    ("model_file", "watchtower_error", "farm_file_error"),
     ("product", "wt_error", "farm_error"),
     ("shop_order_line", "wt_job_ids", "farm_job_ids"),
     ("shop_order_line", "wt_error", "farm_error"),
@@ -149,18 +152,17 @@ FARM_RENAMES = [
 ]
 FARM_DROPS = [("product", "wt_mapping_ids")]
 # (table, column, old value, new value)
+# The old farm app's name in values: "legacy_farm" since the code was published, its own name before.
+LEGACY = ("legacy_farm", "watchtower")
 FARM_VALUES = [
-    ("printer_profile", "dispatch", "legacy_farm", "farm"),
-    ("print_record", "source", "legacy_farm", "farm"),
-    ("plate_check", "checked_by", "legacy_farm", "farm"),
-    ("maint_task", "done_by", "legacy_farm", "farm"),
-    ("maint_task", "created_by", "legacy_farm", "farm"),
-    ("job", "kind", "legacy_farm.sync_product", "farm.sync_product"),
-    ("job", "kind", "legacy_farm.mirror_model", "farm.mirror_model"),
+    *[(t, col, old, "farm") for old in LEGACY
+      for t, col in (("printer_profile", "dispatch"), ("print_record", "source"), ("plate_check", "checked_by"),
+                     ("maint_task", "done_by"), ("maint_task", "created_by"))],
+    *[("job", "kind", f"{old}.{k}", f"farm.{k}") for old in LEGACY for k in ("sync_product", "mirror_model")],
     ("setting", "key", "wt_mirror_library", "farm_mirror_library"),
 ]
 # Background jobs that only served the old farm app: queued ones are dropped.
-FARM_DROPPED_JOBS = ("spools.sync", "spoolman.import_legacy_farm")
+FARM_DROPPED_JOBS = ("spools.sync", "spoolman.import_legacy_farm", "spoolman.import_watchtower")
 OLD = "old:"     # prefix for ids that belonged to the farm an installation moved away from
 
 
@@ -193,7 +195,7 @@ def migrate_farm_names(c) -> None:
         c.execute(text("UPDATE model_file SET farm_file_ref = NULL, farm_kind = NULL "
                        "WHERE farm_kind IS NULL OR farm_kind <> 'openprinthq'"))
     if "kind" in cols("connection"):     # stored credentials for the farm app the hub no longer talks to
-        c.execute(text("DELETE FROM connection WHERE kind = 'legacy_farm'"))
+        c.execute(text("DELETE FROM connection WHERE kind IN ('legacy_farm', 'watchtower')"))
 
 
 def migrate_stores(c) -> None:
