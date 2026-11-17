@@ -476,7 +476,7 @@
           <button class="btn btn-primary" onclick={() => { const f = preview; addToQueue(f); }} disabled={queuingId === preview.id}>{queuingId === preview.id ? 'Queuing' : 'Add to queue'}</button>
           <button class="btn btn-ghost" onclick={() => { const f = preview; closePreview(); openBatch(f); }}>⧉ Batch</button>
         {/if}
-        <a class="btn btn-ghost" href={api.fileDownloadUrl(preview.id)} download>Download</a>
+        <a class="btn btn-ghost" href={api.fileDownloadUrl(preview.id)} download={preview.filename || preview.name || true}>Download</a>
         <button class="btn btn-ghost" onclick={closePreview}>Close</button>
       </div>
     </div>

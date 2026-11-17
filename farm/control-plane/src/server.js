@@ -2460,6 +2460,9 @@ app.get('/api/camera/capability/:printerId', async (req, reply) => {
 // Authenticated gateway: proxy the logged-in user's request to THEIR engine.
 // Frontend calls /api/engine/<engine-path>; we resolve the user's instance and
 // forward. (JSON + GET today; multipart upload proxying is a follow-up.)
+// Headers of the engine's binary answers (downloads, pictures) passed on to the browser.
+const ENGINE_FILE_HEADERS = ['content-disposition', 'cache-control', 'etag', 'last-modified'];
+
 app.all('/api/engine/*', async (req, reply) => {
   const enginePathForScope = req.url.replace(/^\/api\/engine/, '') || '/';
   const user = await callerFor(req, reply, scopeFor(req.method, enginePathForScope)); if (!user) return;
@@ -2525,6 +2528,12 @@ app.all('/api/engine/*', async (req, reply) => {
     }
     reply.code(res.status);
     if (ct) reply.header('content-type', ct);
+    // A file keeps its own name when downloaded (the engine names it in content-disposition), and the
+    // engine's caching answers stand.
+    for (const h of ENGINE_FILE_HEADERS) {
+      const v = res.headers.get(h);
+      if (v) reply.header(h, v);
+    }
     return reply.send(Buffer.from(await res.arrayBuffer()));
   } catch (e) {
     return reply.code(502).send({ error: 'engine unreachable: ' + e.message });
