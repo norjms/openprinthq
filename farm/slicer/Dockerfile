@@ -37,6 +37,9 @@ RUN set -eu; \
     curl -fsSL -o orca.AppImage "$base/$file"; \
     echo "$sum  orca.AppImage" | sha256sum -c -; \
     chmod +x orca.AppImage; \
+    # The AppImage magic bytes (offset 8) keep binfmt_misc from handing the file to QEMU when another
+    # architecture's image is built under emulation; zeroing them after the checksum leaves a plain ELF.
+    printf '\000\000\000' | dd of=orca.AppImage bs=1 seek=8 count=3 conv=notrunc status=none; \
     ./orca.AppImage --appimage-extract >/dev/null; \
     rm orca.AppImage
 
