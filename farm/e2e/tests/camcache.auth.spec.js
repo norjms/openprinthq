@@ -11,7 +11,7 @@ test('camera frames are written to the localStorage cache', async ({ page }) => 
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
 
-  await page.goto('/app/cameras');
+  await page.goto('/app/printers');
   await page.waitForLoadState('networkidle');
   // Give the tiles time to paint a frame and the cache time to write.
   await page.waitForTimeout(20000);

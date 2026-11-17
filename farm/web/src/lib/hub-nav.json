@@ -23,8 +23,7 @@
           "id": "cameras",
           "label": "Cameras",
           "href": "/farm?view=cameras",
-          "icon": "camera",
-          "farm_path": "/app/cameras"
+          "icon": "camera"
         },
         {
           "id": "queue",

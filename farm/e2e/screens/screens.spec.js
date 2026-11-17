@@ -20,7 +20,7 @@ const SHOTS = process.env.SHOTS_DIR || '';
 // its own (the hub's sign-in sits in front of it): those addresses lead to the app.
 export const ROUTES = [
   '/app', '/app/printers', '/app/printers/1', '/app/printers/3', '/app/printers/4', '/app/printers/add',
-  '/app/printers/groups', '/app/printers/1/camera', '/app/cameras', '/app/timelapses',
+  '/app/printers/groups', '/app/printers/1/camera', '/app/timelapses',
   '/app/queue', '/app/files', '/app/files/500', '/app/slicer', '/app/filament', '/app/projects',
   '/app/statistics', '/app/reports', '/app/settings', '/app/genfilament', '/legal', '/t/ABC123'
 ];

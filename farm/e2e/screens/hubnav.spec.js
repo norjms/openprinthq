@@ -46,7 +46,7 @@ for (const [name, origin] of [['the hub unreachable', NO_HUB], ['the hub answeri
       const items = (await sidebar(page)).flatMap((g) => g.items);
       const href = (l) => items.find((i) => i.label === l).href;
       expect(href('Printers')).toBe(BASE + '/app/printers');
-      expect(href('Cameras')).toBe(BASE + '/app/cameras');
+      expect(href('Cameras')).toBe('/farm?view=cameras');   // the hub's Cameras page; the farm has none
       expect(href('Print queue')).toBe(BASE + '/app/queue');
       expect(href('Filament')).toBe(BASE + '/app/filament');
       expect(href('Timelapses')).toBe(BASE + '/app/timelapses');
