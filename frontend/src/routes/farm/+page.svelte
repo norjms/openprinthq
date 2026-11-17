@@ -14,8 +14,9 @@
   import Filament from '$lib/farm/Filament.svelte';
   import Alarms from '$lib/farm/Alarms.svelte';
   import PhonePush from '$lib/farm/PhonePush.svelte';
+  import CameraTile from '$lib/farm/CameraTile.svelte';
 
-  const VIEWS = { printers: ['Printers', 'Every printer in the farm. Click one to control it.'], cameras: ['Cameras', "A frame from each printer's camera, every 10 seconds."],
+  const VIEWS = { printers: ['Printers', 'Every printer in the farm. Click one to control it.'], cameras: ['Cameras', "A picture from each printer's camera, refreshed every 10 seconds."],
     queue: ['Print queue', 'Jobs waiting and printing, as the hub sees them.'], filament: ['Filament', 'What is loaded in each printer, and the spools the farm knows.'] };
   let view = $state(page.url.searchParams.get('view') || 'checks');
   // The sidebar links here with ?view=; follow it when the same page is opened with another view.
@@ -25,8 +26,6 @@
     goto(k === 'checks' ? '/farm' : `/farm?view=${k}`, { replaceState: true, noScroll: true, keepFocus: true });
   }
   let tick = $state(Date.now());
-  const shot = (p) => `/api/mobile/v1/printers/${encodeURIComponent(p.name)}/snapshot?t=${tick}`;
-  let noCam = $state({});
   let d = $state(null);
   let busy = $state(false);
   let failing = $state(null);   // check id with the fail form open
@@ -226,13 +225,7 @@
           <div class="flex items-center gap-[10px]"><span class="ah-card-title" style="flex:1">{p.name}</span>
             <span class="chip {p.busy ? 'live' : p.online ? 'ok' : ''}">{p.busy ? `Printing${p.progress != null ? ` ${Math.round(p.progress)}%` : ''}` : p.online ? 'Idle' : 'Offline'}</span></div>
           <div class="panel" style="padding:0;overflow:hidden;aspect-ratio:16/9;display:grid;place-items:center">
-            <!-- The picture keeps reloading every 10 s even after a miss (a camera that is slow to wake fails its
-                 first frame), and shows again as soon as one arrives. -->
-            {#if noCam[p.name]}<span class="ah-muted" style="grid-area:1/1">No camera frame from {p.name}</span>{/if}
-            <img src={shot(p)} alt="Camera on {p.name}" style="grid-area:1/1;width:100%;height:100%;object-fit:cover"
-              style:visibility={noCam[p.name] ? 'hidden' : 'visible'}
-              onload={() => { if (noCam[p.name]) { const { [p.name]: _, ...rest } = noCam; noCam = rest; } }}
-              onerror={() => (noCam = { ...noCam, [p.name]: true })} />
+            <CameraTile name={p.name} {tick} />
           </div>
         </section>
       {:else}<div class="panel ah-muted" style="padding:24px;grid-column:1/-1;text-align:center">The farm reports no printers yet.</div>{/each}
