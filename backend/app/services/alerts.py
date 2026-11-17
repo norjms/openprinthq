@@ -39,9 +39,10 @@ EVENTS = {
     "order_new": ("New paid order", False),
     "order_shipped": ("Order shipped", False),
     "order_cancelled": ("Order cancelled or refunded", False),
+    "update_ready": ("An update is ready to install", False),
 }
 # Updates rather than problems: only to the phone app by default.
-APP_ONLY = ("print_started", "print_paused", "order_new", "order_shipped", "order_cancelled")
+APP_ONLY = ("print_started", "print_paused", "order_new", "order_shipped", "order_cancelled", "update_ready")
 PHONE = ["ntfy", "telegram", "slack"]
 DEFAULT_RULES = {
     "events": {k: ["push"] + ([] if k in APP_ONLY else PHONE + (["email"] if urgent or k == "order_problem" else []))

@@ -17,7 +17,7 @@ from ..models import Alert, FarmJob, MaintTask, Order, PlateCheck, Quote
 from . import alert_inbox as inbox
 
 KINDS = ("print_done", "print_failed", "failure_detected", "alarm", "printer_offline", "maintenance_due",
-         "order_problem", "order_late", "quote_ordered")
+         "order_problem", "order_late", "quote_ordered", "update_ready")
 
 
 class FixError(Exception):
@@ -530,11 +530,28 @@ def _review_run(db: Session, a: Alert, pid: str, v: dict, actor: str) -> tuple[s
     return "Refused", "refused"
 
 
+def _update(db: Session, a: Alert) -> dict:
+    sub = a.subject or {}
+    return {"summary": [["Version", sub.get("version") or ""]], "photos": [], "camera": None,
+            "paths": [
+                _path("install", "Install it", "The installer's update page: see what changes and install it there. "
+                      "Hub admins only; on a computer.", "refresh", "Open the installer", closes=False,
+                      open={"web": "/manage", "app": None}),
+                _path("later", "Not now", "Put this away. The installer offers it again when there is a newer "
+                      "version, and keeps it on its update page.", "clear", "Not now"),
+            ]}
+
+
+def _update_run(db: Session, a: Alert, pid: str, v: dict, actor: str) -> tuple[str, str | None]:
+    return "Put away; the installer still has it", "not now"
+
+
 PLAYBOOKS = {
     "print_done": (_plate, _plate_run), "print_failed": (_plate, _plate_run),
     "failure_detected": (_vision, _vision_run), "alarm": (_alarm, _alarm_run),
     "printer_offline": (_offline, _offline_run), "maintenance_due": (_maint, _maint_run),
     "order_problem": (_route, _route_run), "order_late": (_late, _late_run), "quote_ordered": (_review, _review_run),
+    "update_ready": (_update, _update_run),
 }
 
 

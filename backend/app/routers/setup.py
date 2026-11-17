@@ -212,3 +212,31 @@ def reach_status(token: str = Path(pattern=REACH_TOKEN), db: Session = Depends(g
     if row is None:
         raise HTTPException(404, "unknown or expired check")
     return ReachStatus(seen=row.seen_at is not None, seen_at=row.seen_at, via_proxy=row.via_proxy)
+
+
+class UpdateNotice(BaseModel):
+    part: str = Field(pattern=r"^[a-z][a-z0-9-]{1,39}$")
+    version: str = Field(min_length=1, max_length=40, pattern=r"^[0-9A-Za-z.+-]+$")
+    title: str = Field(min_length=1, max_length=200)
+    message: str = Field(default="", max_length=1000)
+    ready: bool = True
+
+
+@router.post("/updates")
+def update_notice(body: UpdateNotice, db: Session = Depends(get_db), p=Depends(need("admin"))) -> dict:
+    """The installer has a new version of a part (the OrcaSlicer desktop, say) for this installation: an alert in the
+    inbox, with a way to the installer's update page, until it is installed (ready false closes it). One open alert
+    per part; a newer version updates it. Only the key made at setup may say so."""
+    from ..services import alert_inbox, alerts
+    row = db.get(Installation, 1)
+    if not row or not row.installer_key_id or p.get("key_id") != row.installer_key_id:
+        raise HTTPException(403, "only the key made at setup can announce updates")
+    ref = f"alert:update:{body.part}"
+    if body.ready:
+        channels = alerts.notify(db, "update_ready", body.title, body.message, ref=ref,
+                                 subject={"part": body.part, "version": body.version})
+    else:
+        alert_inbox.resolve(db, ref, f"{body.part} {body.version} installed")
+        channels = []
+    db.commit()
+    return {"ok": True, "channels": channels}

@@ -137,7 +137,7 @@ def test_choices_keep_a_kind_off_this_persons_phone(monkeypatch):
     raw = _key(raw_uid)
     c = _client()
     ch = c.get("/api/mobile/v1/alerts/choices", headers=H(raw)).json()
-    assert [g["id"] for g in ch["groups"]] == ["problems", "needs_you", "prints", "orders"]
+    assert [g["id"] for g in ch["groups"]] == ["problems", "needs_you", "prints", "orders", "hub"]
     out = c.put("/api/mobile/v1/alerts/choices", headers=H(raw), json={"on": {"print_started": False}}).json()
     started = next(k for g in out["groups"] for k in g["kinds"] if k["kind"] == "print_started")
     assert started["on"] is False
