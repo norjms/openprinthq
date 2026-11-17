@@ -8,7 +8,7 @@
       "items": [
         { "id": "farm", "label": "Farm overview", "href": "/farm", "icon": "grid", "badge": "plate_checks" },
         { "id": "printers", "label": "Printers", "href": "/farm?view=printers", "icon": "printer", "farm_path": "/app/printers" },
-        { "id": "cameras", "label": "Cameras", "href": "/farm?view=cameras", "icon": "camera", "farm_path": "/app/cameras" },
+        { "id": "cameras", "label": "Cameras", "href": "/farm?view=cameras", "icon": "camera" },
         { "id": "queue", "label": "Print queue", "href": "/farm?view=queue", "icon": "list-queue", "farm_path": "/app/queue" },
         { "id": "filament", "label": "Filament", "href": "/farm?view=filament", "icon": "spool", "farm_path": "/app/filament" },
         { "id": "slicing", "label": "Slicing", "href": "/slicing", "icon": "layers" }

@@ -69,6 +69,9 @@ def test_the_farm_group_shows_only_with_the_farms_own_pages():
     # Timelapses lives in the Farm group only; the list in the file is not changed by resolving it.
     assert sum(i["id"] == "timelapses" for g in farm["groups"] for i in g["items"]) == 1
     assert "href" not in next(i for g in nav["groups"] for i in g["items"] if i["id"] == "timelapses")
+    # One Cameras page, the hub's, with or without the farm's app.
+    cams = next(i for g in farm["groups"] for i in g["items"] if i["id"] == "cameras")
+    assert cams["href"] == "/farm?view=cameras" and cams.get("app") != "farm"
 
 
 @needs_list
