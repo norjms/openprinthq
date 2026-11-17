@@ -51,6 +51,37 @@ def test_old_names_and_values_move_over(tmp_path):
         assert c.execute(text("SELECT key FROM setting")).scalar() == "farm_mirror_library"
 
 
+def test_names_from_before_the_code_was_published(tmp_path):
+    """A hub that ran the private code before it was published (schema 20) names the old farm app itself."""
+    from app.db import migrate_farm_names
+    eng = create_engine(f"sqlite:///{tmp_path / 'pre.db'}")
+    with eng.begin() as c:
+        for ddl in (
+            "CREATE TABLE printer_profile (id INTEGER PRIMARY KEY, wt_printer TEXT, dispatch TEXT)",
+            "CREATE TABLE model_file (id INTEGER PRIMARY KEY, watchtower_uuid TEXT, watchtower_error TEXT, farm_kind TEXT)",
+            "CREATE TABLE print_record (id INTEGER PRIMARY KEY, source TEXT)",
+            "CREATE TABLE connection (id INTEGER PRIMARY KEY, kind TEXT)",
+            "CREATE TABLE job (id INTEGER PRIMARY KEY, kind TEXT, state TEXT)",
+        ):
+            c.execute(text(ddl))
+        c.execute(text("INSERT INTO printer_profile VALUES (1, 'H2D', 'watchtower')"))
+        c.execute(text("INSERT INTO model_file VALUES (1, 'u-1', 'gone', 'watchtower'), (2, '42', NULL, 'openprinthq')"))
+        c.execute(text("INSERT INTO print_record VALUES (1, 'watchtower')"))
+        c.execute(text("INSERT INTO connection VALUES (1, 'watchtower'), (2, 'openprinthq')"))
+        c.execute(text("INSERT INTO job VALUES (1, 'watchtower.sync_product', 'done')"))
+    with eng.begin() as c:
+        migrate_farm_names(c)
+        migrate_farm_names(c)
+    cols = {x["name"] for x in inspect(eng).get_columns("model_file")}
+    assert {"farm_file_ref", "farm_file_error"} <= cols and "watchtower_uuid" not in cols
+    with eng.connect() as c:
+        assert dict(c.execute(text("SELECT id, farm_file_ref FROM model_file")).all()) == {1: None, 2: "42"}
+        assert c.execute(text("SELECT dispatch FROM printer_profile")).scalar() == "farm"
+        assert c.execute(text("SELECT source FROM print_record")).scalar() == "farm"
+        assert [r[0] for r in c.execute(text("SELECT kind FROM connection"))] == ["openprinthq"]
+        assert c.execute(text("SELECT kind FROM job")).scalar() == "farm.sync_product"
+
+
 @pytest.fixture
 def own_db(tmp_path, monkeypatch):
     """A separate SQLite database for init_db, put back afterwards."""
