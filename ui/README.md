@@ -25,7 +25,7 @@ Pin a tag in `package.json` (the repository keeps its old name until the reposit
 redirect it):
 
 ```json
-"openprinthq-ui": "github:norjms/artisanhub-ui#v0.2.0"
+"openprinthq-ui": "github:norjms/openprinthq-ui#v0.2.0"
 ```
 
 Then, once in the app's root layout:
