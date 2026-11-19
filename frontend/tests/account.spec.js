@@ -1,6 +1,6 @@
 // The Farm group in the sidebar, and the reset page (/account/password), at both desktop sizes: no page scroll,
 // nothing cut off. The Farm group shows only when the hub links to an installed farm, so its check answers
-// /api/nav/v1 the way a hub with ArtisanHub Farm at /apps/farm does. The reset page shows its form when the hub
+// /api/nav/v1 the way a hub with the farm at /apps/farm does. The reset page shows its form when the hub
 // has mail and LLDAP set up (RESET_FORM=1) and the "ask the hub's owner" note otherwise.
 import { test, expect } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
@@ -38,8 +38,8 @@ test('the Farm group follows Print when the hub links to an installed farm', asy
     const list = await (await page.request.get('/nav.json')).json();
     const groups = list.groups.map((g) => ({ ...g, items: g.items.map((i) => (i.farm_path
       ? { ...i, href: FARM + i.farm_path, app: 'farm' } : { ...i, app: 'hub' })) }));
-    await route.fulfill({ json: { version: 1, product: 'ArtisanHub', installation: 'Artisan Prints',
-      farm: { kind: 'openprinthq', label: 'ArtisanHub Farm', app: FARM }, groups } });
+    await route.fulfill({ json: { version: 1, product: 'OpenPrintHQ', installation: 'Artisan Prints',
+      farm: { kind: 'openprinthq', label: 'Farm', app: FARM }, groups } });
   });
   await page.goto('/', { waitUntil: 'networkidle' });
   await page.evaluate(() => document.fonts.ready);

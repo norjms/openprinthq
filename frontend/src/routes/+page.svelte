@@ -8,7 +8,7 @@
   import { attempt, toast } from '$lib/toast.svelte.js';
   import { licenseChip } from '$lib/license.js';
   import SourceImport from '$lib/SourceImport.svelte';
-  import { Icon } from 'artisanhub-ui';
+  import { Icon } from 'openprinthq-ui';
   import Glyph from '$lib/Glyph.svelte';
   let byLink = $state(false);
 
@@ -124,7 +124,7 @@
 
 <Page title="Models" description="Every model as a product: photos, print settings, files, colours, parts and store listing.">
 {#snippet actions()}
-  <a href="/get-app" class="btn" data-sveltekit-reload title="Install the ArtisanHub app on an Android phone"><Icon name="download" size={16} />Get the app</a>
+  <a href="/get-app" class="btn" data-sveltekit-reload title="Install the OpenPrintHQ app on an Android phone"><Icon name="download" size={16} />Get the app</a>
   <button class="btn" onclick={() => (byLink = true)} title="Paste a model link from Printables, Thingiverse, MakerWorld, Thangs, MyMiniFactory, Cults3D or any model file"><Glyph name="link" />Add by link</button>
   <a href="/new" class="btn primary"><Icon name="plus" size={16} />Add model</a>
 {/snippet}

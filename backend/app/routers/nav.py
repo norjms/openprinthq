@@ -1,8 +1,8 @@
-"""The hub's sidebar as data, so ArtisanHub Farm (and any other app that shares the sidebar) draws the same one.
+"""The hub's sidebar as data, so the farm (and any other app that shares the sidebar) draws the same one.
 
 GET /api/nav/v1 answers anyone: the groups and items are the same for everybody. Signed in, it also carries the
 installation's name and, when the installation's farm is OpenPrintHQ with a public address (an installed
-ArtisanHub Farm at /apps/farm), each farm item's link to the farm's own page. The list itself is
+The farm at /apps/farm), each farm item's link to the farm's own page. The list itself is
 frontend/static/nav.json, the file the hub's own sidebar is built from.
 """
 import copy
@@ -21,7 +21,7 @@ NAV_PATHS = (
     _HERE.parents[2] / "static" / "nav.json",                                  # in the container: /app/static
     _HERE.parents[3] / "frontend" / "static" / "nav.json",                     # a source checkout
 )
-FARM_LABEL = {"openprinthq": "ArtisanHub Farm"}
+FARM_LABEL = {"openprinthq": "Farm"}
 
 
 def load() -> dict:
@@ -33,7 +33,7 @@ def load() -> dict:
 
 def farm_info() -> dict:
     """{"kind", "label", "app"}: the installation's farm, and the address of its own pages when the hub can link
-    to them (OpenPrintHQ with a public address, which is what an installed ArtisanHub Farm has)."""
+    to them (OpenPrintHQ with a public address, which is what an installed farm has)."""
     from ..clients import public_url
     from ..services import installation
     kind = installation.chosen_farm()
@@ -43,9 +43,9 @@ def farm_info() -> dict:
             app = (public_url("openprinthq") or "").rstrip("/") or None
         except Exception:  # noqa: BLE001  (no team picked or no connection: the hub's own pages it is)
             app = None
-    label = FARM_LABEL.get(kind or "", "the farm")
+    label = FARM_LABEL.get(kind or "", "The farm")
     if app and "/apps/farm" in app:
-        label = "ArtisanHub Farm"
+        label = "Farm"
     return {"kind": kind, "label": label, "app": app}
 
 
@@ -84,7 +84,7 @@ def nav(request: Request, db: Session = Depends(get_db)):
         p = None
     if p:
         tenant.set_team(p["team_id"])
-    farm = farm_info() if p else {"kind": None, "label": "the farm", "app": None}
+    farm = farm_info() if p else {"kind": None, "label": "The farm", "app": None}
     doc = resolve(load(), farm)
     doc["installation"] = (p.get("team_name") if p else None)
     doc["farm"] = farm

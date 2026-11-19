@@ -23,9 +23,9 @@ from ..services.shop import farm_ref
 router = APIRouter()
 
 PROTOCOLS = ("2025-06-18", "2025-03-26", "2024-11-05")
-SERVER = {"name": "artisan-hub", "title": "Artisan Hub slicing", "version": "1.0.0"}
+SERVER = {"name": "openprinthq", "title": "OpenPrintHQ slicing", "version": "1.0.0"}
 INSTRUCTIONS = (
-    "Artisan Hub slicing tools. Models are identified by hub id or code (for example M1185 or PR-460493). "
+    "OpenPrintHQ slicing tools. Models are identified by hub id or code (for example M1185 or PR-460493). "
     "Printers are the team's printer profiles (list_printers), each sliced with OrcaSlicer or PrusaSlicer on the team's "
     "slicer service. Slicing can take a few minutes: slice_model waits up to wait_seconds, then returns a job id to check "
     "with slice_job_status. A new slice lands in review; approve_slice (or approve=true) makes it the file that printer "

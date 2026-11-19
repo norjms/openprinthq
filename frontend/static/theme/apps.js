@@ -1,4 +1,4 @@
-/* Artisan Hub shared look for the supporting apps. Added by npmplus right before </head>, so it runs before the
+/* OpenPrintHQ shared look for the supporting apps. Added by npmplus right before </head>, so it runs before the
    app's own (deferred) code: it marks <html> with the app, skin and light/dark mode, and switches the app's own
    light/dark setting to match.
    Where the look comes from, first match wins:

@@ -1,4 +1,4 @@
-"""Add a model by URL from the Artisan Hub browser add-on (Firefox, Chrome, Edge).
+"""Add a model by URL from the OpenPrintHQ browser add-on (Firefox, Chrome, Edge).
 
 The add-on signs in with a clip key: a person's own API key with only the `clip` scope. It can look at a link,
 import it, follow the import and send files to a model that was imported by link - nothing else (no reading the
@@ -282,7 +282,7 @@ def make_key(body: KeyIn, db: Session = Depends(get_db), p: Principal = Depends(
     raw = new_api_key(db, (body.name.strip() or "Browser add-on")[:120], ["clip"], team_id=p.team_id, user_id=p.get("user_id"))
     k = db.execute(select(ApiKey).where(ApiKey.prefix == raw.split("_")[1])).scalar()
     k.expires_at = now() + timedelta(days=body.expires_in_days) if body.expires_in_days else None
-    k.note = "Artisan Hub browser add-on (clip scope: add by link and send files only)"
+    k.note = "OpenPrintHQ browser add-on (clip scope: add by link and send files only)"
     event(db, "api", f"Browser add-on key '{k.name}' made", actor=p.actor)
     db.commit()
     return {"key": raw, "id": k.id, "hub": settings().public_url,

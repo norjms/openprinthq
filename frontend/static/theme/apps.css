@@ -1,4 +1,4 @@
-/* Artisan Hub shared look for the supporting apps (InvenTree, Spoolman, Manyfold, ResourceSpace, Authentik sign-in).
+/* OpenPrintHQ shared look for the supporting apps (InvenTree, Spoolman, Manyfold, ResourceSpace, Authentik sign-in).
    Served by the hub at /theme/apps.css and added to each app's pages by npmplus (/_ahtheme/). apps.js sets
    <html data-ah-app data-ah-skin data-ah-mode> from the person's hub choice before the app paints.
    Skins: openprinthq (default), classic. Same tokens as the hub's own app.css. */

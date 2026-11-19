@@ -1,4 +1,4 @@
-"""The print farm: ArtisanHub Farm (OpenPrintHQ).
+"""The print farm: the farm.
 
 The hub talks to its farm only through this interface; clients/openprinthq_api.py is the driver. The driver lists
 the capabilities it has; a hub feature that needs one checks `farm().has(...)` (or catches FarmUnsupported) and

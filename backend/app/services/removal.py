@@ -111,7 +111,7 @@ def purge(db: Session, model_id: int) -> dict:
             except ApiError as e:
                 report["warnings"].append(f"{stores.LABEL[ch]} listing: {e.message[:120]}")
 
-    # ArtisanHub Farm: the model's files in the farm's library
+    # the farm: the model's files in the farm's library
     try:
         c = farm()
         from .shop import farm_ref, model_folder_id

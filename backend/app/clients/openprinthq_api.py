@@ -72,7 +72,7 @@ def _priority(value) -> int:
 class OpenPrintHQClient(BaseClient, FarmBackend):
     service = "openprinthq"
     kind = "openprinthq"
-    label = "ArtisanHub Farm"
+    label = "Farm"
     BASE_CAPABILITIES = frozenset({"files", "jobs", "queue", "priority", "cancel", "printers", "commands", "snapshot",
                                    "filament", "webhooks", "library_folders", "maintenance", "preflight",
                                    "queue_stats", "retries", "spool_library", "locations", "nozzles", "pin_printer"})
@@ -150,7 +150,7 @@ class OpenPrintHQClient(BaseClient, FarmBackend):
         return self.request(method, API + path, **kw)
 
     def push_printer_access(self, body: dict):
-        """Who may see and send to which printer, for ArtisanHub Farm in team mode (services/printer_access.py)."""
+        """Who may see and send to which printer, for the farm in team mode (services/printer_access.py)."""
         return self.request("PUT", "/api/team/printer-access", json=body, retries=2, expect_json=False)
 
     # ---- connection ----
@@ -725,7 +725,7 @@ class OpenPrintHQClient(BaseClient, FarmBackend):
         return out
 
     def add_webhook(self, url, events, secret):
-        body = {"name": "Artisan Hub", "provider_type": "webhook", "enabled": True,
+        body = {"name": "OpenPrintHQ", "provider_type": "webhook", "enabled": True,
                 "config": {"webhook_url": url, "signing_secret": secret, "payload_format": "generic",
                            "source_name": "OpenPrintHQ", "hub_events": list(events or [])}}
         body.update({f: True for f in EVENT_FLAGS})

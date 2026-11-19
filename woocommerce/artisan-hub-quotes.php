@@ -1,7 +1,7 @@
 <?php
 /**
- * Plugin Name: Artisan Hub instant quotes
- * Description: The [artisan_quote] form: a customer uploads their own 3D model, Artisan Hub slices and prices it, and the quoted print goes in the cart as the hidden "Custom 3D print" product at the quoted price. The hub does all the work; WordPress only relays (the customer never talks to the hub directly). Needs the Artisan Hub connector (artisan_hub_api_key option).
+ * Plugin Name: OpenPrintHQ instant quotes
+ * Description: The [artisan_quote] form: a customer uploads their own 3D model, OpenPrintHQ slices and prices it, and the quoted print goes in the cart as the hidden "Custom 3D print" product at the quoted price. The hub does all the work; WordPress only relays (the customer never talks to the hub directly). Needs the OpenPrintHQ connector (artisan_hub_api_key option).
  */
 
 if (!defined('ABSPATH')) {

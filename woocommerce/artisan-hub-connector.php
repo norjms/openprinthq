@@ -1,7 +1,7 @@
 <?php
 /**
- * Plugin Name: Artisan Hub connector
- * Description: Glue between WooCommerce and Artisan Hub: lets Woo fetch product images from and deliver webhooks to the hub on a private network, shows hub links on products, and re-checks supply availability at checkout. Install as a must-use plugin and set ARTISAN_HUB_HOST in wp-config.php, for example define('ARTISAN_HUB_HOST', 'hub.example.com');
+ * Plugin Name: OpenPrintHQ connector
+ * Description: Glue between WooCommerce and OpenPrintHQ: lets Woo fetch product images from and deliver webhooks to the hub on a private network, shows hub links on products, and re-checks supply availability at checkout. Install as a must-use plugin and set ARTISAN_HUB_HOST in wp-config.php, for example define('ARTISAN_HUB_HOST', 'hub.example.com');
  */
 
 if (!defined('ABSPATH')) {
@@ -23,15 +23,15 @@ add_filter('http_request_host_is_external', function ($external, $host) {
 
 /* --------------------------------------------- Hub link on the product screen */
 add_action('add_meta_boxes', function () {
-    add_meta_box('artisan-hub', 'Artisan Hub', function ($post) {
+    add_meta_box('openprinthq', 'OpenPrintHQ', function ($post) {
         $url = get_post_meta($post->ID, '_artisan_hub_url', true);
         $code = get_post_meta($post->ID, '_artisan_hub_model_code', true);
         if ($url) {
-            echo '<p>Managed by Artisan Hub' . ($code ? ' (' . esc_html($code) . ')' : '') . '.</p>';
+            echo '<p>Managed by OpenPrintHQ' . ($code ? ' (' . esc_html($code) . ')' : '') . '.</p>';
             echo '<p>Price, photos, colors and stock are pushed from the hub; edit them there so they stay in sync.</p>';
-            echo '<p><a class="button button-primary" target="_blank" href="' . esc_url($url) . '">Open in Artisan Hub</a></p>';
+            echo '<p><a class="button button-primary" target="_blank" href="' . esc_url($url) . '">Open in OpenPrintHQ</a></p>';
         } else {
-            echo '<p>Not linked to Artisan Hub.</p>';
+            echo '<p>Not linked to OpenPrintHQ.</p>';
         }
     }, 'product', 'side', 'high');
 });

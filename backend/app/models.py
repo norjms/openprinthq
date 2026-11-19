@@ -1,4 +1,4 @@
-"""Database schema for Artisan Hub.
+"""Database schema for OpenPrintHQ.
 
 Model = a design (geometry + photos + print settings).
 Product = how a model is sold (SKU, price, Woo listing, BOM, color variants).
@@ -230,7 +230,7 @@ class ModelFile(TenantMixin, Base):
     print_seconds: Mapped[int | None] = mapped_column(Integer)
     filament: Mapped[list] = mapped_column(JSON, default=list)   # [{slot, type, color, grams}]
     settings: Mapped[dict] = mapped_column(JSON, default=dict)
-    # The file's id in ArtisanHub Farm's library (farm_kind "openprinthq"; any other value is a ref the farm cannot
+    # The file's id in the farm's library (farm_kind "openprinthq"; any other value is a ref the farm cannot
     # use, so the file is uploaded again on first use: see shop.farm_ref()).
     farm_file_ref: Mapped[str | None] = mapped_column(String(80))
     farm_file_error: Mapped[str | None] = mapped_column(Text)
@@ -558,7 +558,7 @@ class Installation(Base):
     never inferred from which connections exist (invariant 1). First-run setup is recorded here too."""
     __tablename__ = "installation"
     id: Mapped[int] = mapped_column(primary_key=True)
-    farm: Mapped[str | None] = mapped_column(String(20))               # openprinthq (ArtisanHub Farm); None until setup connects it
+    farm: Mapped[str | None] = mapped_column(String(20))               # openprinthq (the farm); None until setup connects it
     farm_source: Mapped[str | None] = mapped_column(String(20))        # setup | migrated | legacy
     setup_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     setup_token_hash: Mapped[str | None] = mapped_column(String(64))   # a generated first-run token, until setup completes
@@ -690,7 +690,7 @@ class Invite(Base):
 
 
 class Connection(TenantMixin, Base):
-    """A team's link to an outside service (WooCommerce, ArtisanHub Farm, DAM, InvenTree, Spoolman, Manyfold).
+    """A team's link to an outside service (WooCommerce, the farm, DAM, InvenTree, Spoolman, Manyfold).
     Teams can point at the same instance or their own. Secrets are encrypted at rest."""
     __tablename__ = "connection"
     __table_args__ = (UniqueConstraint("team_id", "kind", name="uq_connection_team_kind"),)

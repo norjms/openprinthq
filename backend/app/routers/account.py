@@ -57,12 +57,12 @@ logging.getLogger("uvicorn.access").addFilter(_NoTokens())
 TOKEN = r"^[A-Za-z0-9_-]{20,80}$"
 MIN_LENGTH = 10
 
-# The shared ArtisanHub look (artisanhub-ui glass-dark values), written out because this page is served on its own,
+# The shared OpenPrintHQ look (openprinthq-ui glass-dark values), written out because this page is served on its own,
 # without the hub's front end. Fonts are the hub's copies under /theme/fonts (SIL Open Font License).
 _PAGE = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
-<title>Choose your password - ArtisanHub</title>
+<title>Choose your password - OpenPrintHQ</title>
 <style>
 @font-face {{ font-family: Manrope; font-weight: 400; src: url(/theme/fonts/manrope-latin-400-normal.woff2) format("woff2"); }}
 @font-face {{ font-family: Manrope; font-weight: 600; src: url(/theme/fonts/manrope-latin-600-normal.woff2) format("woff2"); }}
@@ -96,7 +96,7 @@ a {{ color: #bfe6ff; text-underline-offset: 2px; }}
 </style></head>
 <body><div class="wrap"><div class="brand"><span class="tile"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"
  stroke="#1d2a34" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 3 7v10l9 5 9-5V7l-9-5z"/><path
- d="M3 7l9 5 9-5M12 12v10"/></svg></span>ArtisanHub</div><main>{body}</main></div></body></html>"""
+ d="M3 7l9 5 9-5M12 12v10"/></svg></span>OpenPrintHQ</div><main>{body}</main></div></body></html>"""
 
 
 def _page(body: str, status: int = 200) -> HTMLResponse:
@@ -108,7 +108,7 @@ def _form(uid: str, error: str = "") -> HTMLResponse:
     err = f'<p class="error" role="alert">{html.escape(error)}</p>' if error else ""
     return _page(
         "<h1>Choose your password</h1>"
-        f"<p>For your ArtisanHub login, <strong>{html.escape(uid)}</strong>. At least {MIN_LENGTH} characters."
+        f"<p>For your OpenPrintHQ login, <strong>{html.escape(uid)}</strong>. At least {MIN_LENGTH} characters."
         " This link works once.</p>"
         '<form method="post" autocomplete="on">'
         f'<input type="text" name="username" value="{html.escape(uid)}" autocomplete="username" hidden>'
@@ -142,13 +142,13 @@ def _signed_in_login(request: Request, db: Session):
 def _change_form(uid: str, error: str = "", done: bool = False, status: int | None = None) -> HTMLResponse:
     if done:
         return _page("<h1>Password changed</h1><p>Your new password works everywhere you sign in as "
-                     f"<strong>{html.escape(uid)}</strong> with ArtisanHub.</p>"
+                     f"<strong>{html.escape(uid)}</strong> with OpenPrintHQ.</p>"
                      "<p class=\"back\"><a href=\"/\">Back to the hub</a></p>")
     err = f'<p class="error" role="alert">{html.escape(error)}</p>' if error else ""
     return _page(
         "<h1>Change your password</h1>"
-        f"<p>For your ArtisanHub login, <strong>{html.escape(uid)}</strong>: the one password for everything you sign"
-        f" in to with ArtisanHub. At least {MIN_LENGTH} characters.</p>"
+        f"<p>For your OpenPrintHQ login, <strong>{html.escape(uid)}</strong>: the one password for everything you sign"
+        f" in to with OpenPrintHQ. At least {MIN_LENGTH} characters.</p>"
         '<form method="post" autocomplete="on">'
         f'<input type="text" name="username" value="{html.escape(uid)}" autocomplete="username" hidden>'
         '<label for="cur">Current password'
@@ -250,7 +250,7 @@ def _back() -> str:
 def _reset_form() -> HTMLResponse:
     return _page(
         "<h1>Reset your password</h1>"
-        "<p>Enter the username or the email address of your ArtisanHub login. We send a link to choose a new"
+        "<p>Enter the username or the email address of your OpenPrintHQ login. We send a link to choose a new"
         " password to the email address on the login.</p>"
         '<form method="post" action="/account/password" autocomplete="on">'
         '<label for="login">Username or email'

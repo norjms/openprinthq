@@ -3,7 +3,7 @@
   // the hub owner's People and teams page (/team and /platform redirect here; the owner's part is ?view=hub).
   import { onMount } from 'svelte';
   import { page } from '$app/state';
-  import { Icon, Toggle } from 'artisanhub-ui';
+  import { Icon, Toggle } from 'openprinthq-ui';
   import { api, ago } from '$lib/api.js';
   import { attempt, toast } from '$lib/toast.svelte.js';
   import { session, loadMe, can, ROLE_LABEL, ROLE_HELP } from '$lib/session.svelte.js';

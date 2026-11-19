@@ -1,7 +1,7 @@
 # The screens are the same on every platform, so they are built once, natively.
 FROM --platform=$BUILDPLATFORM node:22-alpine AS ui
 WORKDIR /ui
-# git: the shared look (artisanhub-ui) is a dependency pinned by git tag.
+# git: the shared look (openprinthq-ui) is a dependency pinned by git tag.
 RUN apk add --no-cache git
 COPY frontend/package.json frontend/package-lock.json* ./
 RUN npm install --no-audit --no-fund
@@ -9,7 +9,7 @@ COPY frontend/ ./
 RUN npm run build
 
 FROM python:3.12-slim
-LABEL org.opencontainers.image.title="Artisan Hub" \
+LABEL org.opencontainers.image.title="OpenPrintHQ" \
       org.opencontainers.image.source="https://github.com/norjms/artisan-hub" \
       org.opencontainers.image.licenses="AGPL-3.0-only"
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1

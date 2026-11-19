@@ -194,7 +194,7 @@ def upc_lookup(db: Session, code: str) -> dict | None:
         return None
     try:
         r = httpx.get(url, params={"upc": code}, timeout=6.0, headers={"Accept": "application/json",
-                                                                       "User-Agent": "ArtisanHub/1.0"})
+                                                                       "User-Agent": "OpenPrintHQ/1.0"})
         if r.status_code == 429 or r.status_code >= 500:
             return None
         j = r.json()

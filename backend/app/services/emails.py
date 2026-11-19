@@ -62,7 +62,7 @@ class Email:
 
 
 def _footer(sender: str, reason: str) -> str:
-    where = f"Sent by ArtisanHub at {sender}." if sender else "Sent by your ArtisanHub."
+    where = f"Sent by OpenPrintHQ at {sender}." if sender else "Sent by your OpenPrintHQ."
     return f"{where} {reason}".strip()
 
 
@@ -127,7 +127,7 @@ def _html(e: Email) -> str:
 <tr><td style="padding:32px 28px">
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 22px"><tr>
 <td width="36" height="36" align="center" valign="middle" bgcolor="{ACCENT}" style="width:36px;height:36px;background-color:{ACCENT};border-radius:12px;font-family:{UI_FONT};font-size:13px;font-weight:700;color:{ON_ACCENT}">AH</td>
-<td style="padding-left:10px;font-family:{TITLE_FONT};font-size:20px;font-weight:600;letter-spacing:-0.4px;color:{TEXT}">ArtisanHub</td>
+<td style="padding-left:10px;font-family:{TITLE_FONT};font-size:20px;font-weight:600;letter-spacing:-0.4px;color:{TEXT}">OpenPrintHQ</td>
 </tr></table>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="{CARD}" style="background-color:{CARD};border:1px solid {LINE};border-radius:22px">
 <tr><td style="padding:28px">
@@ -158,14 +158,14 @@ def invite(by: str, target: str, role: str | None, link: str, signup_url: str | 
     (Authentik), then accepts."""
     who = by or "The hub's owner"
     as_role = f" as {_article(role)} {role}" if role else ""
-    paragraphs = [f"{who} invited you to {target} on ArtisanHub{as_role}."]
+    paragraphs = [f"{who} invited you to {target} on OpenPrintHQ{as_role}."]
     if signup_url:
         paragraphs.append("First choose the password for your login, then accept the invitation.")
         buttons = [("Choose your password", signup_url), ("Accept the invitation", link)]
     else:
         buttons = [("Accept the invitation", link)]
     return Email(
-        subject=f"{who} invited you to {target} on ArtisanHub",
+        subject=f"{who} invited you to {target} on OpenPrintHQ",
         heading="You are invited",
         paragraphs=paragraphs,
         buttons=buttons,
@@ -178,10 +178,10 @@ def invite(by: str, target: str, role: str | None, link: str, signup_url: str | 
 def password_reset(link: str, minutes: int, public_url: str) -> Email:
     """A one-time link to choose a new password, for someone who asked for one on the hub's reset page."""
     return Email(
-        subject="Reset your ArtisanHub password",
+        subject="Reset your OpenPrintHQ password",
         heading="Reset your password",
         paragraphs=[
-            "Someone asked for a new password for your ArtisanHub login. If it was you, choose one with the link below.",
+            "Someone asked for a new password for your OpenPrintHQ login. If it was you, choose one with the link below.",
             "If it was not you, ignore this email: your password stays as it is.",
         ],
         buttons=[("Choose a new password", link)],
@@ -222,7 +222,7 @@ def out_of_supplies(product: str, sku: str, lines: list[str], public_url: str) -
 
 def license_reminder(notes: list[str], public_url: str) -> Email:
     return Email(
-        subject="ArtisanHub: commercial license reminder",
+        subject="OpenPrintHQ: commercial license reminder",
         heading="Commercial licenses",
         paragraphs=["Commercial licenses you sell under need attention:"],
         items=[(note, None) for note in notes],
@@ -236,7 +236,7 @@ def license_changes(changes: list[tuple[str, str]], public_url: str) -> Email:
     """``changes``: (what changed, the model's page) for each model."""
     n = len(changes)
     return Email(
-        subject=f"ArtisanHub: {n} model license change{'' if n == 1 else 's'}",
+        subject=f"OpenPrintHQ: {n} model license change{'' if n == 1 else 's'}",
         heading="Model licenses changed",
         paragraphs=[
             "These designs changed license since you downloaded them. Your saved license record shows the terms "

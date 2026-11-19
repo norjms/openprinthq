@@ -185,7 +185,7 @@ def consider(db: Session, c, fj: FarmJob) -> str:
 def scan(db: Session, limit: int = 20) -> dict:
     from ..clients import farm, farm_connected
     if not farm_connected():
-        return {"skipped": "the farm is not connected"}
+        return {"skipped": "The farm is not connected"}
     c = farm()
     out: dict[str, int] = {}
     jobs = db.execute(select(FarmJob).where(FarmJob.status.in_(PENDING), FarmJob.model_id.is_not(None))

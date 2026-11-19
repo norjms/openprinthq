@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     deltaprints_dir: str = ""                   # first team DeltaPrints folder, under source_root; empty = none
     dev_auth_bypass: bool = False                # tests only
     setup_token: str = ""                        # first-run setup token (HUB_SETUP_TOKEN); generated and logged if empty
-    # HUB_FARM_MOVE=openprinthq: an installation set up with a farm the hub no longer supports moves to ArtisanHub
+    # HUB_FARM_MOVE=openprinthq: an installation set up with a farm the hub no longer supports moves to OpenPrintHQ
     # Farm at this start (docs/farm.md, Moving from another farm). Without it such an installation refuses to start.
     farm_move: str = ""
 
@@ -47,7 +47,7 @@ class Settings(BaseSettings):
     authentik_group: str = "hub-users"
     authentik_invite_flow: str = "artisan-hub-invite"
     # LLDAP, the user directory behind Authelia, for invites when there is no Authentik (an installation made by
-    # the ArtisanHub installer). The account must be in lldap_admin. Empty = off.
+    # the OpenPrintHQ installer). The account must be in lldap_admin. Empty = off.
     lldap_url: str = ""                          # its web API, for example http://lldap:17170
     ldap_url: str = ""                           # its LDAP port, for example ldap://lldap:3890
     ldap_base_dn: str = "dc=artisanhub,dc=local"
@@ -78,7 +78,7 @@ class Settings(BaseSettings):
     rs_user: str = ""
     rs_key: str = ""
 
-    # The model library (gyroidhub, under the hub's name at /apps/models/ in an ArtisanHub installation): it browses
+    # The model library (gyroidhub, under the hub's name at /apps/models/ in an OpenPrintHQ installation): it browses
     # the hub's library with a 3D view. The hub links to it from its menu and from each model.
     models_url: str = ""
 
@@ -106,16 +106,16 @@ class Settings(BaseSettings):
     smtp_port: int = 587
     smtp_user: str = ""
     smtp_password: str = ""
-    smtp_from: str = "ArtisanHub <hub@localhost>"
+    smtp_from: str = "OpenPrintHQ <hub@localhost>"
     alert_to: str = ""
     # Shared look for the supporting apps: a reverse proxy sends this key with the signed-in person's email (empty = off)
     theme_proxy_key: str = ""
-    wordmark: str = "/theme/artisanhub-wordmark.svg"   # path or URL of the wordmark the phone apps draw
+    wordmark: str = "/theme/openprinthq-wordmark.svg"   # path or URL of the wordmark the phone apps draw
 
     # Phone app: Connect a phone links (/pair), the install page (/get-app), Android App Links and iOS Universal Links
     app_id: str = ""                               # Android package and iOS bundle id; empty = no app links
     android_cert_sha256: str = ""                  # SHA-256 of the app's signing key, comma list; empty = no App Links
-    android_apk_dir: str = ""                    # folder holding artisan-hub-<version>.apk files; empty = none
+    android_apk_dir: str = ""                    # folder holding openprinthq-<version>.apk files (artisan-hub-<version>.apk before the rename); empty = none
     android_store_url: str = ""                    # Play listing; when set it replaces the APK download
     ios_team_id: str = ""                          # Apple Developer team id; turns on Universal Links (paid program only)
     ios_store_url: str = ""                        # TestFlight or App Store link; when set the install page offers it

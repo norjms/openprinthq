@@ -275,10 +275,10 @@ def test_newer_engine_has_out_of_service_maintenance_log_and_priority(ophq):
     assert c.has("out_of_service") and c.has("maintenance_log")
     assert {"out_of_service", "maintenance_log"} <= set(c.describe()["capabilities"])
 
-    c.set_down("X1C", True, "Lubricate rods (Artisan Hub)")
+    c.set_down("X1C", True, "Lubricate rods (OpenPrintHQ)")
     m, path, body, _ = fake.calls[-1]
-    assert (m, path, body) == ("PUT", API + "/printers/1/out-of-service", {"reason": "Lubricate rods (Artisan Hub)"})
-    assert c.maint_down() == [{"printer_name": "X1C", "reason": "Lubricate rods (Artisan Hub)",
+    assert (m, path, body) == ("PUT", API + "/printers/1/out-of-service", {"reason": "Lubricate rods (OpenPrintHQ)"})
+    assert c.maint_down() == [{"printer_name": "X1C", "reason": "Lubricate rods (OpenPrintHQ)",
                                "since": "2026-10-24T12:00:00Z"}]
     c.set_down("X1C", False)
     assert fake.calls[-1][:2] == ("DELETE", API + "/printers/1/out-of-service")

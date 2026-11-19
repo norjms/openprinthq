@@ -141,7 +141,7 @@ def ensure_tools(prof: PrinterProfile) -> list[dict]:
 
 
 def discover_printers() -> list[dict]:
-    """Printers ArtisanHub Farm reports, as hints for the setup wizard. Without the farm, an empty list."""
+    """Printers the farm reports, as hints for the setup wizard. Without the farm, an empty list."""
     from ..services.connections import is_connected
     from ..clients import farm, farm_connected
     if not farm_connected():

@@ -1,7 +1,7 @@
 # Filament mapping
 
 When the next queued job can't start because the filament loaded on a printer doesn't match what the file was
-sliced with, ArtisanHub Farm holds the job and lists it as unmatched (its rules: `docs/filament-matching.md` in
+sliced with, the farm holds the job and lists it as unmatched (its rules: `docs/filament-matching.md` in
 openprinthq-engine). The hub alerts at once and offers a mapping screen. Code: `services/filament_mapping.py`,
 `routers/filament_mapping.py`, page `/farm/jobs/{id}/filament`.
 
@@ -40,4 +40,4 @@ The same routes under `/api/farm` (web) and `/api/mobile/v1/farm` (phone app):
 | GET, DELETE | `/filament-matching/aliases[/{id}]` | view, farm | Saved mappings |
 
 Only printers the person may use are offered (printer access). An engine without filament matching answers 400
-("update ArtisanHub Farm").
+("update the farm").

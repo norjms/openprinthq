@@ -1,6 +1,6 @@
 # Configuration
 
-Artisan Hub reads its settings from environment variables. Each setting is named `HUB_` followed by the
+OpenPrintHQ reads its settings from environment variables. Each setting is named `HUB_` followed by the
 name in upper case, so `public_url` is `HUB_PUBLIC_URL`. With docker compose, put them in an env file and
 load it with `env_file:` (see `compose.example.yml`).
 
@@ -97,12 +97,12 @@ host name, for example `define('ARTISAN_HUB_HOST', 'hub.example.com');`.
 
 ## Print farm
 
-The print farm is ArtisanHub Farm (OpenPrintHQ). First-run setup records it, and its connection is made in the UI
+The print farm is the farm. First-run setup records it, and its connection is made in the UI
 (Settings, Connected services) with an OpenPrintHQ API key. See `docs/farm.md`.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `HUB_FARM_MOVE` | empty | `openprinthq` moves an installation set up with a farm app the hub no longer supports to ArtisanHub Farm at the next start (`docs/farm.md`, Moving from another farm). |
+| `HUB_FARM_MOVE` | empty | `openprinthq` moves an installation set up with a farm app the hub no longer supports to the farm at the next start (`docs/farm.md`, Moving from another farm). |
 
 ## InvenTree
 
@@ -142,7 +142,7 @@ Teams connect AI providers under **Connections**: a local Ollama server, OpenAI 
 | `HUB_SMTP_PORT` | `587` | Mail server port. |
 | `HUB_SMTP_USER` | empty | Mail user. |
 | `HUB_SMTP_PASSWORD` | empty | *Secret.* Mail password. |
-| `HUB_SMTP_FROM` | `ArtisanHub <hub@localhost>` | Sender address. |
+| `HUB_SMTP_FROM` | `OpenPrintHQ <hub@localhost>` | Sender address. |
 | `HUB_ALERT_TO` | empty | Where alerts go, comma list. |
 
 Push alerts (ntfy, Telegram) are set per team in the UI.
@@ -152,7 +152,7 @@ Push alerts (ntfy, Telegram) are set per team in the UI.
 | Variable | Default | Meaning |
 |---|---|---|
 | `HUB_THEME_PROXY_KEY` | empty | *Secret.* Key a reverse proxy sends, with the signed-in person's email, to fetch that person's look for the supporting apps (`/theme/apps.css`, `/theme/apps.js`). Empty turns it off. |
-| `HUB_WORDMARK` | `/theme/artisanhub-wordmark.svg` | Path or URL of the wordmark the phone apps draw. |
+| `HUB_WORDMARK` | `/theme/openprinthq-wordmark.svg` | Path or URL of the wordmark the phone apps draw. |
 
 ## Phone app links
 
@@ -163,7 +163,7 @@ All off until set.
 |---|---|---|
 | `HUB_APP_ID` | empty | Android package name and iOS bundle id of the phone app. Empty means links open by the app's URL scheme only, and the app link files are empty. |
 | `HUB_ANDROID_CERT_SHA256` | empty | SHA-256 fingerprint of the app's signing key, comma list. Needed with `HUB_APP_ID` for `/.well-known/assetlinks.json`. |
-| `HUB_ANDROID_APK_DIR` | empty | Folder holding `artisan-hub-<version>.apk` files to offer for download. |
+| `HUB_ANDROID_APK_DIR` | empty | Folder holding `openprinthq-<version>.apk` files to offer for download (builds from before the rename are named `artisan-hub-<version>.apk`; both are found). |
 | `HUB_ANDROID_STORE_URL` | empty | Play listing. When set it replaces the APK download. |
 | `HUB_IOS_TEAM_ID` | empty | Apple Developer team id. With `HUB_APP_ID` it turns on Universal Links. |
 | `HUB_IOS_STORE_URL` | empty | TestFlight or App Store link for the install page. |

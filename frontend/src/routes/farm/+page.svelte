@@ -3,7 +3,7 @@
   import { onMount } from 'svelte';
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
-  import { Icon } from 'artisanhub-ui';
+  import { Icon } from 'openprinthq-ui';
   import Glyph from '$lib/Glyph.svelte';
   import { api, fmtTime, ago } from '$lib/api.js';
   import { attempt, toast } from '$lib/toast.svelte.js';

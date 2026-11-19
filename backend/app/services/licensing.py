@@ -263,7 +263,7 @@ def wayback(url: str) -> str | None:
     import httpx
     try:
         r = httpx.get(f"https://web.archive.org/save/{url}", timeout=120, follow_redirects=False,
-                      headers={"User-Agent": "ArtisanHub/1.0 (license record)"})
+                      headers={"User-Agent": "OpenPrintHQ/1.0 (license record)"})
         loc = r.headers.get("content-location") or r.headers.get("location")
         if loc:
             return loc if loc.startswith("http") else f"https://web.archive.org{loc}"
@@ -343,9 +343,9 @@ def _team_name(model: Model) -> str:
         from sqlalchemy.orm import object_session
         from ..models import Team
         t = object_session(model).get(Team, model.team_id)
-        return t.name if t else "Artisan Hub"
+        return t.name if t else "OpenPrintHQ"
     except Exception:  # noqa: BLE001
-        return "Artisan Hub"
+        return "OpenPrintHQ"
 
 
 def render_pdf(path: Path, model: Model, ev: dict, cover: bytes | None):
@@ -361,11 +361,11 @@ def render_pdf(path: Path, model: Model, ev: dict, cover: bytes | None):
     W, H = letter
     L = 0.8 * inch
     c.setTitle(f"License record {model.code}")
-    c.setAuthor("Artisan Hub")
+    c.setAuthor("OpenPrintHQ")
     c.setFont("Helvetica-Bold", 16)
     c.drawString(L, H - 0.9 * inch, f"{_team_name(model)}: license record")
     c.setFont("Helvetica", 9)
-    c.drawString(L, H - 1.1 * inch, f"Captured {ev['captured_at']} by Artisan Hub")
+    c.drawString(L, H - 1.1 * inch, f"Captured {ev['captured_at']} by OpenPrintHQ")
     top = H - 1.45 * inch
     img_w = 1.7 * inch
     if cover and (tb := _thumb(cover)):

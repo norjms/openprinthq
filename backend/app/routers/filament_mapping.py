@@ -52,7 +52,7 @@ def _call(fn):
         if status == 404:
             raise HTTPException(404, "Job not found")
         if type(e).__name__ == "FarmUnsupported":
-            raise HTTPException(400, "The farm doesn't support filament mapping yet; update ArtisanHub Farm")
+            raise HTTPException(400, "The farm doesn't support filament mapping yet; update the farm")
         raise HTTPException(502, (getattr(e, "message", None) or str(e))[:300])
 
 

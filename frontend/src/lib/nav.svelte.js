@@ -1,7 +1,7 @@
 import NAV from '../../static/nav.json';
 import { api } from './api.js';
 
-// The sidebar: one list (static/nav.json) that the hub draws and serves at /api/nav/v1 for ArtisanHub Farm.
+// The sidebar: one list (static/nav.json) that the hub draws and serves at /api/nav/v1 for the farm.
 // The server's copy adds what only it knows: the installed farm's own links and the installation's name, and with
 // them the Farm group (pages only the farm has, app "farm" in the list), which the built-in copy leaves out.
 const hubOnly = NAV.groups
@@ -38,6 +38,6 @@ export function where(url) {
   return null;
 }
 
-/** How the screens name the print farm (ArtisanHub Farm) in a sentence. */
+/** How the screens name the print farm (the farm) in a sentence. */
 export const farmName = () => 'the farm';
 export const FarmName = () => 'The farm';

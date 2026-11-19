@@ -2,7 +2,7 @@
   // Devices: the browser add-on, TVs and phones that reach this hub, and the keys they use. Brings together what
   // were the Browser add-on and Connect a TV pages and the phone part of Settings (old addresses redirect here).
   import { onMount } from 'svelte';
-  import { Icon } from 'artisanhub-ui';
+  import { Icon } from 'openprinthq-ui';
   import { api, ago } from '$lib/api.js';
   import { attempt, toast } from '$lib/toast.svelte.js';
   import { can } from '$lib/session.svelte.js';
@@ -73,7 +73,7 @@
   }
   async function copyPairLink() { try { await navigator.clipboard.writeText(pair.url); toast('Link copied; open it on the phone'); } catch { toast('Could not copy the link'); } }
   async function mkPhone() {
-    const r = await attempt(() => api.post('/api/mobile/v1/keys', { name: 'Phone', scopes: ['read', 'write'], expires_in_days: 90, bind_instance: true, note: 'ArtisanHub phone app' }));
+    const r = await attempt(() => api.post('/api/mobile/v1/keys', { name: 'Phone', scopes: ['read', 'write'], expires_in_days: 90, bind_instance: true, note: 'OpenPrintHQ phone app' }));
     created = r.key; load();
   }
   $effect(() => () => stopTimer());
@@ -121,7 +121,7 @@
     <section class="ah-glass ah-card" id="tv">
       <div class="flex items-center gap-[10px]"><div class="ah-icon-tile"><Icon name="tv" /></div>
         <div style="flex:1;min-width:0"><h2 class="ah-card-title">Connect a TV</h2><div class="ah-muted">Apple TV and Android TV</div></div></div>
-      <p class="ah-secondary">Open ArtisanHub on the TV. It shows a code; type it here. The TV gets its own view-only key: printers, alerts, the queue and today's orders. It cannot change anything.</p>
+      <p class="ah-secondary">Open OpenPrintHQ on the TV. It shows a code; type it here. The TV gets its own view-only key: printers, alerts, the queue and today's orders. It cannot change anything.</p>
       {#if tvDone}<div class="ah-banner ah-banner--live">Connected <b>{tvDone.name || tvDone.device}</b>. The TV shows the wall in a few seconds.</div>{/if}
       {#if can('api_keys')}
         <form class="flex gap-3 items-end" onsubmit={(e) => { e.preventDefault(); approveTv(); }}>
@@ -141,7 +141,7 @@
       <a class="btn sm" href="/get-app" data-sveltekit-reload><Icon name="download" size={16} />Get the app</a></div>
     {#if can('api_keys')}
       {#if !pair}
-        <p class="ah-secondary">Scan the code with the phone's camera or the ArtisanHub app. If the app is not installed yet, the phone offers to install it. The phone shows what it is connecting to and asks you to confirm; only then is a key made, tied to that phone. The code works once, for 10 minutes.</p>
+        <p class="ah-secondary">Scan the code with the phone's camera or the OpenPrintHQ app. If the app is not installed yet, the phone offers to install it. The phone shows what it is connecting to and asks you to confirm; only then is a key made, tied to that phone. The code works once, for 10 minutes.</p>
         <div class="flex flex-wrap gap-3 items-center">
           <span class="ah-muted">The phone can</span>
           <div class="ah-seg" role="group" aria-label="What the phone can do">{#each [['view', 'View only'], ['act', 'View and act'], ['all', 'Everything I can do']] as [val, label]}<button type="button" aria-pressed={pairAccess === val} onclick={() => (pairAccess = val)}>{label}</button>{/each}</div>
@@ -150,7 +150,7 @@
           <button class="btn primary" onclick={startPair}>Show QR code</button>
           <button class="btn ghost" onclick={mkPhone} title="Read and write, 90 days, tied to the first phone that uses it">Make a key to paste</button>
         </div>
-        {#if created}<div class="ah-banner ah-banner--live" style="flex-wrap:wrap;word-break:break-all"><b>Copy it now, it is shown once:</b><button class="btn sm" onclick={() => copy(created)}>Copy</button><code style="width:100%">{created}</code><span>Paste it into the ArtisanHub app with this address: {origin}. It works for 90 days and only on the first phone that uses it.</span></div>{/if}
+        {#if created}<div class="ah-banner ah-banner--live" style="flex-wrap:wrap;word-break:break-all"><b>Copy it now, it is shown once:</b><button class="btn sm" onclick={() => copy(created)}>Copy</button><code style="width:100%">{created}</code><span>Paste it into the OpenPrintHQ app with this address: {origin}. It works for 90 days and only on the first phone that uses it.</span></div>{/if}
       {:else}
         <div class="flex flex-wrap gap-6 items-center">
           <div class="pair-qr" class:faded={pair.state !== 'waiting'}>{@html pair.qr_svg}</div>

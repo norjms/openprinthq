@@ -3,7 +3,7 @@
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
-  import { AppShell, Sidebar, Icon } from 'artisanhub-ui';
+  import { AppShell, Sidebar, Icon } from 'openprinthq-ui';
   import { api } from '$lib/api.js';
   import { toasts } from '$lib/toast.svelte.js';
   import { session, loadMe, ROLE_LABEL } from '$lib/session.svelte.js';
@@ -34,7 +34,7 @@
     }))
   })));
   const here = $derived(where(page.url));
-  const name = $derived(nav.installation || me?.team?.name || 'ArtisanHub');
+  const name = $derived(nav.installation || me?.team?.name || 'OpenPrintHQ');
   const initials = $derived((me?.user?.name || me?.user?.username || '?').split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase());
   // What needs someone's attention, for the bell: the same counts the sidebar badges carry, with where to go.
   const alerts = $derived([
@@ -94,7 +94,7 @@
 {:else}
   <AppShell title={shell.title} description={shell.description} filters={shell.actions ?? undefined} widgets={shell.widgets ?? undefined}>
     {#snippet sidebar()}
-      <Sidebar product="ArtisanHub" {groups} onsearch={openJump} />
+      <Sidebar product="OpenPrintHQ" {groups} onsearch={openJump} />
     {/snippet}
     {#snippet header()}
       <div class="ah-header__name" title="This installation">{name}</div>
@@ -121,11 +121,11 @@
             <div class="ah-glass ah-menu" role="menu">
               <div style="padding:6px 10px"><b>{me.user.name || me.user.username}</b><div class="ah-muted">{ROLE_LABEL[me.team?.role] || 'API key'}{me.user.email ? `, ${me.user.email}` : ''}</div></div>
               <a href="/settings" onclick={() => (userMenu = false)}><Icon name="cog" size={16} />Appearance and settings</a>
-              <!-- B35: the one password for everything signed in to with ArtisanHub, changed on the hub's own page. -->
+              <!-- B35: the one password for everything signed in to with OpenPrintHQ, changed on the hub's own page. -->
               <a href="/account/password/change" data-sveltekit-reload>Change password</a>
               {#if me.links && Object.values(me.links).some(Boolean)}
                 <div class="ah-group-label" style="margin:10px 10px 4px">Systems</div>
-                {#each [['models', 'Models'], ['woo', 'WooCommerce'], ['farm', 'ArtisanHub Farm'], ['dam', 'DAM'], ['manyfold', 'Manyfold'], ['inventree', 'InvenTree'], ['spoolman', 'Spoolman']] as [k, l]}
+                {#each [['models', 'Models'], ['woo', 'WooCommerce'], ['farm', 'Farm'], ['dam', 'DAM'], ['manyfold', 'Manyfold'], ['inventree', 'InvenTree'], ['spoolman', 'Spoolman']] as [k, l]}
                   {#if me.links[k]}<a target="_blank" rel="noopener" href={me.links[k]}>{l}</a>{/if}
                 {/each}
               {/if}

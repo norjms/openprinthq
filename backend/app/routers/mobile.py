@@ -1140,7 +1140,7 @@ async def _relay(app: str, path: str, request: Request, db: Session, p: Principa
 @router.api_route("/relay/{app}/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
 async def relay(app: str, path: str, request: Request, db: Session = Depends(get_db), p: Principal = Depends(need("view"))):
     """Raw access to a connected app's own API, with the team's stored credentials. Paths are relative to:
-    openprinthq /api/engine/api/v1/ (ArtisanHub Farm's engine, the team's API key), spoolman /api/,
+    openprinthq /api/engine/api/v1/ (the farm's engine, the team's API key), spoolman /api/,
     inventree /api/, woo /wp-json/, manyfold /, moonraker /<printer>/<path>, dam: POST {"function", "params"}.
     Needs the connections permission and a relay:<app> (or relay:*) scope; changes are written to the event log."""
     return await _relay(app, path, request, db, p)
@@ -1213,7 +1213,7 @@ class PairingIn(BaseModel):
 
 @router.post("/pairings")
 def make_pairing(body: PairingIn, db: Session = Depends(get_db), p: Principal = Depends(need("api_keys"))):
-    """Start pairing a phone: returns a QR code (SVG) the Artisan Hub app scans. It works once, for 10 minutes."""
+    """Start pairing a phone: returns a QR code (SVG) the OpenPrintHQ app scans. It works once, for 10 minutes."""
     import secrets
     from ..models import PhonePairing
     if body.access not in ACCESS:

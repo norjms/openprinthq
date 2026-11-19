@@ -173,7 +173,7 @@
       <section class="ah-glass ah-card">
         <h2 class="ah-card-title">Other model sites</h2>
         <div class="panel" style="padding:12px 16px"><div class="ah-kv"><b>Printables</b><span class="chip ok">No account needed</span></div><div class="ah-muted">Free models download directly.</div></div>
-        <div class="panel" style="padding:12px 16px"><div class="ah-kv"><b>Thangs and MyMiniFactory</b><span class="chip ok">No account needed</span></div><div class="ah-muted">Details, photos and license import from the link. Their downloads need you signed in, so the files come from your browser: the ArtisanHub add-on's <i>Send files</i>, or drop them on the model's Files tab.</div></div>
+        <div class="panel" style="padding:12px 16px"><div class="ah-kv"><b>Thangs and MyMiniFactory</b><span class="chip ok">No account needed</span></div><div class="ah-muted">Details, photos and license import from the link. Their downloads need you signed in, so the files come from your browser: the OpenPrintHQ add-on's <i>Send files</i>, or drop them on the model's Files tab.</div></div>
         <div class="panel flex flex-col gap-2" style="padding:12px 16px">
           <div class="ah-kv"><b>Cults3D</b>
             {#if srcs?.cults3d?.connected}<span class="chip ok">API key{srcs.cults3d.account ? ` (${srcs.cults3d.account})` : ''}</span><button class="btn sm danger" onclick={() => srcOut('cults3d')}>Remove</button>{/if}</div>

@@ -384,7 +384,7 @@ def import_normalized(db: Session, n: dict, profile_id=None, fetch_files=None, p
         report["files_in_browser"] = True
         report["download_page"] = n.get("download_page") or n["url"]
         report["warnings"].append(f"{PLATFORM_LABEL[platform]} files need your signed-in browser: open the model page and "
-                                  "use the Artisan Hub add-on's Send files, or drop the files on the model's Files tab")
+                                  "use the OpenPrintHQ add-on's Send files, or drop the files on the model's Files tab")
     dups = duplicate_files(db, model, [f.sha256 for f in model.files])
     if dups:
         report["duplicates"] = dups

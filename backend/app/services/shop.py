@@ -381,7 +381,7 @@ def consume_order(db: Session, order_id: int) -> dict:
             if left <= 0:
                 break
         if batch:
-            inventree().remove_stock(batch, notes=f"Artisan Hub: Woo order #{o.number}")
+            inventree().remove_stock(batch, notes=f"OpenPrintHQ: Woo order #{o.number}")
         removed.append({"part": pid, "qty": qty, "short": max(0, left)})
     o.consumed = True
     o.consumed_at = datetime.now(timezone.utc)
@@ -436,7 +436,7 @@ FARM_FILE_KINDS = ("3mf_project", "3mf_sliced", "gcode")
 
 
 # ---------- farm library refs ----------
-# model_file.farm_file_ref is the file's id in ArtisanHub Farm's library (farm_kind "openprinthq"). A ref of any
+# model_file.farm_file_ref is the file's id in the farm's library (farm_kind "openprinthq"). A ref of any
 # other kind means nothing to the farm, so the file is uploaded again on first use instead of sent as a bad ref.
 FARM = "openprinthq"
 

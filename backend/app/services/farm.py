@@ -885,7 +885,7 @@ def order_printed(db: Session, order_id: int) -> dict:
     o = db.get(Order, order_id)
     if not o:
         return {"skipped": "gone"}
-    noted = order_note(db, o, "Artisan Hub: every item on this order has printed and is ready to pack.")
+    noted = order_note(db, o, "OpenPrintHQ: every item on this order has printed and is ready to pack.")
     notify(db, "order_printed", f"Order #{o.number} is printed", "Ready to pack.", link=_link("/orders"))
     return {"noted": noted}
 

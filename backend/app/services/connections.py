@@ -33,9 +33,9 @@ KINDS = {
              "(made_to_order). The webhook secret is the signing secret (whsec_...) from Etsy's Webhook portal."),
     "dam": ("ResourceSpace DAM", ["url", "host", "user"], ["key"],
             "API user and its private key (ResourceSpace > My account > API key). Host is the public name the DAM expects."),
-    "openprinthq": ("ArtisanHub Farm", ["url", "public_url", "target_group", "verify_tls"],
+    "openprinthq": ("Farm", ["url", "public_url", "target_group", "verify_tls"],
                     ["api_key"],
-                    "The ArtisanHub Farm address and an API key with control scope (ArtisanHub Farm, Settings, API "
+                    "The farm's address and an API key with control scope (the farm's Settings, API "
                     "keys). "
                     "Jobs go to the printer group named in target_group, or else to printers of the model a file was "
                     "sliced for."),

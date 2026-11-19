@@ -111,7 +111,7 @@ def test_tiles_without_the_farm(monkeypatch):
     from app.routers import mobile
 
     def boom():
-        raise RuntimeError("the farm is down")
+        raise RuntimeError("The farm is down")
     monkeypatch.setattr(mobile, "_farm", boom)
     r = _client().get("/api/mobile/v1/tiles", headers=H(_key(["read"])))
     assert r.status_code == 200 and "farm" in r.json()["errors"] and "queue" in r.json()

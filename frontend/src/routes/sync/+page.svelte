@@ -3,7 +3,7 @@
   import { onMount } from 'svelte';
   import { api, ago } from '$lib/api.js';
   import { attempt } from '$lib/toast.svelte.js';
-  import { Icon } from 'artisanhub-ui';
+  import { Icon } from 'openprinthq-ui';
   let jobs = $state([]);
   let state = $state('');
   let open = $state(null);

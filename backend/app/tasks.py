@@ -962,7 +962,7 @@ def _has_maint(team):
 
 
 def _farm(team):
-    """The team has ArtisanHub Farm connected."""
+    """The team has the farm connected."""
     from .clients import farm_connected
     return farm_connected(team.id)
 

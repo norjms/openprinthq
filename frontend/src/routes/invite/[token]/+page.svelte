@@ -1,5 +1,5 @@
 <script>
-  import { Icon } from 'artisanhub-ui';
+  import { Icon } from 'openprinthq-ui';
   import { onMount } from 'svelte';
   import { page } from '$app/state';
   import { api } from '$lib/api.js';
@@ -21,15 +21,15 @@
   }
 </script>
 
-<svelte:head><title>Join ArtisanHub</title></svelte:head>
+<svelte:head><title>Join OpenPrintHQ</title></svelte:head>
 
 <div style="width:min(520px,100%)">
-  <div class="flex items-center justify-center gap-[10px]" style="margin-bottom:18px"><span class="ah-icon-tile" style="background:var(--ah-accent);color:var(--ah-on-accent)"><Icon name="cube" /></span><span class="ah-sidebar__brand" style="padding:0">ArtisanHub</span></div>
+  <div class="flex items-center justify-center gap-[10px]" style="margin-bottom:18px"><span class="ah-icon-tile" style="background:var(--ah-accent);color:var(--ah-on-accent)"><Icon name="cube" /></span><span class="ah-sidebar__brand" style="padding:0">OpenPrintHQ</span></div>
   <section class="ah-glass ah-card" style="padding:28px;gap:16px">
         {#if err}
       <h1 class="ah-title" style="font-size:30px">Can't use this invite</h1>
       <p class="muted">{err}</p>
-      <a class="btn mt-4 inline-block" href="/">Go to ArtisanHub</a>
+      <a class="btn mt-4 inline-block" href="/">Go to OpenPrintHQ</a>
     {:else if info}
       <h1 class="ah-title" style="font-size:30px">{info.kind === 'join' ? `Join ${info.team}` : info.kind === 'new_team' ? `Your team: ${info.team}` : 'Your own workspace'}</h1>
       <p class="muted mb-4">{info.kind === 'join' ? `You were invited as ${info.role}.` : "You'll be its owner and can invite your own people."} This invite is for <b>{info.email}</b>.</p>
