@@ -1,5 +1,5 @@
 {
-  "mode": "report",
+  "mode": "enforce",
   "allow": [
     "artisanhub-manager",
     "artisanhub\\.managed",

@@ -11,5 +11,6 @@ export { default as GridTable } from './components/GridTable.svelte';
 export { default as ProgressBar } from './components/ProgressBar.svelte';
 export { default as Banner } from './components/Banner.svelte';
 export { default as Icon } from './components/Icon.svelte';
+export { default as Mark } from './components/Mark.svelte';
 export { ICONS } from './icons.js';
 export { THEMES, DEFAULT_THEME, resolveTheme, applyTheme } from './themes.js';

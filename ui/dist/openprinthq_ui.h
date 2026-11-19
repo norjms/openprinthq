@@ -2,7 +2,7 @@
 #pragma once
 #include <cstdint>
 
-namespace artisanhub_ui {
+namespace openprinthq_ui {
 constexpr std::uint32_t page = 0xFF172028u;
 constexpr std::uint32_t page_mid = 0xFF273642u;
 constexpr std::uint32_t page_top = 0xFF3F566Au;
@@ -48,4 +48,4 @@ constexpr std::uint32_t chip_neutral_bg = 0x14FFFFFFu;
 constexpr std::uint32_t danger_bg = 0x24E66767u;
 constexpr const char* font_sans = "Manrope";
 constexpr const char* font_mono = "JetBrains Mono";
-}  // namespace artisanhub_ui
+}  // namespace openprinthq_ui

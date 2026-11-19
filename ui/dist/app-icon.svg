@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" fill="none" role="img" aria-label="OpenPrintHQ">
+  <defs><radialGradient id="page" cx="0.55" cy="0.35" r="0.8"><stop offset="0" stop-color="#3f566a"/><stop offset="0.5" stop-color="#273642"/><stop offset="1" stop-color="#172028"/></radialGradient></defs>
+  <rect width="64" height="64" fill="url(#page)"/>
+  <path d="M32 10 L50 20 V44 L32 54 L14 44 V20 Z" stroke="#8fd3ff" stroke-width="2.5" stroke-linejoin="round"/>
+  <rect x="22" y="38" width="20" height="4" rx="1.5" fill="#ffb38a"/>
+  <rect x="24.5" y="31" width="15" height="4" rx="1.5" fill="#8fd3ff"/>
+  <rect x="27" y="24" width="10" height="4" rx="1.5" fill="#8fd3ff" opacity="0.75"/>
+</svg>

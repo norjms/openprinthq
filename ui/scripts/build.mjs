@@ -88,19 +88,41 @@ class AhFonts {
   static const String mono = 'JetBrains Mono';
 }
 `;
-writeFileSync(out + 'artisanhub_ui.dart', dart);
+writeFileSync(out + 'openprinthq_ui.dart', dart);
 
 // C++ header, for recolouring OrcaSlicer. Colours as 0xAARRGGBB.
 const cpp = `${head('//')}#pragma once
 #include <cstdint>
 
-namespace artisanhub_ui {
+namespace openprinthq_ui {
 ${colors.map(([n, v]) => `constexpr std::uint32_t ${n.replace(/-/g, '_')} = ${argb(v)}u;`).join('\n')}
 constexpr const char* font_sans = "Manrope";
 constexpr const char* font_mono = "JetBrains Mono";
-}  // namespace artisanhub_ui
+}  // namespace openprinthq_ui
 `;
-writeFileSync(out + 'artisanhub_ui.h', cpp);
+writeFileSync(out + 'openprinthq_ui.h', cpp);
+
+// The OpenPrintHQ mark: a hexagon holding stacked print layers, the first layer in the attention colour.
+// mark.svg on its accent tile (UI, favicons), mark-mono.svg in the text's colour, app-icon.svg full bleed on the
+// page gradient for phone and desktop app icons (the platform rounds the corners).
+const c = Object.fromEntries(colors);
+const hex = 'M32 10 L50 20 V44 L32 54 L14 44 V20 Z';
+const layers = (first, rest) => `<rect x="22" y="38" width="20" height="4" rx="1.5" fill="${first}"/>
+  <rect x="24.5" y="31" width="15" height="4" rx="1.5" fill="${rest}"/>
+  <rect x="27" y="24" width="10" height="4" rx="1.5" fill="${rest}" opacity="0.75"/>`;
+const svg = (body, extra = '') => `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" fill="none" role="img" aria-label="OpenPrintHQ">${extra}
+  ${body}
+</svg>
+`;
+writeFileSync(out + 'mark.svg', svg(`<rect width="64" height="64" rx="14" fill="${c.accent}"/>
+  <path d="${hex}" stroke="${c['on-accent']}" stroke-width="3" stroke-linejoin="round"/>
+  ${layers(c['on-accent'], c['on-accent'])}`));
+writeFileSync(out + 'mark-mono.svg', svg(`<path d="${hex}" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/>
+  ${layers('currentColor', 'currentColor')}`));
+writeFileSync(out + 'app-icon.svg', svg(`<rect width="64" height="64" fill="url(#page)"/>
+  <path d="${hex}" stroke="${c.accent}" stroke-width="2.5" stroke-linejoin="round"/>
+  ${layers(c.attention, c.accent)}`, `
+  <defs><radialGradient id="page" cx="0.55" cy="0.35" r="0.8"><stop offset="0" stop-color="${c['page-top']}"/><stop offset="0.5" stop-color="${c['page-mid']}"/><stop offset="1" stop-color="${c.page}"/></radialGradient></defs>`));
 
 writeFileSync(out + 'tokens.json', JSON.stringify(Object.fromEntries(colors), null, 1) + '\n');
 console.log(`built ${colors.length} colours, ${spacing.length} spacing, ${radius.length} radii`);

@@ -1,7 +1,7 @@
 {
-  "name": "artisanhub-ui",
-  "version": "0.1.0",
-  "description": "The shared look of every ArtisanHub app: design values, CSS, Svelte components, and generated values for Flutter and C++.",
+  "name": "openprinthq-ui",
+  "version": "0.2.0",
+  "description": "The shared look of every OpenPrintHQ app: design values, CSS, Svelte components, the OpenPrintHQ mark, and generated values for Flutter and C++.",
   "license": "MIT",
   "author": "James Norman",
   "type": "module",
@@ -13,7 +13,10 @@
     "./base.css": "./src/lib/base.css",
     "./fonts.css": "./src/lib/fonts.css",
     "./tokens.json": "./dist/tokens.json",
-    "./themes": "./src/lib/themes.js"
+    "./themes": "./src/lib/themes.js",
+    "./mark.svg": "./dist/mark.svg",
+    "./mark-mono.svg": "./dist/mark-mono.svg",
+    "./app-icon.svg": "./dist/app-icon.svg"
   },
   "files": ["dist", "src/lib", "tokens", "LICENSE", "README.md"],
   "scripts": {

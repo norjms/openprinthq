@@ -1,4 +1,4 @@
-/* ArtisanHub UI base styles. Import after dist/theme.css. Every value is a --ah- custom property. */
+/* OpenPrintHQ UI base styles. Import after dist/theme.css. Every value is a --ah- custom property. */
 
 .ah-root {
   font-family: var(--ah-font-sans);
@@ -103,6 +103,9 @@
 .ah-header__crumbs b { color: var(--ah-text); font-weight: 600; }
 .ah-titlerow { display: flex; align-items: flex-end; gap: 16px; }
 .ah-icon-tile { width: 36px; height: 36px; flex: none; border-radius: 12px; background: var(--ah-chip-live-bg); display: grid; place-items: center; color: var(--ah-accent); }
+.ah-mark { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
+.ah-icon-tile.ah-mark__tile { background: var(--ah-accent); color: var(--ah-on-accent); }
+.ah-mark__name { font-family: var(--ah-font-display); font-weight: 600; font-size: 18px; letter-spacing: -0.02em; color: var(--ah-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ah-round-btn { width: 30px; height: 30px; flex: none; border-radius: 50%; border: 1px solid var(--ah-field-line); background: var(--ah-glass); display: grid; place-items: center; color: var(--ah-text); cursor: pointer; margin-left: auto; }
 
 @media (max-width: 1099px) {

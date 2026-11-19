@@ -20,7 +20,7 @@
   let autoQueue = $state(true);
 </script>
 
-{#snippet side()}<Sidebar product="ArtisanHub" {groups} />{/snippet}
+{#snippet side()}<Sidebar product="OpenPrintHQ" {groups} />{/snippet}
 {#snippet head()}
   <Button size="sm">Artisan Prints <Icon name="chevron-down" size={14} /></Button>
   <div class="ah-header__crumbs">Print / <b>Printers</b></div>
@@ -40,7 +40,7 @@
   </WidgetCard>
 {/snippet}
 
-<AppShell sidebar={side} header={head} title="Printers" description="Every printer in ArtisanHub Farm, live." {filters} {widgets}>
+<AppShell sidebar={side} header={head} title="Printers" description="Every printer in the farm, live." {filters} {widgets}>
   <Banner><Icon name="alert" />MK3S-01 slot 3 is empty. Load PLA Galaxy Black.</Banner>
   <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;overflow:auto;min-height:0">
     {#each printers as p (p.name)}

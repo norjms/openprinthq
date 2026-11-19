@@ -1,4 +1,4 @@
-# artisanhub-ui
+# openprinthq-ui
 
 The shared look of every OpenPrintHQ app: the hub, the farm, the sign-in, the installer and the
 companion apps. The look is "glass over a live feed": translucent cards over a dark blue page.
@@ -9,29 +9,32 @@ One source, `tokens/tokens.json`, generates:
 |---|---|
 | `dist/theme.css` | CSS custom properties (`--ah-*`) for every web app |
 | `dist/tailwind.css` | a Tailwind 4 `@theme` mapping those properties |
-| `dist/artisanhub_ui.dart` | the Flutter phone app |
-| `dist/artisanhub_ui.h` | the OrcaSlicer recolour |
+| `dist/openprinthq_ui.dart` | the Flutter phone app |
+| `dist/openprinthq_ui.h` | the OrcaSlicer recolour |
 | `dist/tokens.json` | anything else |
+| `dist/mark.svg`, `dist/mark-mono.svg` | the OpenPrintHQ mark: on its accent tile, and in the text's colour |
+| `dist/app-icon.svg` | phone and desktop app icons, full bleed on the page gradient |
 
 Plus `src/lib/base.css` (shared classes), `src/lib/fonts.css` (Manrope, Sora and JetBrains Mono, all SIL Open Font
 License) and Svelte 5 components: AppShell, Sidebar, GlassCard, WidgetCard, Button, Chip, Segmented, Toggle, Field,
-GridTable, ProgressBar, Banner and Icon.
+GridTable, ProgressBar, Banner, Icon and Mark (the OpenPrintHQ mark beside the product name, used by the Sidebar).
 
 ## Use it
 
-Pin a tag in `package.json`:
+Pin a tag in `package.json` (the repository keeps its old name until the repositories are renamed; GitHub will
+redirect it):
 
 ```json
-"artisanhub-ui": "github:norjms/artisanhub-ui#v0.1.0"
+"openprinthq-ui": "github:norjms/artisanhub-ui#v0.2.0"
 ```
 
 Then, once in the app's root layout:
 
 ```js
-import 'artisanhub-ui/fonts.css'; // leave out where fonts must not load, such as the offline installer
-import 'artisanhub-ui/theme.css';
-import 'artisanhub-ui/base.css';
-import { applyTheme } from 'artisanhub-ui/themes';
+import 'openprinthq-ui/fonts.css'; // leave out where fonts must not load, such as the offline installer
+import 'openprinthq-ui/theme.css';
+import 'openprinthq-ui/base.css';
+import { applyTheme } from 'openprinthq-ui/themes';
 applyTheme(document.documentElement, savedTheme, savedTransparency);
 ```
 
