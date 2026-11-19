@@ -1,6 +1,6 @@
 # artisanhub-ui
 
-The shared look of every ArtisanHub app: the hub, ArtisanHub Farm, OpenPrintHQ, the sign-in, the installer and the
+The shared look of every OpenPrintHQ app: the hub, the farm, the sign-in, the installer and the
 companion apps. The look is "glass over a live feed": translucent cards over a dark blue page.
 
 One source, `tokens/tokens.json`, generates:
