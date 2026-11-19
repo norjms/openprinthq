@@ -1,0 +1,20 @@
+{
+  "mode": "report",
+  "allow": [
+    "artisanhub-manager",
+    "artisanhub\\.managed",
+    "artisanhub-push-v1",
+    "artisan_hub_[a-z_]+",
+    "artisanhub-connector(\\.php)?"
+  ],
+  "allow_until_renamed": [
+    "(github\\.com/|ghcr\\.io/)?norjms/artisan-?hub[A-Za-z0-9_.-]*"
+  ],
+  "skip": [
+    "CHANGELOG*",
+    "*/CHANGELOG*",
+    "docs/installer-decision-log.md",
+    "docs/change-log.md",
+    "docs/legacy-names.md"
+  ]
+}

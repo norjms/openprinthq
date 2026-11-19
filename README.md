@@ -1,6 +1,6 @@
-# Artisan Hub
+# OpenPrintHQ
 
-Artisan Hub is a self-hosted hub for small 3D print businesses and print farms. It manages every 3D model as a
+OpenPrintHQ is a self-hosted hub for small 3D print businesses and print farms. It manages every 3D model as a
 product: photos, print settings, files, colour options, bill of materials, store listing and supply levels. Other
 systems are driven from it: the print farm, the filament inventory, the parts inventory, the model library and
 the web store.
@@ -21,7 +21,7 @@ Licence: [GNU AGPL-3.0](LICENSE).
   Stock is one pool for every store: the units buildable from parts and filament on hand, minus open orders from
   any store. Orders arrive by webhook and print on the farm the same way whichever store they came from. An instant
   quote form on WooCommerce lets customers upload their own model to be sliced and priced. See `docs/stores.md`.
-- **Print farm.** ArtisanHub Farm (OpenPrintHQ) runs the printers: print queue, plate checks,
+- **Print farm.** The farm runs the printers: print queue, plate checks,
   timeline, maintenance, alarms and a wall display (`/tv`).
 - **Slicing.** With a slicer service connected, the hub slices models for the farm's printers and re-slices
   plates.
@@ -46,7 +46,7 @@ Optional services the hub connects to:
 
 | Service | Role |
 |---|---|
-| ArtisanHub Farm (OpenPrintHQ) | Print farm: printers, print queue, print-ready files, filament library. |
+| Farm | Print farm: printers, print queue, print-ready files, filament library. |
 | Spoolman | Filament spools, the source of truth for filament on hand. |
 | Manyfold | Model library with 3D preview, sharing a folder with the hub. |
 | InvenTree | Parts such as screws, magnets, inserts and packaging; suppliers and purchase orders. |
@@ -92,7 +92,7 @@ Please report security problems privately. See [SECURITY.md](SECURITY.md).
 
 ## Licence
 
-Artisan Hub is free software: you can redistribute it and modify it under the terms of the GNU Affero General
+OpenPrintHQ is free software: you can redistribute it and modify it under the terms of the GNU Affero General
 Public License, version 3, as published by the Free Software Foundation. See [LICENSE](LICENSE). If you run a
 modified version for others over a network, the AGPL asks you to offer them its source.
 
