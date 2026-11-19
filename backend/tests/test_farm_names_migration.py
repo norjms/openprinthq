@@ -46,7 +46,7 @@ def test_old_names_and_values_move_over(tmp_path):
         assert c.execute(text("SELECT farm_schedule_id, farm_hours_since FROM maint_plan")).one() == (91, 3.5)
         assert c.execute(text("SELECT farm_note, done_by, created_by FROM maint_task")).one() == ("done there", "farm", "farm")
         files = dict(c.execute(text("SELECT id, farm_file_ref FROM model_file")).all())
-        assert files == {1: None, 2: "42"}          # only references into ArtisanHub Farm are kept
+        assert files == {1: None, 2: "42"}          # only references into the farm are kept
         assert dict(c.execute(text("SELECT id, kind FROM job")).all()) == {1: "farm.sync_product", 3: "spools.sync"}
         assert c.execute(text("SELECT key FROM setting")).scalar() == "farm_mirror_library"
 

@@ -31,7 +31,7 @@ def test_every_email_is_tables_and_inline_styles_with_nothing_to_load(mail):
     # The card is solid where the screens have glass, with the same border.
     assert f"background-color:{emails.CARD};border:1px solid {emails.LINE}" in html
     assert "Manrope" in html and "Sora" in html
-    assert "ArtisanHub" in html and "Artisan Hub" not in html and "Artisan Hub" not in mail.text()
+    assert "OpenPrintHQ" in html and "Open PrintHQ" not in html and "Open PrintHQ" not in mail.text()
     assert chr(0x2014) not in html + mail.text() + mail.subject
 
 
@@ -45,7 +45,7 @@ def test_the_plain_text_twin_says_the_same(mail):
         assert f"{label}: {url}" in text and f'href="{url}"' in mail.html()
     for item, link in mail.items:
         assert item in text and (link is None or link in text)
-    assert "Sent by ArtisanHub at hub.example.org." in text
+    assert "Sent by OpenPrintHQ at hub.example.org." in text
 
 
 def _rgb(hex_):
@@ -81,13 +81,13 @@ def test_nothing_a_person_typed_becomes_markup():
 def test_an_invite_without_a_login_asks_for_a_password_first():
     mail = emails.invite("Jane Doe", "Workshop", "member", f"{URL}/invite/abc", f"{URL}/account/password/xyz",
                          14, URL)
-    assert mail.subject == "Jane Doe invited you to Workshop on ArtisanHub"
-    assert mail.paragraphs[0] == "Jane Doe invited you to Workshop on ArtisanHub as a member."
+    assert mail.subject == "Jane Doe invited you to Workshop on OpenPrintHQ"
+    assert mail.paragraphs[0] == "Jane Doe invited you to Workshop on OpenPrintHQ as a member."
     assert [b[0] for b in mail.buttons] == ["Choose your password", "Accept the invitation"]
     assert mail.html().index("Choose your password") < mail.html().index("Accept the invitation")
     assert "The links work for 14 days" in mail.text()
     owner = emails.invite("", "Workshop", "admin", f"{URL}/invite/abc", None, 14, URL)
-    assert owner.paragraphs[0] == "The hub's owner invited you to Workshop on ArtisanHub as an admin."
+    assert owner.paragraphs[0] == "The hub's owner invited you to Workshop on OpenPrintHQ as an admin."
     assert [b[0] for b in owner.buttons] == ["Accept the invitation"]
 
 

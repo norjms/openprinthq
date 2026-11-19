@@ -204,7 +204,7 @@ def create_part(body: NewPart, db: Session = Depends(get_db), p: Principal = Dep
                                   "link": body.link or "", "pack_quantity": str(body.pack_qty or 1)})
     if body.initial_stock:
         locs = inv.locations()
-        inv.add_stock(part["pk"], body.initial_stock, locs[0]["pk"] if locs else None, "Initial stock via Artisan Hub")
+        inv.add_stock(part["pk"], body.initial_stock, locs[0]["pk"] if locs else None, "Initial stock via OpenPrintHQ")
     from ..services.inventory import refresh_parts
     refresh_parts(db)
     db.commit()
@@ -219,7 +219,7 @@ class Adjust(BaseModel):
 @router.post("/api/inventory/parts/{part_id}/adjust")
 def adjust_part(part_id: int, body: Adjust, db: Session = Depends(get_db), p: Principal = Depends(need("inventory"))):
     inv = inventree()
-    note = body.note or f"Adjusted in Artisan Hub by {p.actor}"
+    note = body.note or f"Adjusted in OpenPrintHQ by {p.actor}"
     if body.delta > 0:
         items = inv.stock(part=part_id, in_stock="true")
         locs = inv.locations()
@@ -294,7 +294,7 @@ def make_pos(db: Session = Depends(get_db), p: Principal = Depends(need("invento
     created = []
     inv = inventree()
     for sid, lines in by_supplier.items():
-        po = inv.create_purchase_order(sid, description="Artisan Hub shopping list")
+        po = inv.create_purchase_order(sid, description="OpenPrintHQ shopping list")
         for spid, qty in lines:
             inv.add_po_line(po["pk"], spid, qty)
         created.append(po.get("reference") or po["pk"])
@@ -738,7 +738,7 @@ def ophq_event_text(name: str, body: dict) -> str:
         v = body.get(k) if isinstance(body, dict) else None
         if isinstance(v, (str, int, float)) and str(v).strip() and str(v) not in parts:
             parts.append(str(v).strip())
-    text = f"ArtisanHub Farm {label.lower() if label != 'Test message' else 'test message'}"
+    text = f"Farm {label.lower() if label != 'Test message' else 'test message'}"
     if parts:
         text += ": " + " - ".join(parts)
     return text[:500]

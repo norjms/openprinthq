@@ -1,6 +1,6 @@
 <script>
-  // Stroke icons the shared set (artisanhub-ui Icon) does not have yet, drawn the same way: 24 grid, stroke 1.7.
-  import { Icon, ICONS } from 'artisanhub-ui';
+  // Stroke icons the shared set (openprinthq-ui Icon) does not have yet, drawn the same way: 24 grid, stroke 1.7.
+  import { Icon, ICONS } from 'openprinthq-ui';
   const MORE = {
     x: '<path d="M18 6 6 18M6 6l12 12"/>',
     'arrow-left': '<path d="M19 12H5M12 19l-7-7 7-7"/>',

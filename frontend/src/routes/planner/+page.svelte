@@ -3,7 +3,7 @@
   import { onMount } from 'svelte';
   import { api } from '$lib/api.js';
   import { attempt, toast } from '$lib/toast.svelte.js';
-  import { Icon } from 'artisanhub-ui';
+  import { Icon } from 'openprinthq-ui';
   let include = $state('live');
   let plan = $state(null);
   let showAll = $state(false);

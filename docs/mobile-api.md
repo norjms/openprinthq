@@ -1,7 +1,7 @@
-# Artisan Hub mobile API (v1)
+# OpenPrintHQ mobile API (v1)
 
 One API for phone apps. The hub is the relay: the phone only ever talks to the hub, and the hub talks to
-ArtisanHub Farm, Spoolman, InvenTree, WooCommerce, Manyfold, the DAM and the Klipper printers with the team's stored
+The farm, Spoolman, InvenTree, WooCommerce, Manyfold, the DAM and the Klipper printers with the team's stored
 credentials. The phone never holds those credentials.
 
 - Base URL: `https://<hub>/api/mobile/v1`, for example `https://hub.example.com/api/mobile/v1`
@@ -74,7 +74,7 @@ the same way.
 
 ## Which farm
 
-The print farm is ArtisanHub Farm (OpenPrintHQ), connected under Settings, Connected services. `GET /me` answers
+The print farm is the farm, connected under Settings, Connected services. `GET /me` answers
 `farm`: `{"kind": "openprinthq", "label", "capabilities": [...], "connected"}`. Show a feature only when its
 capability is listed (`commands`, `snapshot`, `priority`, `maintenance`, ...), since an older engine may not have
 every one yet. A call the farm cannot do answers 502 with "not supported by this farm".
@@ -168,10 +168,10 @@ it directly. Opened in a browser, the public **/pair** page (no hub sign-in) che
 
 - Android: opens the app at once through an `intent://` link (`package=` the app id in `HUB_APP_ID`); without the app,
   Chrome goes to **/get-app?code=...**, which offers the newest APK from `HUB_ANDROID_APK_DIR` (or the Play listing
-  in `HUB_ANDROID_STORE_URL`) and an "I've installed it, open Artisan Hub" button. App 0.2.1 and later also claim
+  in `HUB_ANDROID_STORE_URL`) and an "I've installed it, open OpenPrintHQ" button. App 0.2.1 and later also claim
   the link as a verified Android App Link (`/.well-known/assetlinks.json`, release key `HUB_ANDROID_CERT_SHA256`), so
   the camera opens the app without the browser.
-- iPhone: an **Open in Artisan Hub** button with the app's link `artisanhub://pair?hub=<hub address>&code=<code>`
+- iPhone: an **Open in OpenPrintHQ** button with the app's link `artisanhub://pair?hub=<hub address>&code=<code>`
   (Safari opens other apps only from a tap). If nothing opens, the page points at the install part: the TestFlight
   or App Store link in `HUB_IOS_STORE_URL` when set, otherwise a note that the app is installed from a Mac for now.
   `HUB_IOS_APP_STORE_ID` adds Safari's Smart App Banner. `HUB_IOS_TEAM_ID` serves
@@ -245,7 +245,7 @@ copied spool, filament and vendor is recorded in the hub table `farm_library_mig
 Spoolman extra fields, so `hub_migrated_from` is kept there, and each farm spool's note ends with `(hub Spoolman spool
 #<old id>)`). Vendors and filaments come along with their spools; a filament with no spool cannot be made through
 the engine and is listed in `filaments_without_spools`. Product variant and materials-list filament ids are moved to
-the farm's ids once. When every spool made it, the hub's `spoolman` connection is turned off (kept, not deleted).
+The farm's ids once. When every spool made it, the hub's `spoolman` connection is turned off (kept, not deleted).
 
 ### Spools and filaments [inventory; `GET /spools` needs view]
 
@@ -321,7 +321,7 @@ Label printers are the team's `labelprinter` connection (web: Connected services
 Brother QL: raster built by the `brother_ql` package, sent raw to TCP 9100 (tapes 62x29, 62, 62x100, 29x90, 29,
 38x90). ZPL: the label as one `^GFA` graphic, sent raw to TCP 9100 (`tape` is WxH in mm, `dpi` 203, 300 or 600).
 
-The public page `GET /l/<code>` (no key) shows what kind of thing a code is and its code, with Open in Artisan Hub
+The public page `GET /l/<code>` (no key) shows what kind of thing a code is and its code, with Open in OpenPrintHQ
 (`artisanhub://l/<code>?hub=...`, Android intent with a fallback to `/get-app`) and Get the app. Only someone signed in
 to the hub on the web sees the name. iOS universal links list `/l/*` next to `/pair`.
 

@@ -116,7 +116,7 @@ def from_capture(platform: str, ext_id: str, url: str, cap: dict) -> dict:
             "license_raw": lic, "license_text": _s(cap.get("license_url"), 500) or lic, "photos": imgs, "profiles": [],
             "files": files, "supplies": [], "stats": {}, "updated": None, "api_url": None,
             "paid": bool(cap.get("paid")), "files_in_browser": True, "download_page": url, "from_browser": True,
-            "raw": {"captured_by": "Artisan Hub browser add-on", "capture": {k: cap.get(k) for k in (
+            "raw": {"captured_by": "OpenPrintHQ browser add-on", "capture": {k: cap.get(k) for k in (
                 "title", "designer", "license", "license_url", "tags", "category", "images", "paid", "page_url")}}}
 
 

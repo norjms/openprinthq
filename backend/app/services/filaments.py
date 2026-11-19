@@ -33,7 +33,7 @@ BAMBU_URL = "https://raw.githubusercontent.com/bambulab/BambuStudio/master/resou
 SPOOLMANDB_URL = "https://donkie.github.io/SpoolmanDB/filaments.json"
 FILAMENTCOLORS_URL = "https://filamentcolors.xyz/api/swatch/?format=json&page_size=100"
 FILAMENTCOLORS_SWATCH = "https://filamentcolors.xyz/swatch/"
-USER_AGENT = "ArtisanHub/1.0 (filament colour matching)"
+USER_AGENT = "OpenPrintHQ/1.0 (filament colour matching)"
 MAX_AGE = 7 * 86400
 
 BRANDS = {   # how notes write a brand -> SpoolmanDB manufacturer (None: no colour data)

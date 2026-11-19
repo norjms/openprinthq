@@ -1,7 +1,7 @@
 # First-run setup API, `/api/setup/v1`
 
 A small, versioned API for setting up a new hub from outside. The hub's own `/setup` page uses it, and so
-does the ArtisanHub installer. Everything after first setup goes through the normal API with the key this
+does the OpenPrintHQ installer. Everything after first setup goes through the normal API with the key this
 returns.
 
 **Stability:** within `v1`, fields are only added, never removed or renamed, and the meaning of existing
@@ -32,10 +32,10 @@ No authentication.
 `Authorization: Bearer <setup token>`
 
 ```json
-{"farm": "openprinthq", "team_name": "My workshop", "key_name": "ArtisanHub installer"}
+{"farm": "openprinthq", "team_name": "My workshop", "key_name": "OpenPrintHQ installer"}
 ```
 
-- `farm`: `openprinthq` (ArtisanHub Farm), the only print farm the hub supports; it may be left out. Any other
+- `farm`: `openprinthq` (the farm), the only print farm the hub supports; it may be left out. Any other
   value answers 422. See `docs/farm.md`.
 - `team_name`: the first workspace's name.
 - `key_name`: optional; the name the API key shows under in the hub's settings.

@@ -1,12 +1,12 @@
 """The installation: its print farm and first-run setup.
 
-The print farm is ArtisanHub Farm (OpenPrintHQ), the only farm the hub supports. First-run setup records it once
-the farm is connected. Invariants 3 and 4: the hub is complete without the installer, and the setup API lives in the
+The print farm is the farm, the only farm the hub supports. First-run setup records it once
+The farm is connected. Invariants 3 and 4: the hub is complete without the installer, and the setup API lives in the
 hub. First-run setup goes through /api/setup/v1, used both by the hub's own /setup page and by the installer from
 outside.
 
 An installation set up with a farm the hub no longer supports refuses to start (UnsupportedFarm), so it keeps
-running its previous version until it has moved to ArtisanHub Farm. Nothing about it is changed or guessed.
+running its previous version until it has moved to the farm. Nothing about it is changed or guessed.
 """
 
 import hashlib
@@ -36,9 +36,9 @@ class UnsupportedFarm(RuntimeError):
 
     def __init__(self, farm: str):
         super().__init__(
-            f"This installation's print farm is {farm!r}, which this version of ArtisanHub no longer supports. "
+            f"This installation's print farm is {farm!r}, which this version of OpenPrintHQ no longer supports. "
             "Nothing was changed. Keep running the previous version until the installation has moved to "
-            "ArtisanHub Farm (docs/farm.md, Moving from another farm), then upgrade.")
+            "The farm (docs/farm.md, Moving from another farm), then upgrade.")
         self.farm = farm
 
 
@@ -127,7 +127,7 @@ def bootstrap(db: Session, fresh: bool) -> None:
 
 
 def record_farm(db: Session) -> None:
-    """An installation that has no farm yet (one older than the explicit choice) gets ArtisanHub Farm once it is
+    """An installation that has no farm yet (one older than the explicit choice) gets the farm once it is
     connected."""
     from ..models import Installation
     row = db.get(Installation, 1)

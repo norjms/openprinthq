@@ -111,7 +111,7 @@
   const aiCards = $derived(aiOrder.map((o) => list.find((c) => c.kind === o.kind)).filter(Boolean));
 </script>
 
-<svelte:head><title>Connections · ArtisanHub</title></svelte:head>
+<svelte:head><title>Connections · OpenPrintHQ</title></svelte:head>
 
 {#snippet card(c)}
   <div class="panel p-4 flex flex-col gap-2">

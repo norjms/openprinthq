@@ -1,4 +1,4 @@
-# Artisan Hub with Docker Compose: a starting point for self-hosting.
+# OpenPrintHQ with Docker Compose: a starting point for self-hosting.
 # Copy to compose.yml, set the two values marked CHANGE ME, then: docker compose up -d --build
 # To use the published image instead of building, replace "build: ." with the image line below.
 # All settings: docs/configuration.md
@@ -8,8 +8,8 @@ x-hub-env: &hub-env
   HUB_DATABASE_URL: postgresql+psycopg://hub:CHANGE_ME_DB_PASSWORD@db:5432/hub
   HUB_SESSION_SECRET: CHANGE_ME_LONG_RANDOM_VALUE
   # Sign-in through an OpenID Connect provider, for example Authentik:
-  # HUB_OIDC_ISSUER: https://auth.example.com/application/o/artisan-hub/
-  # HUB_OIDC_CLIENT_ID: artisan-hub
+  # HUB_OIDC_ISSUER: https://auth.example.com/application/o/openprinthq/
+  # HUB_OIDC_CLIENT_ID: openprinthq
   # HUB_OIDC_CLIENT_SECRET: ...
 
 services:
@@ -31,7 +31,7 @@ services:
   web:
     build: .
     # image: ghcr.io/norjms/artisan-hub:main
-    image: artisan-hub:local
+    image: openprinthq:local
     restart: unless-stopped
     depends_on:
       db: { condition: service_healthy }
@@ -42,7 +42,7 @@ services:
       - library:/srv/library
 
   worker:
-    image: artisan-hub:local
+    image: openprinthq:local
     # image: ghcr.io/norjms/artisan-hub:main
     restart: unless-stopped
     depends_on:

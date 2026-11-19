@@ -15,7 +15,7 @@ from .routers import alerts as alerts_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 
-app = FastAPI(title="Artisan Hub", version="1.0.0", docs_url="/api/docs", openapi_url="/api/openapi.json")
+app = FastAPI(title="OpenPrintHQ", version="1.0.0", docs_url="/api/docs", openapi_url="/api/openapi.json")
 app.add_middleware(SessionMiddleware, secret_key=settings().session_secret, session_cookie="ahub",
                    max_age=60 * 60 * 24 * 14, same_site="lax", https_only=settings().public_url.startswith("https"))
 app.include_router(auth.router)
@@ -40,7 +40,7 @@ app.include_router(plugin.router)
 app.include_router(mobile.router)
 app.include_router(mobile_control.router)
 app.include_router(clipper.router)        # browser add-on: add a model by URL, send files
-app.include_router(nav.router)            # the sidebar as data, shared with ArtisanHub Farm
+app.include_router(nav.router)            # the sidebar as data, shared with the farm
 app.include_router(phone_pages.pages)   # /pair, /get-app, /.well-known app links (public)
 
 STATIC = Path(__file__).resolve().parent.parent / "static"

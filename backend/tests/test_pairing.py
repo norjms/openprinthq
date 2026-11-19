@@ -123,7 +123,7 @@ def test_pair_page_opens_the_app_or_offers_install(monkeypatch):
     r = c.get(f"/pair?code={code}")          # public: no hub sign-in
     assert r.status_code == 200 and r.headers["content-type"].startswith("text/html"), r.text
     t = r.text
-    assert "Open in Artisan Hub" in t and "have the app?" in t
+    assert "Open in OpenPrintHQ" in t and "have the app?" in t
     assert f"artisanhub://pair?hub=" in t and f"code={code}" in t                     # iPhone: the app's own link
     assert "intent://pair?" in t and f"package={APP};" in t               # Android: app or install page
     assert "S.browser_fallback_url=" in t and "get-app%3Fcode%3D" in t
@@ -137,7 +137,7 @@ def test_pair_page_bad_used_and_missing_codes():
     assert "missing its code" in c.get("/pair").text
     assert "missing its code" in c.get("/pair?code=<script>").text
     r = c.get("/pair?code=" + "x" * 32)
-    assert r.status_code == 200 and "not from this hub" in r.text and "Open in Artisan Hub" not in r.text
+    assert r.status_code == 200 and "not from this hub" in r.text and "Open in OpenPrintHQ" not in r.text
     raw, _ = _maker()
     d, code, _ = _make(c, raw)
     c.delete(f"/api/mobile/v1/pairings/{d['id']}", headers=H(raw))

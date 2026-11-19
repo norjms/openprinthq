@@ -214,7 +214,7 @@ def snapshot_spools(db: Session, fj: FarmJob) -> list:
     pid = next((p["id"] for p in ps if p.get("name") == fj.printer_name or p.get("id") == fj.printer_name), None)
     fa = (w.filament_assignments() or {}).get("printers") or {}
     loaded = [a for a in ((fa.get(pid) or {}).get("assignments") or []) if a.get("spool_id")]
-    # the farm's spool ids are its Spoolman's (ArtisanHub Farm keeps the library in Spoolman)
+    # the farm's spool ids are its Spoolman's (the farm keeps the library in Spoolman)
     spools = [{"farm": a["spool_id"], "sm": a["spool_id"], "type": (a.get("material_type") or "").upper() or None,
                "color": (a.get("spool_color_hex") or a.get("color_hex") or "").lstrip("#").lower() or None, "g": 0.0}
               for a in loaded]

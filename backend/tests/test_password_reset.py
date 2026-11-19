@@ -88,7 +88,7 @@ def test_the_answer_is_the_same_for_a_login_that_exists_and_one_that_does_not(re
     assert known.status_code == 200 and SENT in known.text
     # Mail went only to the login that exists, at the address LLDAP has, once per request.
     assert [m["to"] for m in mail] == [[email], [email]]
-    assert mail[0]["subject"] == "Reset your ArtisanHub password" and "<!doctype html>" in mail[0]["html"]
+    assert mail[0]["subject"] == "Reset your OpenPrintHQ password" and "<!doctype html>" in mail[0]["html"]
     assert _link_in(mail[1]) in mail[1]["html"]
 
 

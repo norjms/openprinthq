@@ -193,7 +193,7 @@ def complete(db: Session, t: MaintTask, actor: str, notes: str | None = None, pa
     used, errs = [], []
     for p in use:
         try:
-            short = remove_part(p["part_id"], p["qty"], f"Maintenance on {t.printer_name}: {t.title} (Artisan Hub, {actor})")
+            short = remove_part(p["part_id"], p["qty"], f"Maintenance on {t.printer_name}: {t.title} (OpenPrintHQ, {actor})")
             used.append({**p, "short": short} if short else p)
             if short:
                 errs.append(f"{p.get('name') or p['part_id']}: {short:g} not in stock")
@@ -280,7 +280,7 @@ def _record_in_farm(t: MaintTask, p: MaintPlan | None, actor: str, notes: str | 
     if not _farm_on():
         return
     text = "; ".join(x for x in [notes, f"Parts: {_parts_text(t)}" if t.parts_used else None,
-                                 "Recorded by Artisan Hub"] if x)
+                                 "Recorded by OpenPrintHQ"] if x)
     try:
         label = getattr(_farm(), "label", "") or "the farm"
         if p and p.farm_schedule_id:
@@ -309,7 +309,7 @@ def set_out_of_service(db: Session, t: MaintTask, down: bool, actor: str = "") -
         if not _can("out_of_service"):
             from ..clients.farm_base import FarmUnsupported
             raise FarmUnsupported(getattr(_farm(), "kind", "farm"), "out_of_service")
-        _farm().set_down(t.printer_name, True, f"{t.title} (Artisan Hub)"[:200])
+        _farm().set_down(t.printer_name, True, f"{t.title} (OpenPrintHQ)"[:200])
         t.out_of_service = True
         event(db, "farm", f"{t.printer_name} taken out of service: {t.title}", actor=actor or None)
     else:

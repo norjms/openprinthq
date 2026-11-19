@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "product": "ArtisanHub",
+  "product": "OpenPrintHQ",
   "notes": "The hub's sidebar, one list for the hub and the Farm. href is a path on the hub. Items with farm_path open the installed farm's own page (farm app base + farm_path) when the hub reports one, else the hub's page at href. Items whose app is farm are pages only the farm has: they have no href and are left out unless the installed farm's own pages can be linked. badge names a count in /api/stats; perm is the permission an item needs.",
   "groups": [
     {

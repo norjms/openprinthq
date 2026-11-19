@@ -321,7 +321,7 @@ def print_now(model_id: int, body: PrintNowIn, db: Session = Depends(get_db), wh
     except ValueError as e:
         raise HTTPException(400, str(e))
     except ApiError as e:
-        raise HTTPException(502, f"the farm said: {getattr(e, 'message', None) or e}")
+        raise HTTPException(502, f"The farm said: {getattr(e, 'message', None) or e}")
     db.commit()
     return out
 

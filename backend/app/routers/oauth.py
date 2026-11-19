@@ -84,7 +84,7 @@ def _scopes(raw: str | None) -> list[str]:
 @router.get("/.well-known/oauth-protected-resource/mcp", include_in_schema=False)
 def protected_resource():
     return {"resource": resource_url(), "authorization_servers": [base()], "bearer_methods_supported": ["header"],
-            "scopes_supported": list(SCOPES), "resource_name": "Artisan Hub slicing"}
+            "scopes_supported": list(SCOPES), "resource_name": "OpenPrintHQ slicing"}
 
 
 @router.get("/.well-known/oauth-authorization-server", include_in_schema=False)
@@ -165,7 +165,7 @@ def _check_authz(db: Session, q: dict):
     """Validate an authorization request. Returns (client, error_page_or_None)."""
     client = db.execute(select(OAuthClient).where(OAuthClient.client_id == (q.get("client_id") or ""))).scalar()
     if not client:
-        return None, _page("Unknown app", "<h1>Unknown app</h1><p>This app is not registered with Artisan Hub.</p>", 400)
+        return None, _page("Unknown app", "<h1>Unknown app</h1><p>This app is not registered with OpenPrintHQ.</p>", 400)
     if (q.get("redirect_uri") or "") not in (client.redirect_uris or []):
         return None, _page("Bad redirect", "<h1>Redirect not allowed</h1><p>The app sent a return address it did not register.</p>", 400)
     return client, None
@@ -209,7 +209,7 @@ def authorize(request: Request, db: Session = Depends(get_db)):
     host = html.escape(urlparse(ru).hostname or ru)
     can = "<li>see models, printers and slicing results</li>" + \
           ("<li>start slices and choose production files</li>" if "write" in scopes else "")
-    return _page("Allow access", f"""<h1>Allow {html.escape(client.name)} to use Artisan Hub?</h1>
+    return _page("Allow access", f"""<h1>Allow {html.escape(client.name)} to use OpenPrintHQ?</h1>
 <p>Signed in as <b>{who}</b>. It will return to <b>{host}</b> and be able to:</p><ul>{can}</ul>
 <p>You can disconnect it any time in hub Settings.</p>
 <form method="post" action="/oauth/authorize">{hidden}{team_field}<input type="hidden" name="csrf" value="{csrf}">

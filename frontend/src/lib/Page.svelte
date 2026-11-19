@@ -13,5 +13,5 @@
   });
 </script>
 
-<svelte:head><title>{title} · ArtisanHub</title></svelte:head>
+<svelte:head><title>{title} · OpenPrintHQ</title></svelte:head>
 {@render children?.()}

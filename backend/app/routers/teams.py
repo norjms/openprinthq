@@ -30,7 +30,7 @@ def _member_view(m: Membership, u: User) -> dict:
 
 
 def _push_printers(db: Session):
-    """People changed: ArtisanHub Farm learns who may use which printers (services/printer_access.py)."""
+    """People changed: the farm learns who may use which printers (services/printer_access.py)."""
     from ..services import printer_access
     printer_access.push_soon(db)
 

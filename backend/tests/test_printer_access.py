@@ -1,5 +1,5 @@
 """Printers shared by the team, narrowed per person by the owner (B32): the hub keeps who may use which printer,
-applies it wherever it shows or acts on a printer, and hands it to ArtisanHub Farm. The farm is a fake with three
+applies it wherever it shows or acts on a printer, and hands it to the farm. The farm is a fake with three
 printers."""
 import pytest
 

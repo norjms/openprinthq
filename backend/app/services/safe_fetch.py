@@ -25,7 +25,7 @@ from urllib.parse import unquote, urljoin, urlsplit
 import httpx
 
 UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36 "
-      "ArtisanHub/1.0 (+model import)")
+      "OpenPrintHQ/1.0 (+model import)")
 MAX_HTML = 5 * 1024 * 1024
 MAX_IMAGE = 25 * 1024 * 1024
 MAX_FILE = 500 * 1024 * 1024

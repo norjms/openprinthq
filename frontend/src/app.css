@@ -1,12 +1,12 @@
 @import "tailwindcss";
-/* The shared ArtisanHub look (artisanhub-ui): Manrope, Sora and JetBrains Mono, the --ah-* values of the named theme
+/* The shared OpenPrintHQ look (openprinthq-ui): Manrope, Sora and JetBrains Mono, the --ah-* values of the named theme
    set on <html data-theme> (app.html, lib/theme.svelte.js), the shared classes (ah-glass, ah-btn, ah-chip and the
    rest) and Tailwind utilities named after the same values (bg-ah-glass, text-ah-text-2 and so on). The shared
    classes sit in the components layer, so the hub's own rules below and Tailwind's utilities refine them. */
-@import "artisanhub-ui/fonts.css";
-@import "artisanhub-ui/theme.css";
-@import "artisanhub-ui/base.css" layer(components);
-@import "artisanhub-ui/tailwind.css";
+@import "openprinthq-ui/fonts.css";
+@import "openprinthq-ui/theme.css";
+@import "openprinthq-ui/base.css" layer(components);
+@import "openprinthq-ui/tailwind.css";
 
 @theme inline {
   --font-sans: var(--ah-font-sans);

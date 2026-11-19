@@ -1,7 +1,7 @@
 """First-run setup API, /api/setup/v1 (invariants 3 and 4).
 
 A stable, versioned API so that first setup can be done from outside the hub: by the hub's own /setup page,
-or by the ArtisanHub installer. It is authenticated by a one-time setup token: HUB_SETUP_TOKEN when the hub is
+or by the OpenPrintHQ installer. It is authenticated by a one-time setup token: HUB_SETUP_TOKEN when the hub is
 started with one, otherwise a token the hub generates and logs once at first start. Once setup is complete
 the token stops working and the API refuses further setup. Documented in docs/setup-api.md.
 """
@@ -58,9 +58,9 @@ def status(db: Session = Depends(get_db)) -> Status:
 
 
 class InitializeIn(BaseModel):
-    farm: Literal["openprinthq"] = "openprinthq"   # ArtisanHub Farm, the only farm; kept for older installers
+    farm: Literal["openprinthq"] = "openprinthq"   # the farm, the only farm; kept for older installers
     team_name: str = Field(min_length=1, max_length=120)
-    key_name: str = Field(default="ArtisanHub installer", min_length=1, max_length=80)
+    key_name: str = Field(default="OpenPrintHQ installer", min_length=1, max_length=80)
 
 
 class TeamOut(BaseModel):
@@ -202,7 +202,7 @@ def reach_hit(request: Request, token: str = Path(pattern=REACH_TOKEN), db: Sess
         row.seen_at = datetime.now(timezone.utc)
         row.via_proxy = bool(request.headers.get("x-forwarded-for") or request.headers.get("x-forwarded-proto"))
         db.commit()
-    return {"ok": True, "message": "ArtisanHub received this check. You can go back to the installer."}
+    return {"ok": True, "message": "OpenPrintHQ received this check. You can go back to the installer."}
 
 
 @router.get("/reach/{token}/status", response_model=ReachStatus)

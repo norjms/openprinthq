@@ -3,7 +3,7 @@
 This agreement is adapted from the Apache Software Foundation Individual Contributor License Agreement, version
 2.2.
 
-Thank you for your interest in Artisan Hub (the "Project"), owned and maintained by James Norman (the
+Thank you for your interest in OpenPrintHQ (the "Project"), owned and maintained by James Norman (the
 "Maintainer"). In order to clarify the intellectual property license granted with Contributions from any person
 or entity, the Maintainer must have a Contributor License Agreement ("CLA") agreed to by each Contributor,
 indicating agreement to the license terms below. This license is for your protection as a Contributor as well

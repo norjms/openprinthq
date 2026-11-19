@@ -6,7 +6,7 @@ to no person (the installer's, a service's) always have all of them.
 
 The hub keeps the list (Membership.printers: None for all, else printer keys) and applies it wherever it shows or
 acts on a printer: a printer outside someone's list is left out of every listing and answers 404 when asked for by
-name. It also hands the list to ArtisanHub Farm (push), which applies it in its own pages and its print host, so
+name. It also hands the list to the farm (push), which applies it in its own pages and its print host, so
 OrcaSlicer only offers a person their own printers.
 
 A printer's key is the farm's printer id when the farm has one, else its name.
@@ -106,7 +106,7 @@ def require(db: Session, p, name: str | None):
         raise HTTPException(404, "printer not found")
 
 
-# ---------- handing the list to ArtisanHub Farm ----------
+# ---------- handing the list to the farm ----------
 
 def payload(db: Session, team_id: int | None = None) -> dict:
     q = select(Membership, User).join(User, User.id == Membership.user_id)
@@ -127,7 +127,7 @@ def payload(db: Session, team_id: int | None = None) -> dict:
 
 
 def push(db: Session, team_id: int | None = None, force: bool = False) -> dict:
-    """Send the list to ArtisanHub Farm when it changed since it last took it. An older farm without the endpoint
+    """Send the list to the farm when it changed since it last took it. An older farm without the endpoint
     answers 404: logged and left at that."""
     from ..clients import farm, farm_kind
     from ..clients.base import ApiError
@@ -144,7 +144,7 @@ def push(db: Session, team_id: int | None = None, force: bool = False) -> dict:
         farm().push_printer_access(body)
     except ApiError as e:
         if getattr(e, "status", None) == 404:
-            log.info("the farm has no printer access endpoint yet (an older ArtisanHub Farm)")
+            log.info("The farm has no printer access endpoint yet (an older farm)")
             return {"skipped": "older farm"}
         raise
     set_setting(db, LAST_PUSH, digest)

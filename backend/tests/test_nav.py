@@ -1,4 +1,4 @@
-"""The sidebar as data (/api/nav/v1), shared with ArtisanHub Farm, and the redirects from pages that moved."""
+"""The sidebar as data (/api/nav/v1), shared with the farm, and the redirects from pages that moved."""
 import pytest
 from fastapi.testclient import TestClient
 
@@ -25,7 +25,7 @@ def test_nav_is_the_approved_list():
     r = _client().get("/api/nav/v1")
     assert r.status_code == 200
     d = r.json()
-    assert d["version"] == 1 and d["product"] == "ArtisanHub"
+    assert d["version"] == 1 and d["product"] == "OpenPrintHQ"
     assert {g["label"]: [i["label"] for i in g["items"]] for g in d["groups"]} == APPROVED
     for g in d["groups"]:
         for it in g["items"]:
@@ -78,11 +78,11 @@ def test_the_farm_group_shows_only_with_the_farms_own_pages():
 def test_the_api_shows_the_farm_group_to_people_signed_in_with_an_installed_farm(monkeypatch):
     from app.config import settings
     from app.routers import nav as nav_router
-    monkeypatch.setattr(nav_router, "farm_info", lambda: {"kind": "openprinthq", "label": "ArtisanHub Farm",
+    monkeypatch.setattr(nav_router, "farm_info", lambda: {"kind": "openprinthq", "label": "Farm",
                                                           "app": "https://hub.example/apps/farm"})
     signed_in = _client().get("/api/nav/v1").json()       # the tests' development sign-in
     assert [g["label"] for g in signed_in["groups"]][:2] == ["Print", "Farm"]
-    monkeypatch.setattr(nav_router, "farm_info", lambda: {"kind": None, "label": "the farm", "app": None})
+    monkeypatch.setattr(nav_router, "farm_info", lambda: {"kind": None, "label": "The farm", "app": None})
     assert "Farm" not in [g["label"] for g in _client().get("/api/nav/v1").json()["groups"]]
     monkeypatch.setattr(settings(), "dev_auth_bypass", False)
     anon = _client().get("/api/nav/v1").json()

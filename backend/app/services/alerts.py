@@ -217,7 +217,7 @@ def _telegram(c, title, msg, link, data):
 
 
 def _slack(c, title, msg, link):
-    text = f"*{title}*\n{msg}" + (f"\n<{link}|Open in Artisan Hub>" if link else "")
+    text = f"*{title}*\n{msg}" + (f"\n<{link}|Open in OpenPrintHQ>" if link else "")
     r = httpx.post(c["slack_webhook_url"], json={"text": text}, timeout=30)
     r.raise_for_status()
 
@@ -229,7 +229,7 @@ def send_test() -> tuple[bool, str]:
         return False, "no phone channel is filled in"
     db = SessionLocal()
     try:
-        out = deliver(db, {"title": "Artisan Hub test alert", "message": "Farm alerts reach this channel.",
+        out = deliver(db, {"title": "OpenPrintHQ test alert", "message": "Farm alerts reach this channel.",
                            "channels": chans, "link": settings().public_url.rstrip("/") + "/farm"})
         db.commit()
     finally:

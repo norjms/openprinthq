@@ -45,7 +45,7 @@ def _farm():
     from ..clients import farm
     f = farm()
     if f.kind != "openprinthq":
-        raise HTTPException(400, "this needs ArtisanHub Farm as the team's farm")
+        raise HTTPException(400, "this needs the farm as the team's farm")
     return f
 
 

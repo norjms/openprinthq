@@ -74,14 +74,14 @@ def _woo(db: Session) -> dict:
             if w.get("status") != "active":
                 woo().update_webhook(w["id"], {"status": "active", "secret": secret})
             continue
-        woo().create_webhook(f"Artisan Hub {t}", t, url, secret)
+        woo().create_webhook(f"OpenPrintHQ {t}", t, url, secret)
         made.append(t)
     out["woo_webhooks_created"] = made
     return out
 
 
 def _farm(db: Session) -> dict:
-    """ArtisanHub Farm's signed webhook to the hub."""
+    """The farm's signed webhook to the hub."""
     out = {}
     secret_key = "ophq_webhook_secret"
     wurl = hook_url(db, "openprinthq")

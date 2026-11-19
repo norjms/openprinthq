@@ -1,6 +1,6 @@
 """The person's look: a named theme and a "reduce transparency" choice, saved on their hub account.
 
-The themes come from the shared design package (artisanhub-ui). glass-dark is the only one today; the names exist so
+The themes come from the shared design package (openprinthq-ui). glass-dark is the only one today; the names exist so
 that a light or high-contrast theme can be added without changing anything that stores or reads the choice.
 
 Earlier hubs saved a "skin" and a light or dark "mode". Those are gone: every

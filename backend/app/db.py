@@ -234,7 +234,7 @@ def _installation_farm(c) -> str | None:
 
 
 def move_farm_data(c) -> None:
-    """The installation moves to ArtisanHub Farm from a farm the hub no longer supports (HUB_FARM_MOVE). Ids that
+    """The installation moves to the farm from a farm the hub no longer supports (HUB_FARM_MOVE). Ids that
     belonged to the old farm are kept as history under the "old:" prefix, so they never match the new farm's ids;
     jobs still waiting or printing there are closed, since they are not in the new farm; links to its maintenance
     items and files are cleared. Runs after migrate_farm_names."""

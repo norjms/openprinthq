@@ -54,11 +54,11 @@ def openprinthq():
                                                               verify=c.get("verify_tls", True)))
 
 
-FARM_KINDS = ("openprinthq",)   # the one farm app: ArtisanHub Farm / OpenPrintHQ (clients/farm_base.py)
+FARM_KINDS = ("openprinthq",)   # the one farm app: the farm (clients/farm_base.py)
 
 
 def farm_kind(team_id: int | None = None) -> str:
-    """The installation's print farm: always OpenPrintHQ (ArtisanHub Farm). Raises FarmNotChosen until first-run
+    """The installation's print farm: always the farm. Raises FarmNotChosen until first-run
     setup has connected it."""
     from ..services import installation
     if installation.state()["farm"]:

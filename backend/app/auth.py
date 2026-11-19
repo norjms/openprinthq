@@ -76,7 +76,7 @@ async def callback(request: Request):
     groups = info.get("groups") or []
     allowed = allowed_groups()
     if allowed and not (allowed & set(groups)) and not await run_in_threadpool(_has_invite, info.get("email")):
-        raise HTTPException(403, "Your account is not allowed to use Artisan Hub yet. Ask a team admin to invite you.")
+        raise HTTPException(403, "Your account is not allowed to use OpenPrintHQ yet. Ask a team admin to invite you.")
     user_id = await run_in_threadpool(_login_user, dict(info), list(groups))
     nxt = safe_next(request.session.get("next"))
     request.session.clear()          # new session on sign-in

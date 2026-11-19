@@ -79,9 +79,9 @@ def sync_now(db: Session = Depends(get_db), _: Principal = Depends(need("farm"))
     try:
         out = farm.sync(db)
     except NotConnected:
-        raise HTTPException(400, "ArtisanHub Farm isn't connected")
+        raise HTTPException(400, "The farm isn't connected")
     except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"ArtisanHub Farm: {(getattr(e, 'message', None) or str(e))[:300]}")
+        raise HTTPException(502, f"The farm: {(getattr(e, 'message', None) or str(e))[:300]}")
     db.commit()
     return out
 

@@ -1,4 +1,4 @@
-"""The farm interface: the hub reaches its print farm only through clients.farm() (ArtisanHub Farm)."""
+"""The farm interface: the hub reaches its print farm only through clients.farm() (the farm)."""
 import pytest
 
 
@@ -20,7 +20,7 @@ def test_unsupported_raises_an_api_error_callers_already_handle():
     assert isinstance(e.value, ApiError) and e.value.capability == "alarms"
 
 
-def test_farm_is_artisanhub_farm(monkeypatch):
+def test_the_farm_is_the_farm(monkeypatch):
     from app import clients
     sentinel = object()
     monkeypatch.setattr(clients, "openprinthq", lambda: sentinel)

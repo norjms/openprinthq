@@ -1,6 +1,6 @@
 # Phone app notifications
 
-The ArtisanHub app on iPhone, iPad and Android gets every hub alert as a notification: problems (alarms, failed
+The OpenPrintHQ app on iPhone, iPad and Android gets every hub alert as a notification: problems (alarms, failed
 prints, filament that needs mapping), print updates (started, paused, finished) and order updates (new, shipped,
 cancelled). Which alerts go to the app is set per event under Farm, Settings, Alerts, in the `push` column; every
 alert is on by default.

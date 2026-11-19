@@ -1,14 +1,27 @@
 {
-  "mode": "report",
+  "mode": "enforce",
   "allow": [
     "artisanhub-manager",
     "artisanhub\\.managed",
     "artisanhub-push-v1",
     "artisan_hub_[a-z_]+",
-    "artisanhub-connector(\\.php)?"
+    "artisanhub-connector(\\.php)?",
+    "ARTISAN_HUB_HOST",
+    "artisan-hub-(connector|quotes)(\\.php)?",
+    "artisan-hub-invite",
+    "svc-artisan-hub",
+    "dc=artisanhub",
+    "artisan-hub(-[0-9.]+|-\\d)?\\.apk",
+    "\\(\\?:openprinthq\\|artisan-hub\\)",
+    "artisan-hub-<version>\\.apk"
   ],
   "allow_until_renamed": [
-    "(github\\.com/|ghcr\\.io/)?norjms/artisan-?hub[A-Za-z0-9_.-]*"
+    "(github\\.com/|ghcr\\.io/)?norjms/artisan-?hub[A-Za-z0-9_.-]*",
+    "artisanhub://",
+    "scheme=artisanhub",
+    "artisanhub-push-relay",
+    "cd artisan-hub",
+    "artisan-hub-clipper[a-z0-9.-]*"
   ],
   "skip": [
     "CHANGELOG*",

@@ -1,4 +1,4 @@
-# Contributing to Artisan Hub
+# Contributing to OpenPrintHQ
 
 Thank you for helping. Bug reports, fixes and new integrations are all welcome.
 
@@ -77,4 +77,4 @@ pip install pre-commit && pre-commit install
 
 ## Licence
 
-Artisan Hub is licensed under the GNU AGPL-3.0. By contributing you agree to the terms in [CLA.md](CLA.md).
+OpenPrintHQ is licensed under the GNU AGPL-3.0. By contributing you agree to the terms in [CLA.md](CLA.md).

@@ -60,7 +60,7 @@
             {/each}
           </ul>
         {:else if s.choice === 'on'}
-          <p class="muted">No phone yet: open the ArtisanHub app and turn notifications on.</p>
+          <p class="muted">No phone yet: open the OpenPrintHQ app and turn notifications on.</p>
         {/if}
         {#if can('settings')}
           <h3 class="font-semibold mt-4 mb-1">This installation</h3>

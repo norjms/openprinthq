@@ -156,6 +156,6 @@ def public_summary(code: str) -> dict:
     c = normalize(code)
     k = kind_of(c)
     names = {"spool": "Filament spool", "location": "Storage or printer location", "product": "Product",
-             "order": "Order", "barcode": "Product barcode", "unknown": "Artisan Hub code"}
+             "order": "Order", "barcode": "Product barcode", "unknown": "OpenPrintHQ code"}
     return {"kind": k, "code": c.upper() if k != "barcode" else c, "title": f"{names[k]} {c.upper()}"
             if k in ("spool", "product", "order", "location") else names[k]}

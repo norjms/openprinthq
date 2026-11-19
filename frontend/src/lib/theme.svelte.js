@@ -1,7 +1,7 @@
-import { THEMES, DEFAULT_THEME, resolveTheme, applyTheme } from 'artisanhub-ui/themes';
+import { THEMES, DEFAULT_THEME, resolveTheme, applyTheme } from 'openprinthq-ui/themes';
 import { api } from './api.js';
 
-// The person's look: a named theme from artisanhub-ui (glass-dark is the only one) and whether to reduce
+// The person's look: a named theme from openprinthq-ui (glass-dark is the only one) and whether to reduce
 // transparency. Saved on their hub account so it follows them between devices, and in the browser so the first
 // paint (app.html) is already right. Older saved skins resolve to the default theme.
 export { THEMES };

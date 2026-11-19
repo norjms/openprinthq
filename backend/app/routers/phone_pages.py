@@ -1,11 +1,12 @@
 """Public pages for the phone app (2026-10-22).
 
 - /pair?code=...   What a Connect a phone QR code opens. Any camera can read it (it is a plain https link). The page
-                   opens the Artisan Hub app straight on the confirmation, or offers to install it. Nothing is used up
+                   opens the OpenPrintHQ app straight on the confirmation, or offers to install it. Nothing is used up
                    here: only the app's Connect button makes a key.
 - /get-app         Install page: the Android APK (or the Play listing once there is one) and the iPhone app (TestFlight
                    or App Store link once there is one).
-- /get-app/artisan-hub.apk   The newest APK from android_apk_dir.
+- /get-app/openprinthq.apk   The newest APK from android_apk_dir (also at /get-app/artisan-hub.apk, its address before
+                             the rename, for links already sent).
 - /.well-known/assetlinks.json                Android App Links: a verified app opens /pair links without the browser.
 - /.well-known/apple-app-site-association      iOS Universal Links, only when ios_team_id is set (paid program).
 - /l/<code>        What a spool or location label opens (2026-10-23): S<spool>, L<location>, P<product>, O<order>.
@@ -28,7 +29,8 @@ from ..db import get_db
 pages = APIRouter(include_in_schema=False)
 
 CODE_RE = re.compile(r"^[A-Za-z0-9_-]{16,128}$")
-APK_RE = re.compile(r"^artisan-hub-(\d+(?:\.\d+)*)\.apk$")
+# The app build names its file openprinthq-<version>.apk; builds from before the rename named it artisan-hub-<version>.apk.
+APK_RE = re.compile(r"^(?:openprinthq|artisan-hub)-(\d+(?:\.\d+)*)\.apk$")
 
 
 def _hub() -> str:
@@ -104,7 +106,7 @@ def _page(title: str, body: str, head: str = "", script: str = "") -> HTMLRespon
     doc = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex"><title>{html.escape(title)}</title>{head}<style>{CSS}</style></head>
-<body><main><div class="brand"><span class="logo">A</span>Artisan Hub</div>{body}</main>
+<body><main><div class="brand"><span class="logo">A</span>OpenPrintHQ</div>{body}</main>
 <script>{PLATFORM_JS}{script}</script></body></html>"""
     return HTMLResponse(doc, headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer",
                                       "X-Robots-Tag": "noindex"})
@@ -121,12 +123,12 @@ def _ios_head(code: str | None) -> str:
 def _install_ios() -> str:
     s = settings()
     if s.ios_store_url:
-        return (f'<a class="btn primary" href="{html.escape(s.ios_store_url)}">Get Artisan Hub for iPhone</a>'
+        return (f'<a class="btn primary" href="{html.escape(s.ios_store_url)}">Get OpenPrintHQ for iPhone</a>'
                 '<p class="muted small" style="margin-top:10px">After it installs, come back to this page and tap '
-                '<b>Open in Artisan Hub</b>, or scan the code again.</p>')
+                '<b>Open in OpenPrintHQ</b>, or scan the code again.</p>')
     return ('<p>The iPhone app is not in the App Store yet. For now it is installed from a Mac with Xcode, so ask '
             'whoever runs this hub to put it on your iPhone.</p>'
-            '<p class="muted small">Once it is installed, scan the code again or tap <b>Open in Artisan Hub</b>.</p>')
+            '<p class="muted small">Once it is installed, scan the code again or tap <b>Open in OpenPrintHQ</b>.</p>')
 
 
 def _install_android(code: str | None) -> str:
@@ -136,9 +138,9 @@ def _install_android(code: str | None) -> str:
     apk = newest_apk()
     if not apk:
         return '<p>The Android app is not available to download from this hub right now. Ask whoever runs it.</p>'
-    after = ('<li>Come back here and tap <b>Open in Artisan Hub</b>.</li>' if code else
-             '<li>Open Artisan Hub and tap <b>Scan QR code</b>.</li>')
-    return (f'<a class="btn primary" href="/get-app/artisan-hub.apk" download>Download the app (version {html.escape(apk[1])})</a>'
+    after = ('<li>Come back here and tap <b>Open in OpenPrintHQ</b>.</li>' if code else
+             '<li>Open OpenPrintHQ and tap <b>Scan QR code</b>.</li>')
+    return (f'<a class="btn primary" href="/get-app/openprinthq.apk" download>Download the app (version {html.escape(apk[1])})</a>'
             '<ol class="small"><li>Open the downloaded file.</li>'
             '<li>If Android asks, allow installing apps from your browser (<b>Settings</b>, then turn on '
             '<b>Allow from this source</b>), go back and tap <b>Install</b>.</li>'
@@ -176,8 +178,8 @@ def pair_page(request: Request, code: str = "", db: Session = Depends(get_db)):
 <h1>Connect this phone</h1>
 <p class="muted">To <b>{host}</b>{who}. The app shows exactly what it will be able to do, and nothing connects until you
 tap <b>Connect</b> there.</p>
-<div data-show="android"><a id="open-android" class="btn primary" href="{intent}">Open in Artisan Hub</a></div>
-<div data-show="ios"><a id="open-ios" class="btn primary" href="{app_link}">Open in Artisan Hub</a></div>
+<div data-show="android"><a id="open-android" class="btn primary" href="{intent}">Open in OpenPrintHQ</a></div>
+<div data-show="ios"><a id="open-ios" class="btn primary" href="{app_link}">Open in OpenPrintHQ</a></div>
 <div data-show="desktop" class="note">Open this link on your phone: scan the QR code in the hub with the phone's
 camera.</div>
 <div id="no-app" class="note hide"><b>Didn't open?</b> The app may not be installed on this phone yet.</div>
@@ -231,27 +233,27 @@ def _signed_in_summary(request: Request, db: Session, code: str) -> dict | None:
 def label_page(code: str, request: Request, db: Session = Depends(get_db)):
     from ..services import scan
     if not LABEL_CODE_RE.match(code or ""):
-        return _page("Artisan Hub", '<div class="card"><h1>This code can\'t be read</h1>'
-                     '<p class="muted">Scan the label again with the Artisan Hub app.</p></div>')
+        return _page("OpenPrintHQ", '<div class="card"><h1>This code can\'t be read</h1>'
+                     '<p class="muted">Scan the label again with the OpenPrintHQ app.</p></div>')
     pub = scan.public_summary(code)
     who = _signed_in_summary(request, db, code)
     kinds = {"spool": "Filament spool", "location": "Location", "printer": "Printer", "ams": "AMS unit",
              "ams_slot": "AMS slot", "external": "External spool holder", "product": "Product", "order": "Order",
-             "barcode": "Product barcode", "unknown": "Artisan Hub code"}
+             "barcode": "Product barcode", "unknown": "OpenPrintHQ code"}
     title = html.escape((who or {}).get("title") or pub["title"])
-    sub = html.escape((who or {}).get("subtitle") or kinds.get(pub["kind"], "Artisan Hub code"))
+    sub = html.escape((who or {}).get("subtitle") or kinds.get(pub["kind"], "OpenPrintHQ code"))
     c = html.escape(pub["code"])
     body = f"""<div class="card">
-<p class="muted small">{html.escape(kinds.get((who or pub).get("kind") or pub["kind"], "Artisan Hub code"))} - <code>{c}</code></p>
+<p class="muted small">{html.escape(kinds.get((who or pub).get("kind") or pub["kind"], "OpenPrintHQ code"))} - <code>{c}</code></p>
 <h1>{title}</h1>
 <p class="muted">{sub}</p>
-<div data-show="android"><a class="btn primary" href="{html.escape(_label_intent(pub['code']))}">Open in Artisan Hub</a></div>
-<div data-show="ios"><a class="btn primary" href="{html.escape(_label_app_link(pub['code']))}">Open in Artisan Hub</a></div>
-<div data-show="desktop" class="note">Scan this label with the Artisan Hub app on your phone to see it and act on it.</div>
+<div data-show="android"><a class="btn primary" href="{html.escape(_label_intent(pub['code']))}">Open in OpenPrintHQ</a></div>
+<div data-show="ios"><a class="btn primary" href="{html.escape(_label_app_link(pub['code']))}">Open in OpenPrintHQ</a></div>
+<div data-show="desktop" class="note">Scan this label with the OpenPrintHQ app on your phone to see it and act on it.</div>
 <a class="btn" href="/get-app">Get the app</a>
 <p class="muted small" style="margin-top:18px">{'Signed in to ' + html.escape(_hub().split('://', 1)[-1]) if who else 'Sign in to the hub or use the app to see the details.'}</p>
 </div>"""
-    return _page(f"{pub['code']} - Artisan Hub", body)
+    return _page(f"{pub['code']} - OpenPrintHQ", body)
 
 
 @pages.get("/get-app")
@@ -260,25 +262,26 @@ def get_app(request: Request, code: str = ""):
     back = ""
     if code:
         back = (f'<div data-show="android"><a class="btn" href="{html.escape(_intent_link(code))}">I\'ve installed it, '
-                f'open Artisan Hub</a></div><div data-show="ios"><a class="btn" href="{html.escape(_app_link(code))}">'
-                f'I\'ve installed it, open Artisan Hub</a></div>')
+                f'open OpenPrintHQ</a></div><div data-show="ios"><a class="btn" href="{html.escape(_app_link(code))}">'
+                f'I\'ve installed it, open OpenPrintHQ</a></div>')
     body = f"""<div class="card">
-<h1>Get the Artisan Hub app</h1>
+<h1>Get the OpenPrintHQ app</h1>
 <p class="muted">Watch the farm, plate checks, orders and stock from your phone.</p>
 <div data-show="android desktop"><div class="section"><h2>Android</h2>{_install_android(code or None)}</div></div>
 <div data-show="ios desktop"><div class="section"><h2>iPhone</h2>{_install_ios()}</div></div>
 {back}
 </div>"""
-    return _page("Get the Artisan Hub app", body, head=_ios_head(code or None))
+    return _page("Get the OpenPrintHQ app", body, head=_ios_head(code or None))
 
 
-@pages.get("/get-app/artisan-hub.apk")
+@pages.get("/get-app/openprinthq.apk")
+@pages.get("/get-app/artisan-hub.apk", include_in_schema=False)
 def get_apk():
     apk = newest_apk()
     if not apk:
         raise HTTPException(404, "no Android app on this hub")
     return FileResponse(apk[0], media_type="application/vnd.android.package-archive",
-                        filename=f"artisan-hub-{apk[1]}.apk", headers={"Cache-Control": "no-cache"})
+                        filename=f"openprinthq-{apk[1]}.apk", headers={"Cache-Control": "no-cache"})
 
 
 @pages.get("/.well-known/assetlinks.json")

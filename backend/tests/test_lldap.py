@@ -1,4 +1,4 @@
-"""Logins in LLDAP, for a hub that signs people in through Authelia (the ArtisanHub installer's default).
+"""Logins in LLDAP, for a hub that signs people in through Authelia (the OpenPrintHQ installer's default).
 
 An invite to someone with no login makes one in LLDAP and a one-time link to the hub's page where they choose its
 password; someone who has a login joins the hub-users group. The installer's key, and only it, may ask for such a

@@ -1,4 +1,4 @@
-"""One call for the ArtisanHub add-on for OrcaSlicer.
+"""One call for the OpenPrintHQ add-on for OrcaSlicer.
 
 The add-on's farm tab shows the hub's farm features: plate checks (with the camera photo), staggered start, the
 timeline and order due dates, maintenance, real filament use, report totals and quotes waiting. It polls this endpoint with a team API key; actions use the regular

@@ -120,7 +120,7 @@ def skin_look(css: str, skin: str) -> dict:
 
 def _wordmark() -> str:
     from ..config import settings
-    return settings().wordmark or "/theme/artisanhub-wordmark.svg"
+    return settings().wordmark or "/theme/openprinthq-wordmark.svg"
 
 
 def build(skin: str, mode: str, all_skins: bool = False) -> dict | None:

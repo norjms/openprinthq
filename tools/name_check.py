@@ -67,13 +67,14 @@ def tracked(root: Path) -> list[str]:
 
 
 def self_test() -> None:
-    allow = [re.compile(r"artisanhub-manager"), re.compile(r"artisan_hub_[a-z_]+")]
+    stem = "artisan"  # written in parts, so this file does not carry the old name itself
+    allow = [re.compile(stem + "hub-manager"), re.compile(stem + r"_hub_[a-z_]+")]
     old = "Artisan" + "Hub"
     assert left(f"Welcome to {old}", allow)
     assert left("the " + "artisan" + "-hub image", allow)
     assert left("Artisan" + " Hub", allow)
-    assert not left("volume artisanhub-manager and option artisan_hub_api_key", allow)
-    assert left(f"artisanhub-manager for {old}", allow)
+    assert not left(f"volume {stem}hub-manager and option {stem}_hub_api_key", allow)
+    assert left(f"{stem}hub-manager for {old}", allow)
     assert not left("Artisan Prints, the shop", allow)
     print("name-check: self-test passed")
 
