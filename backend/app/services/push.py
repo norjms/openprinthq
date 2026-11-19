@@ -1,4 +1,4 @@
-"""Phone app notifications through a push relay (artisanhub-push-relay), encrypted end to end.
+"""Phone app notifications through a push relay (openprinthq-push-relay), encrypted end to end.
 
 Apple and Google take push messages only from whoever holds the app's keys, so the hub hands each alert to a push
 relay that holds them. Before it leaves the hub the alert is sealed for one phone with that phone's public key
@@ -165,7 +165,7 @@ def disclaimer(db: Session) -> dict:
     points.append("Rather not use the relay? Choose email instead: your alerts come by email from your hub, and "
                   "filament mapping stays on the hub's web pages.")
     return {"title": "How phone notifications work", "points": points, "relay": url, "relay_status": st,
-            "source": st.get("source") or "https://github.com/norjms/artisanhub-push-relay"}
+            "source": st.get("source") or "https://github.com/norjms/openprinthq-push-relay"}
 
 
 # ---------------------------------------------------------------- devices

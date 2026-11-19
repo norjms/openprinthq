@@ -30,7 +30,7 @@ services:
 
   web:
     build: .
-    # image: ghcr.io/norjms/artisan-hub:main
+    # image: ghcr.io/norjms/openprinthq:main
     image: openprinthq:local
     restart: unless-stopped
     depends_on:
@@ -43,7 +43,7 @@ services:
 
   worker:
     image: openprinthq:local
-    # image: ghcr.io/norjms/artisan-hub:main
+    # image: ghcr.io/norjms/openprinthq:main
     restart: unless-stopped
     depends_on:
       db: { condition: service_healthy }

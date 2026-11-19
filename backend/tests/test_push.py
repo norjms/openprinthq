@@ -76,7 +76,7 @@ def relay(monkeypatch):
         return httpx.Response(code, json={"ok": code == 200}, request=httpx.Request("POST", url))
 
     def get(url, timeout=None, **kw):
-        return httpx.Response(200, json={"service": "artisanhub-push-relay", "delivery_log": True, "source": "https://example.test/src"},
+        return httpx.Response(200, json={"service": "openprinthq-push-relay", "delivery_log": True, "source": "https://example.test/src"},
                               request=httpx.Request("GET", url))
 
     from app.services import push
