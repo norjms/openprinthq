@@ -10,8 +10,8 @@
   // AGPL §13 source offer, the complete corresponding source is published in the
   // public repositories (the app + the print engine). Linking them satisfies the
   // network-use source requirement and stays current with the deployed version.
-  const APP_REPO = 'https://github.com/norjms/artisan-hub-farm';
-  const UPSTREAM_REPO = 'https://github.com/norjms/openprinthq';
+  const APP_REPO = 'https://github.com/norjms/openprinthq-farm';
+  const UPSTREAM_REPO = 'https://github.com/norjms/openprinthq-classic';
   const ENGINE_REPO = 'https://github.com/norjms/openprinthq-engine';
   const CLIENT_REPO = 'https://github.com/norjms/openprinthq-cloud-client';
   // Deployed commit SHAs (injected at build time via vite `define`). When present,

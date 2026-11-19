@@ -65,7 +65,7 @@ services:
   # slicer/ for the version in slicer/orcaslicer.env. Engines reach it by name on
   # the shared network via OPHQ_SLICER_URL (http://orca-slicer-api:3000).
   orca-slicer-api:
-    image: ${OPHQ_SLICER_IMAGE:-ghcr.io/norjms/artisan-hub-farm-slicer:latest}
+    image: ${OPHQ_SLICER_IMAGE:-ghcr.io/norjms/openprinthq-farm-slicer:latest}
     restart: unless-stopped
     environment:
       - PORT=3000

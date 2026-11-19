@@ -1,7 +1,7 @@
 # Contributing to OpenPrintHQ Farm
 
 OpenPrintHQ Farm is the print farm part of OpenPrintHQ, served under the hub's name. It grew from the standalone
-[OpenPrintHQ](https://github.com/norjms/openprinthq) project, which is retired: changes are made here.
+[OpenPrintHQ](https://github.com/norjms/openprinthq-classic) project, which is retired: changes are made here.
 
 ## How changes get in
 

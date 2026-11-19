@@ -29,7 +29,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          path-to-document: https://github.com/norjms/artisan-hub-farm/blob/main/CLA.md
+          path-to-document: https://github.com/norjms/openprinthq-farm/blob/main/CLA.md
           path-to-signatures: signatures/cla.json
           branch: cla-signatures
           allowlist: norjms,dependabot[bot],github-actions[bot]

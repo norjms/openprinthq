@@ -21,14 +21,14 @@
 
 services:
   router:
-    image: ${OPHQ_ROUTER_IMAGE:-ghcr.io/norjms/artisan-hub-farm-router:main}
+    image: ${OPHQ_ROUTER_IMAGE:-ghcr.io/norjms/openprinthq-farm-router:main}
     restart: unless-stopped
     ports:
       - "${OPHQ_HTTP_PORT:-8088}:80"
     depends_on: [web, control-plane]
 
   web:
-    image: ${OPHQ_WEB_IMAGE:-ghcr.io/norjms/artisan-hub-farm-web:main}
+    image: ${OPHQ_WEB_IMAGE:-ghcr.io/norjms/openprinthq-farm-web:main}
     restart: unless-stopped
     environment:
       - NODE_ENV=production
@@ -36,7 +36,7 @@ services:
       - "3000"
 
   control-plane:
-    image: ${OPHQ_CONTROL_PLANE_IMAGE:-ghcr.io/norjms/artisan-hub-farm-control-plane:main}
+    image: ${OPHQ_CONTROL_PLANE_IMAGE:-ghcr.io/norjms/openprinthq-farm-control-plane:main}
     restart: unless-stopped
     environment:
       - PORT=8080
@@ -88,7 +88,7 @@ services:
     depends_on: [postgres]
 
   orca-slicer-api:
-    image: ${OPHQ_SLICER_IMAGE:-ghcr.io/norjms/artisan-hub-farm-slicer:latest}
+    image: ${OPHQ_SLICER_IMAGE:-ghcr.io/norjms/openprinthq-farm-slicer:latest}
     restart: unless-stopped
     environment:
       - PORT=3000
