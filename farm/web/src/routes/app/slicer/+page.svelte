@@ -15,7 +15,8 @@
   // ArtisanHub Farm has one slicer, OrcaSlicer. The slicing service runs its
   // command line; when the ArtisanHub installer added the OrcaSlicer desktop,
   // the same version runs in the browser too, and info.desktop_url says where.
-  let info = $state({ version: null, desktop_url: null, print_host: null, desktop_print_host: null, print_host_keys: 0 });
+  let info = $state({ version: null, desktop_url: null, print_host: null, desktop_print_host: null, print_host_keys: 0,
+                      addon: null, desktop: null });
   let full = $state(false);
   let keyBusy = $state(false);
   let keyError = $state(null);
@@ -49,6 +50,33 @@
       info.print_host_keys = 1;
     } catch (e) { keyError = e.message || 'could not make a key'; }
     finally { keyBusy = false; }
+  }
+
+  // Q9: OrcaSlicer prints to the queue through the OrcaSlicer add-on. The desktop in the browser is connected by
+  // the farm; on a computer, the person installs the add-on and pastes a key.
+  let addonKey = $state(null);
+  let addonBusy = $state(false);
+  let addonError = $state(null);
+  async function makeAddonKey() {
+    if (addonKey === null && !confirm('Make a key for the add-on? A key made here before stops working.')) return;
+    addonBusy = true; addonError = null;
+    try { addonKey = await api.slicerAddonKey(); }
+    catch (e) { addonError = e.message || 'could not make a key'; }
+    finally { addonBusy = false; }
+  }
+  let connectBusy = $state(false);
+  let connectError = $state(null);
+  async function connectDesktop() {
+    if (info.desktop?.connected && !confirm('Connect OrcaSlicer in the browser again? It gets a new key and the farm\'s printers as they are now.')) return;
+    connectBusy = true; connectError = null;
+    try {
+      const out = await api.slicerDesktopConnect();
+      info.desktop = { ...(info.desktop || {}), pending: true, printers: out.printers, skipped: out.skipped, scope: out.scope };
+    } catch (e) { connectError = e.message || 'could not connect it'; }
+    finally { connectBusy = false; }
+  }
+  function when(at) {
+    try { return new Date(at).toLocaleString(); } catch { return at; }
   }
 
   function onKey(e) { if (e.key === 'Escape') full = false; }
@@ -152,16 +180,80 @@
     </div>
   </div>
 
-  <div class="card card-pad send">
-    <span class="eyebrow">Send plates from OrcaSlicer</span>
-    <p class="muted">OrcaSlicer, in the browser above or on your own computer, can send a sliced plate
-      straight into your <a href="{basePath}/app/queue">print queue</a>. In OrcaSlicer's printer
-      settings, under <b>Connection</b>, choose <b>Octo/Klipper</b>, enter the address below as the
-      host, and paste the key. One key serves both.</p>
+  {#if info.desktop}
+    <div class="card card-pad send" data-testid="desktop-queue">
+      <span class="eyebrow">Print from OrcaSlicer in the browser</span>
+      {#if info.desktop.pending}
+        <p><b>Almost connected.</b> Close OrcaSlicer in the desktop above (File, Quit): it opens again, connected to
+          your <a href="{basePath}/app/queue">print queue</a>.</p>
+      {:else if info.desktop.connected}
+        <p><b>Connected</b>{info.desktop.at ? ' since ' + when(info.desktop.at) : ''}. In OrcaSlicer, choose a printer
+          ending in "ArtisanHub Farm", slice, then <b>Print</b> puts the plate first in line on that printer and
+          <b>Send</b> adds it to the end of its queue. The farm starts it when the printer is ready.</p>
+      {:else if info.desktop.error}
+        <p><b>Not connected:</b> {info.desktop.error}. Connect it again; if it fails again, restart the desktop from
+          the installer.</p>
+      {:else}
+        <p>Connect it to send plates from OrcaSlicer to your <a href="{basePath}/app/queue">print queue</a>, for every
+          printer here, Bambu Lab included.</p>
+      {/if}
+      {#if info.desktop.printers?.length}
+        <div class="chips">{#each info.desktop.printers as p}<span class="chip primary">{p.preset}</span>{/each}</div>
+      {/if}
+      {#if info.desktop.skipped?.length}
+        <p class="muted small">No OrcaSlicer printer to match {info.desktop.skipped.map((p) => p.name).join(', ')}: in
+          OrcaSlicer, choose its printer, name it with the farm printer's name, and set <b>Printer agent</b> to
+          OpenPrintHQ (Printer settings, Basic information, advanced mode).</p>
+      {/if}
+      {#if info.desktop.scope === 'submit'}
+        <p class="muted small">Everyone who opens this desktop uses its connection, so it can send work but not change
+          the queue: reorder, cancel and printer controls stay here.</p>
+      {/if}
+      {#if connectError}<p class="muted">{connectError}</p>{/if}
+      <button class="btn btn-sm" onclick={connectDesktop} disabled={connectBusy} data-testid="desktop-connect">
+        <Icon name="link" size={15} />{connectBusy ? 'Connecting' : (info.desktop.connected || info.desktop.pending ? 'Connect again' : 'Connect it')}
+      </button>
+    </div>
+  {/if}
+
+  {#if info.addon}
+    <div class="card card-pad send" data-testid="addon">
+      <span class="eyebrow">Print from OrcaSlicer on your computer</span>
+      <p class="muted">The OrcaSlicer add-on sends plates to your <a href="{basePath}/app/queue">print queue</a>
+        instead of straight to a printer, for every printer here, Bambu Lab included, and adds a tab for the farm.
+        OrcaSlicer 2.5.1 or later.</p>
+      <ol class="steps muted">
+        <li>Download the add-on, then in OrcaSlicer: <b>Plugins</b>, <b>Install local plugin</b>, and pick the file.
+          Keep its name, <code>{info.addon.file}</code>.</li>
+        <li>OrcaSlicer, <b>Preferences</b>: turn on <b>Use printer agents instead of print hosts</b>.</li>
+        <li>The add-on's <b>Config</b> page: this address and a key made here.</li>
+        <li>For each printer: in OrcaSlicer, a printer named with the farm printer's name, such as
+          "H2D - ArtisanHub Farm", with <b>Printer agent</b> set to OpenPrintHQ and any print host.</li>
+      </ol>
+      <p><code>{info.addon.url}</code></p>
+      {#if addonKey}
+        <p class="muted small">Your key, shown only now:</p>
+        <p><code class="key" data-testid="addon-key">{addonKey.api_key}</code></p>
+      {/if}
+      {#if addonError}<p class="muted">{addonError}</p>{/if}
+      <div class="flex center gap wrap">
+        <a class="btn btn-sm" href="{basePath}/api/slicer/addon" download={info.addon.file} data-testid="addon-download">
+          <Icon name="download" size={15} />Download the add-on{info.addon.version ? ' ' + info.addon.version : ''}</a>
+        <button class="btn btn-ghost btn-sm" onclick={makeAddonKey} disabled={addonBusy}>
+          <Icon name="key" size={15} />{addonBusy ? 'Making' : 'Make a key'}</button>
+      </div>
+    </div>
+  {/if}
+
+  <details class="card card-pad send other">
+    <summary><span class="eyebrow">Other slicers: an OctoPrint print host</span></summary>
+    <p class="muted">PrusaSlicer, SuperSlicer and other slicers that upload to OctoPrint can send to the queue too:
+      under <b>Physical printer</b> or <b>Connection</b>, choose OctoPrint, enter the address below as the host, and
+      paste the key. Upload and Print adds the plate to the queue; Upload only adds it to Files.</p>
     {#if info.desktop_print_host}
-      <p class="muted small">From OrcaSlicer in the browser:</p>
+      <p class="muted small">From the desktop in the browser:</p>
       <p><code>{info.desktop_print_host}</code></p>
-      {#if info.print_host}<p class="muted small">From OrcaSlicer on a computer:</p>{/if}
+      {#if info.print_host}<p class="muted small">From a computer:</p>{/if}
     {/if}
     {#if info.print_host}<p><code>{info.print_host}</code></p>{/if}
     {#if newKey}
@@ -172,7 +264,7 @@
     <button class="btn btn-sm" onclick={makeKey} disabled={keyBusy || !info.print_host}>
       <Icon name="key" size={15} />{keyBusy ? 'Making' : (info.print_host_keys > 0 ? 'Make a new key' : 'Make a key')}
     </button>
-  </div>
+  </details>
 
   <div class="grid two">
     <div class="card card-pad">
@@ -213,6 +305,10 @@
   .send code { font-family: var(--ah-font-mono); font-size: 0.88em; padding: 0.1rem 0.35rem;
                border-radius: 6px; border: 1px solid var(--ah-panel-line); background: var(--ah-panel); word-break: break-all; }
   .send .btn { margin-top: 0.4rem; }
+  .send .steps { margin: 0.5rem 0; padding-left: 1.3rem; }
+  .send .steps li { margin: 0.25rem 0; }
+  .send .wrap { flex-wrap: wrap; }
+  .other summary { cursor: pointer; list-style: revert; }
   .status { margin-bottom: 1.2rem; }
   .status h3 { margin: 0; font-size: 1.1rem; }
   .status p { margin: 0.2rem 0 0; font-size: 0.9rem; }

@@ -77,6 +77,18 @@ jobs:
           OPHQ_AGENT_SRC: ${{ runner.temp }}/agent.js
         run: npm test
 
+  orcaslicer-addon:
+    name: OrcaSlicer add-on (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Tests
+        working-directory: control-plane/orcaslicer-addon
+        run: python3 -I -m unittest discover -s tests
+
   images:
     name: Images build
     runs-on: ubuntu-latest

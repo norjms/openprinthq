@@ -42,6 +42,8 @@ import { setSink, sinkConfigured, shipServer } from './logship.js';
 import { dbg } from './debuglog.js';
 import { fetchLinkPrinters, linkConfigured } from './link.js';
 import { desktopSettings, inboxFor, inboxName, sendToInbox } from './desktop.js';
+import { readAddon, addonFor, addonVersion, ADDON_FILE_NAME, desktopPrinters, writeConnection, desktopConnection,
+  dropPendingConnection, DESKTOP_KEY_LABEL, ADDON_KEY_LABEL } from './orcaslicer.js';
 import { engineBaseOf, singleTenant, engineUrl } from './tenancy.js';
 import { teamMode, ACCESS_SETTING, parseAccessMap, accessFor, inTeam, allows, onlyPrinter, isAll,
   checkEngineRequest, filterEngineAnswer, filterPrinters, answerHidden } from './team.js';
@@ -291,7 +293,10 @@ app.get('/api/slicer/info', async (req, reply) => {
     desktop_print_host: DESKTOP_URL ? (DESKTOP_PRINTHOST || null) : null,
     // Whether "Open in OrcaSlicer" can send a file to the desktop (B49).
     desktop_open: Boolean(DESKTOP_URL && desktopSettings().inbox),
-    print_host_keys: await countPrintHostTokens(actorOf(user).id, 'slicer').catch(() => 0)
+    print_host_keys: await countPrintHostTokens(actorOf(user).id, 'slicer').catch(() => 0),
+    // Q9: the OrcaSlicer add-on for computers, and where this person's desktop stands.
+    addon: await addonInfo(),
+    desktop: await desktopConnectionView(req)
   };
 });
 
@@ -330,6 +335,135 @@ app.post('/api/slicer/desktop-open', async (req, reply) => {
   dbg('slicer', 'file sent to the OrcaSlicer desktop', { userId: user.id, fileId: id, shared: !settings.perPerson });
   return { sent: name, desktop_url: DESKTOP_URL + '/' };
 });
+
+// ---- OrcaSlicer sends to the print queue (Q9, orcaslicer.js) -----------------------------------------------
+// The add-on file is read once; a farm without one (an old image) offers no download.
+let addonCache;
+async function addonSource() {
+  if (addonCache === undefined) addonCache = await readAddon().catch(() => null);
+  return addonCache;
+}
+async function addonInfo() {
+  const src = await addonSource();
+  return src && PUBLIC_URL ? { version: addonVersion(src), file: ADDON_FILE_NAME, url: PUBLIC_URL } : null;
+}
+
+// The desktop a request is about: the shared one, or the person's own, by the login the proxy vouches for.
+function desktopDirFor(req) {
+  const settings = desktopSettings();
+  if (!DESKTOP_URL || !DESKTOP_PRINTHOST || !settings.inbox) return { settings, dir: null };
+  const gatewayOk = !GATEWAY_SECRET || req.headers['x-ophq-gateway'] === GATEWAY_SECRET;
+  const login = gatewayOk ? req.headers['x-authentik-username'] : null;
+  return { settings, dir: inboxFor(settings, login) };
+}
+async function desktopConnectionView(req) {
+  const { dir } = desktopDirFor(req);
+  if (!dir) return null;
+  const c = await desktopConnection(dir).catch(() => null);
+  if (!c) return null;
+  const { key, ...view } = c;
+  return view;
+}
+
+// The farm's address as the desktop reaches it: on the installation's own network, beside the print host.
+function desktopFarmUrl() {
+  return DESKTOP_PRINTHOST.replace(/\/printhost\/?$/, '');
+}
+
+// The active printers this account's key will see, from its engine.
+async function farmPrinterList(instanceUserId, access) {
+  const inst = await getInstanceForUser(instanceUserId);
+  const base = engineBase(inst);
+  if (!base) throw new Error('no running instance for this account');
+  const r = await fetch(base + '/api/v1/printers/', { headers: { accept: 'application/json' } });
+  if (!r.ok) throw new Error('the engine did not list its printers');
+  const d = await r.json();
+  const arr = Array.isArray(d) ? d : (d.printers || d.items || []);
+  return arr.filter((p) => p.is_active !== false && allows(access, p.id));
+}
+
+// A new key with this label for this person, revoking the ones it replaces: one key per use, so a leaked one is
+// one click (or one reconnect) from useless.
+async function replaceLabelledKey(actorId, label, scope) {
+  for (const t of await listPrintHostTokens(actorId)) {
+    if (t.kind === 'api' && t.label === label) await revokePrintHostToken(actorId, t.token_id);
+  }
+  const secret = API_KEY_PREFIX + randomBytes(32).toString('base64url');
+  const { token, tokenId } = await createPrintHostToken(actorId, secret, label, null, 'api', scope);
+  return { token, tokenId };
+}
+
+// Connect a desktop: a key for it (the person's own desktop can do what they can; a shared desktop only sends
+// work, since everyone who opens it uses the key), its printers, and the file the desktop takes.
+async function connectDesktop(dir, perPerson, actor, instanceUserId, access) {
+  const previous = await desktopConnection(dir).catch(() => null);
+  if (previous?.key) await revokePrintHostToken(previous.key.actorId, previous.key.tokenId).catch(() => {});
+  await dropPendingConnection(dir);
+  const scope = perPerson ? 'control' : 'submit';
+  const label = perPerson ? DESKTOP_KEY_LABEL : DESKTOP_KEY_LABEL + ' (shared)';
+  const { printers, skipped } = desktopPrinters(await farmPrinterList(instanceUserId, access));
+  const { token, tokenId } = await replaceLabelledKey(actor.id, label, scope);
+  await writeConnection(dir, {
+    url: desktopFarmUrl(), key: token, scope, label, token_id: tokenId, actor_id: actor.id,
+    by: actor.email || null, printers, skipped, at: new Date().toISOString()
+  });
+  return { pending: true, scope, printers, skipped };
+}
+
+// The add-on for OrcaSlicer on a computer, declared for this farm's address.
+app.get('/api/slicer/addon', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  const src = await addonSource();
+  if (!src || !PUBLIC_URL) return reply.code(404).send({ error: 'this farm has no OrcaSlicer add-on to offer' });
+  reply.header('content-type', 'text/x-python; charset=utf-8');
+  reply.header('content-disposition', `attachment; filename="${ADDON_FILE_NAME}"`);
+  reply.header('cache-control', 'no-store');
+  return addonFor(src, PUBLIC_URL);
+});
+
+// A key for the add-on on a computer: shown once; making a new one revokes the last.
+app.post('/api/slicer/addon-key', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  if (!PUBLIC_URL) return reply.code(503).send({ error: 'OPHQ_PUBLIC_URL is not set' });
+  const { token } = await replaceLabelledKey(actorOf(user).id, ADDON_KEY_LABEL, 'control');
+  req.log.info({ userId: actorOf(user).id }, 'OrcaSlicer add-on key minted');
+  return { url: PUBLIC_URL, api_key: token, scope: 'control' };
+});
+
+// Connect OrcaSlicer in the browser to the farm. It takes the connection when OrcaSlicer is not running (closing
+// it is enough: the desktop opens it again, connected).
+app.post('/api/slicer/desktop-connect', async (req, reply) => {
+  const user = await requireUser(req, reply); if (!user) return;
+  const { settings, dir } = desktopDirFor(req);
+  if (!DESKTOP_URL || !settings.inbox) return reply.code(404).send({ error: 'there is no OrcaSlicer desktop here' });
+  if (!dir) return reply.code(409).send({ error: 'no OrcaSlicer desktop of yours to connect' });
+  try {
+    const out = await connectDesktop(dir, settings.perPerson, actorOf(user), user.id, await printerAccess(req, user));
+    dbg('slicer', 'OrcaSlicer desktop connection written', { userId: actorOf(user).id, shared: !settings.perPerson, printers: out.printers.length });
+    return out;
+  } catch (e) {
+    return reply.code(502).send({ error: e.message || String(e) });
+  }
+});
+
+// The shared desktop comes connected: at start, when it has never had a connection, the owner's account connects
+// it. A person's own desktop is connected by that person, from the Slice page.
+async function connectSharedDesktopOnce(log) {
+  const settings = desktopSettings();
+  if (!DESKTOP_URL || !DESKTOP_PRINTHOST || !settings.inbox || settings.perPerson) return;
+  const dir = inboxFor(settings, null);
+  const now = await desktopConnection(dir).catch(() => null);
+  if (!dir || !now || now.connected || now.pending) return;
+  const ownerId = await getOwnerUserId();
+  const owner = ownerId ? await getUserById(ownerId) : null;
+  if (!owner) return;
+  try {
+    const out = await connectDesktop(dir, false, owner, owner.id, 'all');
+    log.info({ printers: out.printers.length, skipped: out.skipped.length }, 'shared OrcaSlicer desktop connected to the farm');
+  } catch (e) {
+    log.warn({ err: e.message }, 'shared OrcaSlicer desktop not connected yet');
+  }
+}
 
 // ArtisanHub Link's printers (B48, link.js), for the add-printer page: what a scan from here cannot find when
 // the farm runs away from its printers. Owners only, as adding printers is.
@@ -2756,6 +2890,15 @@ try {
   // Resume + drive any running temperature-staggered batches.
   startOrchestrator(8000);
   await app.listen({ host: '0.0.0.0', port: PORT });
+  // Q9: retried a few times while the engine starts beside the farm.
+  (async () => {
+    for (let i = 0; i < 10; i++) {
+      await connectSharedDesktopOnce(app.log).catch(() => {});
+      const c = await desktopConnection(inboxFor(desktopSettings(), null)).catch(() => null);
+      if (!c || c.connected || c.pending) return;
+      await new Promise((r) => setTimeout(r, 30000));
+    }
+  })();
   app.log.info(`control-plane listening on ${PORT}`);
   shipServer(`control-plane started, listening on ${PORT}`);
 } catch (err) {
