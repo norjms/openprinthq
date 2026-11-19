@@ -24,6 +24,6 @@
     "@fontsource/ibm-plex-sans": "^5.1.0",
     "@fontsource/inter": "^5.1.0",
     "@fontsource/jetbrains-mono": "^5.1.0",
-    "openprinthq-ui": "github:norjms/artisanhub-ui#v0.2.0"
+    "openprinthq-ui": "github:norjms/openprinthq-ui#v0.2.0"
   }
 }

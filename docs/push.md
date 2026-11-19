@@ -8,7 +8,7 @@ alert is on by default.
 ## How it works
 
 Apple and Google take push messages only from whoever holds the app's keys, so the hub hands each alert to a push
-relay ([artisanhub-push-relay](https://github.com/norjms/artisanhub-push-relay)) that has them.
+relay ([openprinthq-push-relay](https://github.com/norjms/openprinthq-push-relay)) that has them.
 
 1. When a person turns notifications on in the app, the phone makes an X25519 key pair. The private key stays in
    the phone's secure storage. The phone sends the hub its public key and the push token Apple or Google gave it
@@ -31,7 +31,7 @@ notifications off, removes the phone, or the push service says the token is gone
 | The installation (settings permission) | Farm, Settings, Phone app notifications | Use the relay, or off (people who turned notifications on get email instead). The relay address. |
 
 The relay address is the team setting `push_relay_url`, else `HUB_PUSH_RELAY_URL`. Any relay running
-artisanhub-push-relay with keys for the app build works, so an installation can run its own.
+openprinthq-push-relay with keys for the app build works, so an installation can run its own.
 
 The text a person reads before turning notifications on comes from the hub (`GET /api/push/state`, `disclaimer`),
 so the app and the web say the same thing. It reads the relay's own `GET /status`: when the relay's delivery log

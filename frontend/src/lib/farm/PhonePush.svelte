@@ -72,7 +72,7 @@
             <input class="input" placeholder="https://push.example.com" bind:value={relayEdit} aria-label="Push relay address" />
             <button class="btn sm" type="submit">Save</button>
           </form>
-          <p class="text-xs muted mt-1">Any relay running artisanhub-push-relay with keys for this app. Empty: the installation's default.</p>
+          <p class="text-xs muted mt-1">Any relay running openprinthq-push-relay with keys for this app. Empty: the installation's default.</p>
         {/if}
       </div>
     </div>

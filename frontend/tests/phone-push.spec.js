@@ -19,7 +19,7 @@ const STATE = {
     ],
     relay: 'https://push.example.com',
     relay_status: { reachable: true, version: '0.1.0', delivery_log: true },
-    source: 'https://github.com/norjms/artisanhub-push-relay'
+    source: 'https://github.com/norjms/openprinthq-push-relay'
   }
 };
 

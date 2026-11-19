@@ -62,8 +62,8 @@ Optional services the hub connects to:
 You need Docker with the compose plugin.
 
 ```sh
-git clone https://github.com/norjms/artisan-hub.git
-cd artisan-hub
+git clone https://github.com/norjms/openprinthq.git
+cd openprinthq
 cp compose.example.yml compose.yml
 # Edit compose.yml: set a database password and HUB_SESSION_SECRET (a long random value).
 docker compose up -d --build

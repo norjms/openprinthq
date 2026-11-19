@@ -10,7 +10,7 @@ RUN npm run build
 
 FROM python:3.12-slim
 LABEL org.opencontainers.image.title="OpenPrintHQ" \
-      org.opencontainers.image.source="https://github.com/norjms/artisan-hub" \
+      org.opencontainers.image.source="https://github.com/norjms/openprinthq" \
       org.opencontainers.image.licenses="AGPL-3.0-only"
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 RUN apt-get update && apt-get install -y --no-install-recommends libxml2 libxslt1.1 curl && rm -rf /var/lib/apt/lists/*
