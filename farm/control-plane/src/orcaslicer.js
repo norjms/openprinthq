@@ -4,7 +4,7 @@
 //
 // - OrcaSlicer on a person's computer: the Slice page offers the add-on as a download, declared for this farm's
 //   address so OrcaSlicer asks about the address once, and a key to paste on its Config page.
-// - OrcaSlicer in the browser (the ArtisanHub installer's desktop): the farm writes a connection file,
+// - OrcaSlicer in the browser (the OpenPrintHQ installer's desktop): the farm writes a connection file,
 //   ".farm.json", into the desktop's inbox (desktop.js). The desktop takes it when OrcaSlicer is not running:
 //   it installs the add-on, gives it the address and key, and adds one printer per farm printer, then deletes the
 //   file (it holds the key) and leaves ".farm-applied", without the key, which the Slice page reads.
@@ -17,7 +17,7 @@ export const ADDON_PATH = new URL('../orcaslicer-addon/plugin/openprinthq_print_
 export const ADDON_FILE_NAME = 'openprinthq_print_queue.py';
 export const CONNECTION_FILE = '.farm.json';
 export const APPLIED_FILE = '.farm-applied';
-export const PRESET_SUFFIX = ' - ArtisanHub Farm';
+export const PRESET_SUFFIX = ' - OpenPrintHQ Farm';
 export const DESKTOP_KEY_LABEL = 'OrcaSlicer in the browser';
 export const ADDON_KEY_LABEL = 'OrcaSlicer add-on';
 // The one line the add-on declares its hosts on (permissions OrcaSlicer asks about once, at load).
@@ -56,7 +56,7 @@ export async function readAddon(path = ADDON_PATH) {
   return readFile(path, 'utf8');
 }
 
-// OrcaSlicer's own printer for a farm printer: the system preset its "ArtisanHub Farm" printer inherits. Only
+// OrcaSlicer's own printer for a farm printer: the system preset its "OpenPrintHQ Farm" printer inherits. Only
 // names OrcaSlicer ships; a printer that matches none is listed as skipped and set up by hand (choose its printer
 // in OrcaSlicer and set its printer agent to OpenPrintHQ).
 const BAMBU = {

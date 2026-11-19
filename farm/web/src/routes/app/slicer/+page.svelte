@@ -12,8 +12,8 @@
   let presetCats = $state([]);
   let connected = $state(false);
 
-  // ArtisanHub Farm has one slicer, OrcaSlicer. The slicing service runs its
-  // command line; when the ArtisanHub installer added the OrcaSlicer desktop,
+  // OpenPrintHQ Farm has one slicer, OrcaSlicer. The slicing service runs its
+  // command line; when the OpenPrintHQ installer added the OrcaSlicer desktop,
   // the same version runs in the browser too, and info.desktop_url says where.
   let info = $state({ version: null, desktop_url: null, print_host: null, desktop_print_host: null, print_host_keys: 0,
                       addon: null, desktop: null });
@@ -89,7 +89,7 @@
   function popOut() {
     const w = Math.min(1600, window.screen?.availWidth || 1600);
     const h = Math.min(1000, window.screen?.availHeight || 1000);
-    popup = window.open(info.desktop_url, 'artisanhub-orcaslicer', `popup=yes,width=${w},height=${h}`);
+    popup = window.open(info.desktop_url, 'openprinthq-orcaslicer', `popup=yes,width=${w},height=${h}`);
     if (!popup) return; // a pop-up blocker: the page keeps it
     popped = true; full = false;
     clearInterval(watchPopup);
@@ -188,7 +188,7 @@
           your <a href="{basePath}/app/queue">print queue</a>.</p>
       {:else if info.desktop.connected}
         <p><b>Connected</b>{info.desktop.at ? ' since ' + when(info.desktop.at) : ''}. In OrcaSlicer, choose a printer
-          ending in "ArtisanHub Farm", slice, then <b>Print</b> puts the plate first in line on that printer and
+          ending in "OpenPrintHQ Farm", slice, then <b>Print</b> puts the plate first in line on that printer and
           <b>Send</b> adds it to the end of its queue. The farm starts it when the printer is ready.</p>
       {:else if info.desktop.error}
         <p><b>Not connected:</b> {info.desktop.error}. Connect it again; if it fails again, restart the desktop from
@@ -228,7 +228,7 @@
         <li>OrcaSlicer, <b>Preferences</b>: turn on <b>Use printer agents instead of print hosts</b>.</li>
         <li>The add-on's <b>Config</b> page: this address and a key made here.</li>
         <li>For each printer: in OrcaSlicer, a printer named with the farm printer's name, such as
-          "H2D - ArtisanHub Farm", with <b>Printer agent</b> set to OpenPrintHQ and any print host.</li>
+          "H2D - OpenPrintHQ Farm", with <b>Printer agent</b> set to OpenPrintHQ and any print host.</li>
       </ol>
       <p><code>{info.addon.url}</code></p>
       {#if addonKey}

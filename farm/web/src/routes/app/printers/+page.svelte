@@ -284,7 +284,7 @@
           <button class="btn btn-ghost btn-sm" onclick={() => (showRemoteConnect = false)}>Hide</button>
         </div>
       {:else}
-        <button class="btn btn-ghost btn-sm reveal" onclick={() => (showRemoteConnect = true)}>Add a printer that is not on the same network as ArtisanHub Farm</button>
+        <button class="btn btn-ghost btn-sm reveal" onclick={() => (showRemoteConnect = true)}>Add a printer that is not on the same network as OpenPrintHQ Farm</button>
       {/if}
     {/if}
   {/if}

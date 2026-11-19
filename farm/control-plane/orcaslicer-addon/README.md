@@ -19,10 +19,10 @@ The farm's **Slice** page offers the add-on, declared for that farm's address, a
 2. OrcaSlicer, **Preferences**: turn on **Use printer agents instead of print hosts**.
 3. The add-on's **Config** page: the farm's address and the key from the Slice page.
 4. For each farm printer, a printer in OrcaSlicer whose name includes the farm printer's name (for example
-   "H2D - ArtisanHub Farm"), with **Printer agent** set to OpenPrintHQ and any print host (OrcaSlicer only uses an
+   "H2D - OpenPrintHQ Farm"), with **Printer agent** set to OpenPrintHQ and any print host (OrcaSlicer only uses an
    agent when the host is set; the add-on takes the address from its Config page).
 
-OrcaSlicer in the browser on an ArtisanHub hub comes with all of this done.
+OrcaSlicer in the browser on an OpenPrintHQ hub comes with all of this done.
 
 A managed install can give the address and key in the environment OrcaSlicer starts with (`OPENPRINTHQ_URL`,
 `OPENPRINTHQ_API_KEY`); they fill only what the Config page leaves blank.

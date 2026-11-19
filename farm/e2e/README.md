@@ -17,7 +17,7 @@ BASE_URL=https://internal.example.com npm test
 
 ## Coverage (v1: unauthenticated surface)
 
-- **landing**: loads with the glass theme from artisanhub-ui, no theme picker.
+- **landing**: loads with the glass theme from openprinthq-ui, no theme picker.
 - **responsive**: no horizontal overflow + header actions on-screen at 390px (regression: mobile banner).
 - **auth-gating**: `/app` redirects to Authentik; `/`, `/signup`, `/legal` are public.
 - **signin-links**: footer/signup/header sign-in links carry `data-sveltekit-reload`, and clicking signup's "Sign in" routes through Authentik (regression: client-side nav landed users on an unauthenticated `/app`).
@@ -28,7 +28,7 @@ BASE_URL=https://internal.example.com npm test
 
 `playwright.screens.config.js` runs the specs in `screens/` against `screens/server.mjs`, which serves a built
 web app under its base path and answers its API calls from `screens/fixtures.mjs`. Two stand-ins run: one where
-the hub at the site root answers `GET /api/nav/v1` and `GET /api/stats` (as in an ArtisanHub install), and one
+the hub at the site root answers `GET /api/nav/v1` and `GET /api/stats` (as in an OpenPrintHQ install), and one
 where it does not.
 
 - `screens.spec.js`: every page at 1920 x 1080 and 1280 x 860 (the public pages also at 390 x 844) must fit the

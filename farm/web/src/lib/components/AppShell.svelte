@@ -116,7 +116,7 @@
     const parts = n.split(/[\s@._-]+/).filter(Boolean);
     return ((parts[0]?.[0] || '') + (parts[1]?.[0] || '')).toUpperCase();
   });
-  const instName = $derived(nav.installation || 'ArtisanHub');
+  const instName = $derived(nav.installation || 'OpenPrintHQ');
   // Signed in through the hub, signing out is the hub's; without it, the farm's own.
   const signOut = $derived(nav.fromHub ? '/auth/logout' : basePath + '/logout');
 
@@ -127,8 +127,8 @@
   <div class="ah-shell__side">
     <aside class="ah-glass ah-sidebar">
       <div class="side-head">
-        <a href="/" class="ah-sidebar__brand brand" data-sveltekit-reload aria-label="ArtisanHub home">
-          <span class="ah-icon-tile brand-tile" aria-hidden="true"><Icon name="cube" size={18} /></span>ArtisanHub
+        <a href="/" class="ah-sidebar__brand brand" data-sveltekit-reload aria-label="OpenPrintHQ home">
+          <span class="ah-icon-tile brand-tile" aria-hidden="true"><Icon name="mark" size={18} /></span>OpenPrintHQ
         </a>
         <button type="button" class="menu-toggle ah-round-btn" aria-label={menuOpen ? 'Close menu' : 'Open menu'}
                 aria-expanded={menuOpen} onclick={() => (menuOpen = !menuOpen)}>
@@ -139,7 +139,7 @@
         <button type="button" class="ah-input jump" onclick={() => (jumpOpen = true)}>
           <Icon name="search" size={16} />Search or jump to<span class="ah-muted kbd">Ctrl K</span>
         </button>
-        <nav class="ah-sidebar__nav" aria-label="ArtisanHub navigation">
+        <nav class="ah-sidebar__nav" aria-label="OpenPrintHQ navigation">
           {#each groups as g (g.label)}
             <div class="ah-group-label">{g.label}</div>
             {#each g.items as it (it.id || it.href)}
@@ -158,7 +158,7 @@
         </nav>
         <div class="side-foot">
           {#if $branding.trademark}<span class="ah-muted">{$branding.trademark}</span>{/if}
-          <a class="ah-muted src" href="{basePath}/legal">ArtisanHub Farm source, AGPL-3.0</a>
+          <a class="ah-muted src" href="{basePath}/legal">OpenPrintHQ Farm source, AGPL-3.0</a>
         </div>
       </div>
     </aside>

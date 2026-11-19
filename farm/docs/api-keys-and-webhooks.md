@@ -1,11 +1,11 @@
 # API keys and webhooks for integrations
 
-For scripts and other apps (Artisan Hub, n8n, the phone app). People in a browser keep signing in through
+For scripts and other apps (the OpenPrintHQ hub, n8n, the phone app). People in a browser keep signing in through
 Authentik; nothing about that changes.
 
 ## Keys
 
-Make one while signed in: `POST /api/api-keys` with `{"label": "Artisan Hub", "scope": "submit", "expiresInDays": 365}`
+Make one while signed in: `POST /api/api-keys` with `{"label": "OpenPrintHQ hub", "scope": "submit", "expiresInDays": 365}`
 (`expiresInDays` 0 or left out means no expiry). The answer holds the key, `ophqk_...`, once. `GET /api/api-keys`
 lists keys (never the secret); `DELETE /api/api-keys/{id}` revokes one. Keys cannot list, make or revoke keys.
 
@@ -59,7 +59,7 @@ supply them.
 The engine already sends events through its notification providers. Add a provider of type `webhook` (Settings,
 Notifications, or `POST /api/engine/api/v1/notifications/` with a `control` key) with:
 
-- `webhook_url`: where to send, for example Artisan Hub's `/hooks/openprinthq`;
+- `webhook_url`: where to send, for example the hub's `/hooks/openprinthq`;
 - `signing_secret`: a long random string shared with the receiver;
 - the events to send (print start and complete, failures, queue job added, started, failed, printer offline or
   error, plate not empty, filament low, maintenance due, and the rest the provider offers).

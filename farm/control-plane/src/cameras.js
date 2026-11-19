@@ -14,7 +14,7 @@
 // and their health is checked in the background, so a camera is ready before
 // anyone opens it and its state can be shown without opening it. The list and
 // single frames are served through this control-plane, so a program holding a
-// read key (the ArtisanHub hub, say) can show a printer's camera without ever
+// read key (the OpenPrintHQ hub, say) can show a printer's camera without ever
 // reaching go2rtc or the printer.
 //
 // A source URL can carry a password (a Bambu access code, a webcam login). It is
@@ -111,7 +111,7 @@ export function validSource(url) {
 /**
  * An added camera's source with its printer's address put in: a URL whose host is just "printer" (as
  * rtsp://printer:8554/cam) means the printer's own machine, wherever it is now. So a camera served on the
- * printer's machine follows the printer, as when ArtisanHub Link gives it a new address; a fixed address would
+ * printer's machine follows the printer, as when OpenPrintHQ Link gives it a new address; a fixed address would
  * go stale. Any other host is left as it is.
  */
 export function onPrinter(source, p) {

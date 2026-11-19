@@ -46,17 +46,17 @@ test('farm printers become OrcaSlicer printers where OrcaSlicer has one', () => 
 });
 
 test('preset names are safe file names that name the printer', () => {
-  assert.equal(presetName('H2D'), 'H2D - ArtisanHub Farm');
-  assert.equal(presetName('a/b:c'), 'a-b-c - ArtisanHub Farm');
-  assert.equal(presetName('..hidden'), 'hidden - ArtisanHub Farm');
+  assert.equal(presetName('H2D'), 'H2D - OpenPrintHQ Farm');
+  assert.equal(presetName('a/b:c'), 'a-b-c - OpenPrintHQ Farm');
+  assert.equal(presetName('..hidden'), 'hidden - OpenPrintHQ Farm');
   assert.equal(presetName(''), null);
-  assert.equal(presetName('x'.repeat(90)).length, 60 + ' - ArtisanHub Farm'.length);
+  assert.equal(presetName('x'.repeat(90)).length, 60 + ' - OpenPrintHQ Farm'.length);
   const d = desktopPrinters([
     { id: 1, name: 'H2D', model: 'H2D', connection_type: 'bambu' },
     { id: 5, name: 'voron01', model: 'Voron 2.4', connection_type: 'klipper' },
     { id: 6, name: 'old', model: 'H2C', connection_type: 'bambu', is_active: false }
   ]);
-  assert.deepEqual(d.printers, [{ id: 1, name: 'H2D', preset: 'H2D - ArtisanHub Farm', inherits: 'Bambu Lab H2D 0.4 nozzle' }]);
+  assert.deepEqual(d.printers, [{ id: 1, name: 'H2D', preset: 'H2D - OpenPrintHQ Farm', inherits: 'Bambu Lab H2D 0.4 nozzle' }]);
   assert.deepEqual(d.skipped, [{ id: 5, name: 'voron01' }]);
 });
 
@@ -64,7 +64,7 @@ test('the connection file is the owner\'s only, and the status never shows its k
   const dir = await mkdtemp(join(tmpdir(), 'ophq-desk-'));
   assert.deepEqual(await desktopConnection(dir), { connected: false, pending: false, error: null, at: null, printers: [], skipped: [], scope: null, key: null });
   await writeConnection(dir, { url: 'http://h:8480/apps/farm', key: 'ophqk_secret', scope: 'submit', token_id: 't1', actor_id: 7,
-    printers: [{ id: 1, name: 'H2D', preset: 'H2D - ArtisanHub Farm', inherits: 'x' }], skipped: [{ id: 5, name: 'v' }] });
+    printers: [{ id: 1, name: 'H2D', preset: 'H2D - OpenPrintHQ Farm', inherits: 'x' }], skipped: [{ id: 5, name: 'v' }] });
   const st = await stat(join(dir, CONNECTION_FILE));
   assert.equal(st.mode & 0o777, 0o600);
   assert.deepEqual((await readdir(dir)).sort(), [CONNECTION_FILE]);   // no temporary file left behind
@@ -77,12 +77,12 @@ test('the connection file is the owner\'s only, and the status never shows its k
   // The desktop takes it: the file goes, the marker (no key) stays.
   await dropPendingConnection(dir);
   await writeFile(join(dir, APPLIED_FILE), JSON.stringify({ schema: 1, applied_at: '2026-11-19T17:00:00Z', token_id: 't1', actor_id: 7,
-    printers: [{ name: 'H2D', preset: 'H2D - ArtisanHub Farm' }], skipped: [], scope: 'submit' }));
+    printers: [{ name: 'H2D', preset: 'H2D - OpenPrintHQ Farm' }], skipped: [], scope: 'submit' }));
   const after = await desktopConnection(dir);
   assert.equal(after.connected, true);
   assert.equal(after.pending, false);
   assert.equal(after.at, '2026-11-19T17:00:00Z');
-  assert.deepEqual(after.printers, [{ name: 'H2D', preset: 'H2D - ArtisanHub Farm' }]);
+  assert.deepEqual(after.printers, [{ name: 'H2D', preset: 'H2D - OpenPrintHQ Farm' }]);
   assert.equal(await desktopConnection(null), null);
   // A connection the desktop could not take says why, and is not connected.
   await writeFile(join(dir, APPLIED_FILE), JSON.stringify({ schema: 1, error: 'the add-on could not be installed' }));

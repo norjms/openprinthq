@@ -1,5 +1,5 @@
-// ArtisanHub Link (B48). When the farm runs away from its printers (a cloud machine), a printer site runs
-// ArtisanHub Link, which gives each printer it finds an address the farm reaches through the Link server. A scan
+// OpenPrintHQ Link (B48). When the farm runs away from its printers (a cloud machine), a printer site runs
+// OpenPrintHQ Link, which gives each printer it finds an address the farm reaches through the Link server. A scan
 // of the site's network from here finds nothing: the farm is not on that network. So the farm asks the Link
 // server which printers it sees instead, with a read-only key (OPHQ_LINK_TOKEN, the Link server's
 // LINK_STATUS_TOKEN), and offers them where it offers what a scan found.
@@ -47,6 +47,6 @@ export async function fetchLinkPrinters(env = process.env, fetchImpl = fetch) {
     headers: { authorization: 'Bearer ' + token, accept: 'application/json' },
     signal: AbortSignal.timeout(5000)
   });
-  if (!r.ok) throw new Error('ArtisanHub Link answered ' + r.status);
+  if (!r.ok) throw new Error('OpenPrintHQ Link answered ' + r.status);
   return { enabled: true, printers: linkPrinters(await r.json()) };
 }

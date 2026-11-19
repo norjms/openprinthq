@@ -1,5 +1,5 @@
 <script>
-  // The farm's Cameras grid is gone: ArtisanHub has one Cameras page, the hub's (Farm, Cameras), and the
+  // The farm's Cameras grid is gone: OpenPrintHQ has one Cameras page, the hub's (Farm, Cameras), and the
   // sidebar's Cameras goes there. Old links land on it, and old links to the Timelapses tab on the farm's
   // Timelapses page.
   // SPDX-License-Identifier: AGPL-3.0-or-later

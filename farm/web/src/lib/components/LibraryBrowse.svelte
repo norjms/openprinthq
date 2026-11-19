@@ -1,6 +1,6 @@
 <script>
   import { base as basePath } from '$app/paths';
-  // ArtisanHub Farm - folder view of the tenant's library.
+  // OpenPrintHQ Farm - folder view of the tenant's library.
   // SPDX-License-Identifier: AGPL-3.0-or-later
   //
   // The model grid is the library as the library sees it; this is the bucket as

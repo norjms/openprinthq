@@ -18,7 +18,7 @@
   ];
 
   const features = [
-    { icon: 'home', title: 'Your own private instance', body: 'Every account gets an isolated ArtisanHub Farm: its own database, printers and storage. No shared tenancy, no noisy neighbors.' },
+    { icon: 'home', title: 'Your own private instance', body: 'Every account gets an isolated OpenPrintHQ Farm: its own database, printers and storage. No shared tenancy, no noisy neighbors.' },
     { icon: 'printer', title: 'Multi-brand, one HQ', body: 'Built around OrcaSlicer, so it targets what OrcaSlicer targets: Bambu Lab today, with Prusa, Creality, Klipper/Voron and more in active validation. One queue, one dashboard, every machine.' },
     { icon: 'layers', title: 'OrcaSlicer, built in', body: 'Slice STL and 3MF right in the browser with a bundled OrcaSlicer. No desktop install. Send straight to any printer in your fleet.' },
     { icon: 'camera', title: 'Live monitoring', body: 'Peer-to-peer WebRTC camera streams, temperatures, progress and health in real time. Catch failures before they waste a spool.' },
@@ -29,7 +29,7 @@
     { icon: 'film', title: 'Timelapses and projects', body: 'Automatic per-print timelapses and project organisation: capture, group and revisit every build.' },
     { icon: 'spool', title: 'Filament and spool tracking', body: 'Track spools, usage and cost automatically. Know what you have on hand and what a print really costs.' },
     { icon: 'chart', title: 'Statistics and reports', body: 'Success rates, throughput and usage across the fleet, with printable reports for your records or clients.' },
-    { icon: 'puzzle', title: 'Integrations', body: 'Per-user read-only tokens expose fleet status to Home Assistant, Homepage and Prometheus, so ArtisanHub Farm plugs into your dashboards.' },
+    { icon: 'puzzle', title: 'Integrations', body: 'Per-user read-only tokens expose fleet status to Home Assistant, Homepage and Prometheus, so OpenPrintHQ Farm plugs into your dashboards.' },
     { icon: 'users', title: 'Accessible by design', body: 'Glass that turns to solid panels on request, text scaling, larger targets, underlined links and a legible font. Add your own name, logo and favicon.' },
     { icon: 'key', title: 'Social sign-in', body: 'Sign in with Google, Facebook or Microsoft as well as email. Onboarding stays invite-gated, so you keep control of who joins.' },
     { icon: 'scan', title: 'GenFilament, AI profiles', body: 'Generate tuned filament profiles for new or unusual materials with AI, ready to slice. Available as an optional paid add-on.' },
@@ -38,7 +38,7 @@
 
   const steps = [
     { n: '01', t: 'Create your account', d: 'Sign in and we provision a dedicated instance just for you in seconds.' },
-    { n: '02', t: 'Add your printers', d: 'Point ArtisanHub Farm at your machines: Bambu Lab, Prusa, Creality, Klipper/Voron, OctoPrint and more.' },
+    { n: '02', t: 'Add your printers', d: 'Point OpenPrintHQ Farm at your machines: Bambu Lab, Prusa, Creality, Klipper/Voron, OctoPrint and more.' },
     { n: '03', t: 'Run your farm', d: 'Queue, slice, monitor and manage everything from one command center.' }
   ];
 </script>
@@ -85,7 +85,7 @@
       {/each}
     </div>
     <p class="small note-validating">
-      ArtisanHub Farm targets every printer OrcaSlicer can talk to: Bambu Lab, Prusa, Creality,
+      OpenPrintHQ Farm targets every printer OrcaSlicer can talk to: Bambu Lab, Prusa, Creality,
       Voron/Klipper (Moonraker), OctoPrint, Snapmaker, FlashForge, MKS and Duet/RepRapFirmware.
       Support beyond Bambu Lab is <strong>actively being tested and validated</strong>, so brands
       roll out as they pass our hardware checks.
@@ -134,7 +134,7 @@
       <span class="eyebrow">Open by principle</span>
       <h2>Free software. Forever.</h2>
       <p>
-        ArtisanHub Farm is licensed under the GNU AGPL-3.0. You can read the source, self-host it, audit it and
+        OpenPrintHQ Farm is licensed under the GNU AGPL-3.0. You can read the source, self-host it, audit it and
         improve it. Built on the shoulders of the open 3D-printing community, with full attribution to the
         projects that made it possible.
       </p>

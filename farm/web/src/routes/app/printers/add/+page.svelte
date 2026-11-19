@@ -31,7 +31,7 @@
     { key: 'flashforge', ct: 'flashforge', name: 'FlashForge', sub: 'LAN', ex: 'Adventurer 5M #1', fields: [F.name, F.ip, F.model] },
     { key: 'mks', ct: 'mks', name: 'MKS', sub: 'WiFi module', ex: 'Sidewinder X2 #1', fields: [F.name, F.ip, F.model] },
     { key: 'snapmaker', ct: 'snapmaker', name: 'Snapmaker', sub: 'Artisan · J1 · 2.0', ex: 'Artisan #1',
-      note: 'First connection: tap Allow on the printer’s touchscreen to authorize ArtisanHub Farm.',
+      note: 'First connection: tap Allow on the printer’s touchscreen to authorize OpenPrintHQ Farm.',
       fields: [F.name, F.ip, F.apikey, F.model] }
   ];
   const vendorByKey = Object.fromEntries(vendors.map((v) => [v.key, v]));
@@ -157,8 +157,8 @@
   let existing = $state([]);
   let hiddenCount = $state(0);
 
-  // ---- ArtisanHub Link (B48) ----
-  // A farm away from its printers (a cloud machine) cannot scan their network; ArtisanHub Link at the printers'
+  // ---- OpenPrintHQ Link (B48) ----
+  // A farm away from its printers (a cloud machine) cannot scan their network; OpenPrintHQ Link at the printers'
   // site already knows them. Its printers of the chosen kind are offered here, and with a scan's results when
   // they were found on the network scanned.
   const LINK_FAMILY = { bambu: 'bambu', klipper: 'moonraker', prusalink: 'prusalink', octoprint: 'octoprint' };
@@ -239,7 +239,7 @@
         if (!s.running) break;
       }
       const scannedHere = await (klip ? api.discoveredKlipperPrinters() : api.discoveredPrinters());
-      // ArtisanHub Link's printers found on the network scanned, by their address there (B48).
+      // OpenPrintHQ Link's printers found on the network scanned, by their address there (B48).
       const viaLink = linkAll.filter((p) => p.family === LINK_FAMILY[selected.ct] && inSubnet(p.found_at, subnet));
       const raw = [...(scannedHere || []), ...viaLink];
       const fresh = raw.filter((p) => !alreadyAdded(p));
@@ -468,7 +468,7 @@
             {#each discovered as p}
               <button type="button" class="foundrow" class:sel={pickedIp === p.ip_address} onclick={() => pickDiscovered(p)}>
                 <span class="fn">{p.name || prettyModel(p.model) || (isKlipper ? 'Klipper printer' : 'Bambu printer')}{#if p.model && !isKlipper}<span class="muted mono"> · {prettyModel(p.model)}</span>{/if}</span>
-                <span class="muted mono tiny">{where(p)}{#if !isKlipper && p.serial} · {p.serial}{/if}{#if p.link} · through ArtisanHub Link{/if}</span>
+                <span class="muted mono tiny">{where(p)}{#if !isKlipper && p.serial} · {p.serial}{/if}{#if p.link} · through OpenPrintHQ Link{/if}</span>
               </button>
             {/each}
           </div>
@@ -487,8 +487,8 @@
 
     {#if linkFound.length}
       <div class="discover" data-testid="link-printers">
-        <div class="dtitle"><b>Printers ArtisanHub Link sees</b></div>
-        <p class="muted tiny">At your printer sites, reached through ArtisanHub Link. Pick one to fill in its details{selected.ct === 'bambu' ? ', then add its access code' : ''}.</p>
+        <div class="dtitle"><b>Printers OpenPrintHQ Link sees</b></div>
+        <p class="muted tiny">At your printer sites, reached through OpenPrintHQ Link. Pick one to fill in its details{selected.ct === 'bambu' ? ', then add its access code' : ''}.</p>
         <div class="found">
           {#each linkFound as p}
             <button type="button" class="foundrow" class:sel={pickedIp === p.ip_address} onclick={() => pickDiscovered(p)}>

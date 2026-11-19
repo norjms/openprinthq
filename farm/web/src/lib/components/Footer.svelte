@@ -21,7 +21,7 @@
         <span class="chip ok">AGPL-3.0 · Open source</span>
       </div>
       <div class="col">
-        <h4>ArtisanHub</h4>
+        <h4>OpenPrintHQ</h4>
         <a href="/" data-sveltekit-reload>The hub</a>
         <a href="{basePath}/app">The farm</a>
       </div>

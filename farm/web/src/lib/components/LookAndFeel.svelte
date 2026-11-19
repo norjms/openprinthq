@@ -5,7 +5,7 @@
   // this account.
   // SPDX-License-Identifier: AGPL-3.0-or-later
   import { get } from 'svelte/store';
-  import { Toggle } from 'artisanhub-ui';
+  import { Toggle } from 'openprinthq-ui';
   import { appearance, saveAppearance as persist } from '$lib/stores/appearance';
   import { TRANSPARENCY, A11Y_OPTIONS, normalizeConfig, applyAppearance, clampScale } from '$lib/theme';
 

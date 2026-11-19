@@ -110,6 +110,6 @@ jobs:
         with:
           context: ${{ matrix.context }}
           push: false
-          tags: artisan-hub-farm/${{ matrix.name }}:ci
+          tags: openprinthq-farm/${{ matrix.name }}:ci
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}

@@ -28,7 +28,7 @@ OrcaSlicer — https://github.com/SoftFever/OrcaSlicer
     • BambuStudio  — Copyright (C) Bambu Lab — AGPL-3.0
     • PrusaSlicer  — Copyright (C) Prusa Research — AGPL-3.0
     • Slic3r       — Copyright (C) Alessandro Ranellucci and contributors — AGPL-3.0
-  ArtisanHub Farm runs the official Linux release, unmodified, at the version
+  OpenPrintHQ Farm runs the official Linux release, unmodified, at the version
   named in slicer/orcaslicer.env.
 orca-slicer-api — https://github.com/maziggy/orca-slicer-api
   Copyright (C) AFKFelix, maziggy and contributors. Licensed AGPL-3.0. HTTP
@@ -40,7 +40,7 @@ FONTS  (bundled in the web app; SIL Open Font License 1.1)
 Manrope, Copyright (C) Mikhail Sharanda, https://github.com/sharanda/manrope
 Sora, Copyright (C) the Sora project authors, https://github.com/sora-xor/sora-font
 JetBrains Mono — Copyright (C) JetBrains s.r.o. — https://github.com/JetBrains/JetBrainsMono
-  All three are distributed via @fontsource (through artisanhub-ui) under the
+  All three are distributed via @fontsource (through openprinthq-ui) under the
   SIL OFL-1.1; the full license text ships with each font package.
 
 
@@ -67,7 +67,7 @@ OPTIONAL ORCASLICER DESKTOP
 ---------------------------
 linuxserver/orcaslicer: https://github.com/linuxserver/docker-orcaslicer
   Copyright (C) linuxserver.io. Licensed GPL-3.0. The same OrcaSlicer version
-  as the slicing service, as a desktop in the browser, which the ArtisanHub
+  as the slicing service, as a desktop in the browser, which the OpenPrintHQ
   installer can add. Not part of this repository and not redistributed by it.
 
 

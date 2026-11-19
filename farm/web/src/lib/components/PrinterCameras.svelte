@@ -105,7 +105,7 @@
         </label>
         <button class="btn btn-primary btn-sm" type="submit" disabled={busy === 'add'}>{busy === 'add' ? 'Adding' : 'Add camera'}</button>
         <button class="btn btn-ghost btn-sm" type="button" onclick={() => { adding = false; formErr = null; }}>Cancel</button>
-        <p class="muted tiny full">A camera served on the printer's own machine: use <code>printer</code> as its host, as in <code>rtsp://printer:8554/stream</code>, and it follows the printer's address, also through ArtisanHub Link.</p>
+        <p class="muted tiny full">A camera served on the printer's own machine: use <code>printer</code> as its host, as in <code>rtsp://printer:8554/stream</code>, and it follows the printer's address, also through OpenPrintHQ Link.</p>
         {#if formErr}<p class="err full">{formErr}</p>{/if}
       </form>
     {/if}

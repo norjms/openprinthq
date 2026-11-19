@@ -1,5 +1,5 @@
 <script>
-  // ArtisanHub Farm - library settings: the vocabulary the library sorts by, plus
+  // OpenPrintHQ Farm - library settings: the vocabulary the library sorts by, plus
   // the two maintenance actions worth exposing.
   // SPDX-License-Identifier: AGPL-3.0-or-later
   //

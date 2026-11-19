@@ -1,6 +1,6 @@
 <script>
   import Icon from '$lib/components/AppIcon.svelte';
-  // ArtisanHub Farm, per-printer settings, edited in a popup layer (not a route).
+  // OpenPrintHQ Farm, per-printer settings, edited in a popup layer (not a route).
   // Persisted on the printer record in the database (source of truth) via PATCH.
   // SPDX-License-Identifier: AGPL-3.0-or-later
   import { api } from '$lib/api';

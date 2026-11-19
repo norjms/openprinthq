@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "@fontsource/jetbrains-mono": "^5.1.1",
-    "artisanhub-ui": "github:norjms/artisanhub-ui#v0.1.0",
+    "openprinthq-ui": "github:norjms/artisanhub-ui#v0.2.0",
     "fflate": "^0.8.3",
     "three": "^0.180.0"
   }

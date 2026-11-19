@@ -1,5 +1,5 @@
 <script>
-  // ArtisanHub Farm, public legal / open-source page (AGPL-3.0 §13 source offer).
+  // OpenPrintHQ Farm, public legal / open-source page (AGPL-3.0 §13 source offer).
   // Deliberately reachable WITHOUT login: license, attribution, and the
   // complete corresponding source must be available to every user of the
   // running instance.
@@ -26,7 +26,7 @@
 
 <svelte:head>
   <title>License, attribution and source · {$branding.siteName}</title>
-  <meta name="description" content="ArtisanHub Farm is free software under the GNU AGPL v3. License, upstream attribution, and complete corresponding source." />
+  <meta name="description" content="OpenPrintHQ Farm is free software under the GNU AGPL v3. License, upstream attribution, and complete corresponding source." />
 </svelte:head>
 
 <div class="ah-root doc-shell">
@@ -36,8 +36,8 @@
   <header class="phead">
     <span class="eyebrow">Open source</span>
     <h1>License, attribution and source</h1>
-    <p class="lead">ArtisanHub Farm is the print farm part of ArtisanHub, a fork of
-      <a href={UPSTREAM_REPO} rel="noopener">OpenPrintHQ</a>. Like OpenPrintHQ, it is free software under the GNU Affero General Public License v3.0.
+    <p class="lead">OpenPrintHQ Farm is the print farm part of OpenPrintHQ. It grew from the standalone
+      <a href={UPSTREAM_REPO} rel="noopener">OpenPrintHQ</a> project and, like it, is free software under the GNU Affero General Public License v3.0.
       Everything on this page is public, no account required, because the AGPL guarantees every
       user of this instance access to its license and complete source.</p>
   </header>
@@ -96,9 +96,9 @@
 
   <section id="slicers" class="card card-pad">
     <h2>OrcaSlicer</h2>
-    <p>ArtisanHub Farm slices with one slicer: <a href="https://github.com/OrcaSlicer/OrcaSlicer"
+    <p>OpenPrintHQ Farm slices with one slicer: <a href="https://github.com/OrcaSlicer/OrcaSlicer"
       rel="noopener">OrcaSlicer</a> (© SoftFever and contributors), <strong>AGPL-3.0</strong>, the
-      official release, unmodified. Its command line runs on the server; the ArtisanHub installer can
+      official release, unmodified. Its command line runs on the server; the OpenPrintHQ installer can
       also run the same version as a desktop in your browser, using
       <a href="https://github.com/linuxserver/docker-orcaslicer" rel="noopener">linuxserver.io's
       image</a> (<strong>GPL-3.0</strong>). Its name and logo are used only to identify the project,

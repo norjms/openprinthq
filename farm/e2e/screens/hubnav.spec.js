@@ -80,9 +80,9 @@ test('the hub names the installation and counts for its badges', async ({ page }
   await expect(page.locator('a.ah-nav', { hasText: 'Printers' }).locator('.ah-badge')).toHaveText('4');
 });
 
-test('without the hub the header falls back to ArtisanHub', async ({ page }) => {
+test('without the hub the header falls back to OpenPrintHQ', async ({ page }) => {
   await page.goto(NO_HUB + '/app/printers', { waitUntil: 'networkidle' });
-  await expect(page.locator('.inst')).toHaveText('ArtisanHub');
+  await expect(page.locator('.inst')).toHaveText('OpenPrintHQ');
   await expect(page.locator('a.ah-nav', { hasText: 'Orders' }).locator('.ah-badge')).toHaveCount(0);
 });
 

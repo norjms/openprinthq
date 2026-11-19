@@ -2,7 +2,7 @@
  * OpenPrintHQ styles
  * SPDX-License-Identifier: AGPL-3.0-or-later
  *
- * The look comes from artisanhub-ui ("glass over a live feed"): its design
+ * The look comes from openprinthq-ui ("glass over a live feed"): its design
  * values (--ah-*), its base classes (ah-*) and its fonts. This file maps the
  * app's own --ophq-* names onto those values, so every component keeps its
  * variable names and takes the shared look, and styles the app's own classes
@@ -13,9 +13,9 @@
  * (data-transparency="on" or "off"); off swaps glass for solid panels.
  * data-a11y-* attributes on <html> toggle the accessibility behaviours below.
  */
-@import 'artisanhub-ui/fonts.css';
-@import 'artisanhub-ui/theme.css';
-@import 'artisanhub-ui/base.css';
+@import 'openprinthq-ui/fonts.css';
+@import 'openprinthq-ui/theme.css';
+@import 'openprinthq-ui/base.css';
 
 /* ---- the app's names for the shared values ------------------------------ */
 :root {

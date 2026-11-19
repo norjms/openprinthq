@@ -1,7 +1,7 @@
 <script>
   import { base as basePath } from '$app/paths';
   import Icon from '$lib/components/AppIcon.svelte';
-  // ArtisanHub Farm, local connectors (#28/#29).
+  // OpenPrintHQ Farm, local connectors (#28/#29).
   // Manage outbound-tunnel agents that let this cloud instance reach printers
   // on a private LAN behind NAT/CGNAT/firewalls. Create a connector (token
   // shown once), install the agent on that network, revoke when done.
@@ -179,7 +179,7 @@
   // and the published image instead of at source.
   const instructions = $derived({
     docker: `# On a machine on the same LAN as your printers:\ndocker run -d --name openprinthq-connector --restart unless-stopped \\\n  --network host \\\n  -e OPHQ_CONTROL_URL=${base} \\\n  -e OPHQ_CONNECTOR_TOKEN=${tok} \\\n  ghcr.io/norjms/openprinthq-connector:latest`,
-    linux: `# Download the .deb or .rpm from the Cloud Client releases page,\n# install it, then enter this instance URL and token in the app:\n#   ${base}\n#   ${tok}\nsudo apt install ./ArtisanHub Farm.Cloud.Client_*_amd64.deb`,
+    linux: `# Download the .deb or .rpm from the Cloud Client releases page,\n# install it, then enter this instance URL and token in the app:\n#   ${base}\n#   ${tok}\nsudo apt install ./OpenPrintHQ Farm.Cloud.Client_*_amd64.deb`,
     macos: `# Download the .pkg from the Cloud Client releases page and run it,\n# then enter this instance URL and token in the menu-bar app:\n#   ${base}\n#   ${tok}`,
     windows: `# Download the .msi from the Cloud Client releases page and run it,\n# then enter this instance URL and token in the tray app:\n#   ${base}\n#   ${tok}`
   });

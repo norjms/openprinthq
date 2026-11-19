@@ -1,7 +1,7 @@
 <script>
   import { base as basePath } from '$app/paths';
   import Icon from '$lib/components/AppIcon.svelte';
-  // ArtisanHub Farm, print-cost & billing reports (#25).
+  // OpenPrintHQ Farm, print-cost & billing reports (#25).
   // Pulls the print log for a chosen period + printer, computes filament/energy
   // cost per job (falling back to grams × default filament cost when a job has
   // no stored cost), and renders a print-optimised report. "Download PDF" uses

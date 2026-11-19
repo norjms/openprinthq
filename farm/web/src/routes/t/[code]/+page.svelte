@@ -63,7 +63,7 @@
 </script>
 
 <svelte:head>
-  <title>{state === 'ready' ? title : 'Filament tag'} · ArtisanHub Farm</title>
+  <title>{state === 'ready' ? title : 'Filament tag'} · OpenPrintHQ Farm</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="robots" content="noindex, nofollow" />
 </svelte:head>
@@ -121,7 +121,7 @@
         {#if spool.tag_uid}<div><dt>Tag</dt><dd><code>{spool.tag_uid}</code></dd></div>{/if}
         {#if spool.note}<div class="wide"><dt>Note</dt><dd>{spool.note}</dd></div>{/if}
       </dl>
-      <a class="open" href="{basePath}/app/filament">Open in ArtisanHub Farm</a>
+      <a class="open" href="{basePath}/app/filament">Open in OpenPrintHQ Farm</a>
     </footer>
   {/if}
 </main>

@@ -1,6 +1,6 @@
 <script>
   import { base as basePath } from '$app/paths';
-  // ArtisanHub Farm - the tenant's model library.
+  // OpenPrintHQ Farm - the tenant's model library.
   // SPDX-License-Identifier: AGPL-3.0-or-later
   //
   // Native pages, not a frame. The library is our fork of GyroidVault, one

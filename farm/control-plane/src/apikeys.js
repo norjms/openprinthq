@@ -1,4 +1,4 @@
-// Scoped API keys for scripts and integrations (Artisan Hub, n8n, the phone app).
+// Scoped API keys for scripts and integrations (the OpenPrintHQ hub, n8n, the phone app).
 //
 // A browser keeps using the Authentik session. A program sends `Authorization: Bearer ophqk_...` (or
 // `X-API-Key`) and gets what the key's scope allows, on the same routes:

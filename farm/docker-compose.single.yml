@@ -1,4 +1,4 @@
-# ArtisanHub Farm - the single-tenant stack. The ArtisanHub installer sets this
+# OpenPrintHQ Farm - the single-tenant stack. The OpenPrintHQ installer sets this
 # up for you; this file is for running it by hand.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #

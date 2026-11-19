@@ -50,13 +50,13 @@ on the host's network, which this compose file does not do.
 
 ## Team mode: one farm for a team, printers per person
 
-`OPHQ_TEAM_MODE=1`, with `OPHQ_ENGINE_URL` set, makes the farm one farm for one team, as an ArtisanHub
+`OPHQ_TEAM_MODE=1`, with `OPHQ_ENGINE_URL` set, makes the farm one farm for one team, as an OpenPrintHQ
 installation is:
 
 - The owner's account holds the printers, the queue and the files. Everyone else signed in works on that same
   farm and never gets a farm of their own. A person the team knows (see below) gets an account on their first
   visit, with no invite.
-- Which printers each person may see and use comes from ArtisanHub, which pushes the whole list with the owner's
+- Which printers each person may see and use comes from the hub, which pushes the whole list with the owner's
   API key (scope `control`) whenever it changes:
 
   ```

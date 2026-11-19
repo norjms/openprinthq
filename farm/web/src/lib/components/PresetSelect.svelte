@@ -1,6 +1,6 @@
 <script>
   import Icon from '$lib/components/AppIcon.svelte';
-  // ArtisanHub Farm, searchable preset combobox.
+  // OpenPrintHQ Farm, searchable preset combobox.
   // SPDX-License-Identifier: AGPL-3.0-or-later
   // Native <select> is unusable for OrcaSlicer's preset lists (the filament
   // list alone is ~1000 entries). This is a type-to-filter dropdown; options

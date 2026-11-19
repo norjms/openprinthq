@@ -18,7 +18,7 @@
   let toastTimer = null;
   let filterPrinter = $state('all');   // 'all' | 'unassigned' | printer id
   // Filament matching. Mapping a job's filament is a hub page, so the link shows
-  // only when the farm runs inside ArtisanHub.
+  // only when the farm runs inside OpenPrintHQ.
   let fromHub = $state(false);
   let matchLevel = $state(null);
   let levelSaving = $state(false);
@@ -352,7 +352,7 @@
           <span class="sub">{[q.qty > 1 ? `${q.qty} copies` : '', q.filament, fmtTime(q.timeSec) ? `about ${fmtTime(q.timeSec)}` : ''].filter(Boolean).join(' · ')}</span>
           {#if q.unmatched}
             <span class="fwarn">Filament doesn't match on {q.unmatched}.
-              {#if fromHub}<a href="/farm/jobs/{q.id}/filament" data-sveltekit-reload>Map filament</a>{:else}Load the right filament, or map it in ArtisanHub.{/if}
+              {#if fromHub}<a href="/farm/jobs/{q.id}/filament" data-sveltekit-reload>Map filament</a>{:else}Load the right filament, or map it in the hub.{/if}
             </span>
           {/if}
         </span>

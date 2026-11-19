@@ -3,7 +3,7 @@
 # Writes the router's configuration for OPHQ_BASE_PATH, the path the web image
 # was built for (for example /apps/farm; empty for the root). Runs before the
 # image's own template step, so a configuration supplied in
-# /etc/nginx/templates (as the ArtisanHub installer does) still wins.
+# /etc/nginx/templates (as the OpenPrintHQ installer does) still wins.
 set -eu
 
 if ls /etc/nginx/templates/*.template >/dev/null 2>&1; then

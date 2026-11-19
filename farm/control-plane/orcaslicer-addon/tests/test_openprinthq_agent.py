@@ -1805,7 +1805,7 @@ class AgentSettingsSyncTests(ServerCase):
 
 
 class ManagedConnectionTests(ServerCase):
-    """0.15.0: a managed install (OrcaSlicer in the browser on an ArtisanHub hub) gives the address and key in the
+    """0.15.0: a managed install (OrcaSlicer in the browser on an OpenPrintHQ hub) gives the address and key in the
     environment. They fill only blanks, are never written to the plugin's settings and never sync."""
 
     def env(self, url=None, key=None):
@@ -1860,7 +1860,7 @@ class ManagedConnectionTests(ServerCase):
         self.assertNotIn(KEY, html)
 
 
-# ---------------------------------------------------------------- Artisan Hub (0.11.0)
+# ---------------------------------------------------------------- The hub (0.11.0)
 
 HUB_KEY = "ahk_0123abcd_" + "x" * 32
 
@@ -1969,7 +1969,7 @@ class HubTests(ServerCase):
 
     # -- pure helpers
     def test_resolve_look(self):
-        # 0.13.0: one look, artisanhub-ui's glass-dark, whatever the saved settings or the hub say
+        # 0.13.0: one look, openprinthq-ui's glass-dark, whatever the saved settings or the hub say
         for cfg, hub_look in (({}, None), ({"look": "orca"}, {"skin": "classic"}),
                               ({"look": "legacy_farm", "look_mode": "light"}, {"skin": "classic", "mode": "dark"})):
             self.assertEqual(wt.resolve_look(cfg, hub_look), {"theme": "glass-dark"})
@@ -2101,13 +2101,13 @@ class HubTests(ServerCase):
 
 
 class GlassLookTests(unittest.TestCase):
-    """0.13.0: artisanhub-ui's glass-dark look, embedded so the pages work offline."""
+    """0.13.0: openprinthq-ui's glass-dark look, embedded so the pages work offline."""
 
     def pages(self):
         return (wt.TAB_HTML, wt.JOB_WINDOW_HTML, wt.PREFLIGHT_HTML, wt.CONFIG_PAGE_HTML)
 
-    def test_values_come_from_artisanhub_ui(self):
-        self.assertEqual(wt.AH_UI_VERSION, "0.1.0")
+    def test_values_come_from_openprinthq_ui(self):
+        self.assertEqual(wt.AH_UI_VERSION, "0.2.0")
         for token in ("--ah-glass:", "--ah-chip-underlay:", "--ah-page-gradient:", "prefers-reduced-transparency"):
             self.assertIn(token, wt.AH_THEME_CSS)
 
@@ -2130,7 +2130,7 @@ class GlassLookTests(unittest.TestCase):
 
     def test_product_name_is_one_word(self):
         for page in self.pages():
-            self.assertNotIn("Artisan Hub", page)
+            self.assertNotIn("Artisan" + " Hub", page)
 
 
 class DeclarePermissionsTests(unittest.TestCase):

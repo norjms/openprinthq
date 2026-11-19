@@ -1,9 +1,9 @@
-# Keep ArtisanHub Farm on the newest OrcaSlicer, in step with linuxserver/orcaslicer.
+# Keep OpenPrintHQ Farm on the newest OrcaSlicer, in step with linuxserver/orcaslicer.
 #
 # Every day: when OrcaSlicer has a newer full release than slicer/orcaslicer.env names, and linuxserver.io
 # has published linuxserver/orcaslicer at that same version, open a pull request moving the farm's slicer to
 # it, with the release's checksums. Until linuxserver.io has it, nothing moves, so the farm's slicer and the
-# OrcaSlicer desktop the ArtisanHub installer can add always run the same version.
+# OrcaSlicer desktop the OpenPrintHQ installer can add always run the same version.
 name: orcaslicer-watch
 
 on:
@@ -71,7 +71,7 @@ jobs:
           git switch -c "$branch"
           git commit -am "Slicer: OrcaSlicer $VERSION"
           git push origin "$branch"
-          body="OrcaSlicer $VERSION is a full release, and linuxserver/orcaslicer has published $VERSION too, so the farm's slicer and the OrcaSlicer desktop stay at one version. Checksums are the release's own. Once merged, build and publish the slicer image at $VERSION; the ArtisanHub installer then pins both images at $VERSION."
+          body="OrcaSlicer $VERSION is a full release, and linuxserver/orcaslicer has published $VERSION too, so the farm's slicer and the OrcaSlicer desktop stay at one version. Checksums are the release's own. Once merged, build and publish the slicer image at $VERSION; the OpenPrintHQ installer then pins both images at $VERSION."
           # Where this repository does not let workflows open pull requests, an issue points at the branch.
           gh pr create --base main --head "$branch" --title "Slicer: OrcaSlicer $VERSION" --body "$body" ||
             gh issue create --title "Slicer: OrcaSlicer $VERSION is ready" --body \

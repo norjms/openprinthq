@@ -1,4 +1,4 @@
-// Open in OrcaSlicer (B49). The ArtisanHub installer can add OrcaSlicer as a desktop in the browser, shared by
+// Open in OrcaSlicer (B49). The OpenPrintHQ installer can add OrcaSlicer as a desktop in the browser, shared by
 // everyone or one for each person. It mounts each desktop's inbox here too (OPHQ_ORCASLICER_INBOX): the shared
 // desktop's at <inbox>/shared, a person's at <inbox>/people/<their login>. A file put there, followed by a
 // marker ".open-<name>", opens in that desktop's OrcaSlicer (the desktop's own watcher takes each marker once).

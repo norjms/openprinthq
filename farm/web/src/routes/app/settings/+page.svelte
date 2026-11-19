@@ -90,7 +90,7 @@
   async function copy(text, which) {
     try { await navigator.clipboard.writeText(text); copied = which; setTimeout(() => (copied = null), 1500); } catch { /* ignore */ }
   }
-  const homepageSnippet = $derived(`- ArtisanHub Farm:
+  const homepageSnippet = $derived(`- OpenPrintHQ Farm:
     widget:
       type: customapi
       url: ${summaryUrl}
@@ -105,7 +105,7 @@
   const haSnippet = $derived(`# configuration.yaml
 sensor:
   - platform: rest
-    name: ArtisanHub Farm
+    name: OpenPrintHQ Farm
     resource: ${summaryUrl}
     value_template: "{{ value_json.printers_online }}"
     json_attributes:

@@ -1,5 +1,5 @@
 // The sidebar is the hub's: the farm draws the hub's navigation list, read from
-// the hub (GET /api/nav/v1, see docs/nav-api.md in artisan-hub) when it answers,
+// the hub (GET /api/nav/v1, see docs/nav-api.md in the hub's repository) when it answers,
 // and from the copy built in here (hub-nav.json) when it does not.
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //

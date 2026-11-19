@@ -7,7 +7,7 @@ test.describe('landing', () => {
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'glass-dark');
   });
 
-  test('takes its colours from the shared ArtisanHub UI values', async ({ page }) => {
+  test('takes its colours from the shared OpenPrintHQ UI values', async ({ page }) => {
     await page.goto('/');
     const v = (name) => page.evaluate((n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim().toLowerCase(), name);
     expect(await v('--ah-page')).toBe('#172028');

@@ -1,17 +1,17 @@
 // OpenPrintHQ appearance settings
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// The look itself comes from artisanhub-ui: one named theme, glass-dark, set as
+// The look itself comes from openprinthq-ui: one named theme, glass-dark, set as
 // data-theme on <html>. What a user can still choose is stored here, per user:
 // transparency (follow the device, always glass, or solid panels), text size,
 // accessibility aids, branding and the navigation. Older saved configs carried
 // a theme "mode" (dark, light, accessible, custom) and colour overrides; those
 // values resolve to glass-dark and the overrides are ignored.
 
-import { resolveTheme, applyTheme, DEFAULT_THEME } from 'artisanhub-ui/themes';
+import { resolveTheme, applyTheme, DEFAULT_THEME } from 'openprinthq-ui/themes';
 import { normalizePrinterSections } from '$lib/printerSections';
 
-export { THEMES, DEFAULT_THEME } from 'artisanhub-ui/themes';
+export { THEMES, DEFAULT_THEME } from 'openprinthq-ui/themes';
 
 // Transparency: 'auto' follows the device's "reduce transparency" setting.
 export const TRANSPARENCY = [
@@ -32,8 +32,8 @@ export const A11Y_OPTIONS = [
 export const DEFAULT_A11Y = { underline: false, focus: false, targets: false, font: false, motion: false };
 
 export const DEFAULT_BRANDING = {
-  siteName: 'ArtisanHub Farm',
-  tagline: 'The print farm part of ArtisanHub.',
+  siteName: 'OpenPrintHQ Farm',
+  tagline: 'The print farm part of OpenPrintHQ.',
   // Logo data-URIs (empty = the built-in mark). The glass theme is dark, so the
   // `dark` slot is the one shown; the other two are kept so older saved configs
   // round-trip and are used as fallbacks.

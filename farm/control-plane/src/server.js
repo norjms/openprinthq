@@ -264,8 +264,8 @@ app.get('/api/team/printer-access', async (req, reply) => {
 });
 
 // ---- OrcaSlicer ------------------------------------------------------------
-// ArtisanHub Farm has one slicer, OrcaSlicer: its command line runs headless in
-// the slicing service (OPHQ_SLICER_URL), and the ArtisanHub installer can add
+// OpenPrintHQ Farm has one slicer, OrcaSlicer: its command line runs headless in
+// the slicing service (OPHQ_SLICER_URL), and the OpenPrintHQ installer can add
 // the same version of OrcaSlicer as a desktop in the browser
 // (OPHQ_ORCASLICER_DESKTOP_URL). The Slice tab shows both and how to send plates
 // from the desktop to the farm.
@@ -465,7 +465,7 @@ async function connectSharedDesktopOnce(log) {
   }
 }
 
-// ArtisanHub Link's printers (B48, link.js), for the add-printer page: what a scan from here cannot find when
+// OpenPrintHQ Link's printers (B48, link.js), for the add-printer page: what a scan from here cannot find when
 // the farm runs away from its printers. Owners only, as adding printers is.
 app.get('/api/link/printers', async (req, reply) => {
   const user = await requireOwner(req, reply); if (!user) return;
@@ -473,7 +473,7 @@ app.get('/api/link/printers', async (req, reply) => {
   try {
     return await fetchLinkPrinters();
   } catch (e) {
-    return reply.code(502).send({ error: 'ArtisanHub Link did not answer: ' + (e.message || e) });
+    return reply.code(502).send({ error: 'OpenPrintHQ Link did not answer: ' + (e.message || e) });
   }
 });
 

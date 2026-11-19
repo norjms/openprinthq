@@ -3,13 +3,13 @@
 FROM node:22-alpine AS build
 WORKDIR /app
 COPY package.json ./
-# git: the shared look (artisanhub-ui) is a dependency pinned by git tag.
+# git: the shared look (openprinthq-ui) is a dependency pinned by git tag.
 RUN apk add --no-cache git && npm install --no-audit --no-fund
 COPY . .
 # Deployed commit SHAs for the /legal AGPL §13 source offer (optional; empty by default).
 ARG OPHQ_APP_COMMIT=""
 ARG OPHQ_ENGINE_COMMIT=""
-# Path the site is served under (ArtisanHub Farm: /apps/farm). Empty = site root.
+# Path the site is served under (OpenPrintHQ Farm: /apps/farm). Empty = site root.
 ARG BASE_PATH=""
 ENV BASE_PATH=$BASE_PATH
 ENV OPHQ_APP_COMMIT=$OPHQ_APP_COMMIT

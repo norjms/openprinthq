@@ -1,5 +1,5 @@
 <script>
-  // ArtisanHub Farm mark and name, brandable per instance.
+  // OpenPrintHQ Farm mark and name, brandable per instance.
   // SPDX-License-Identifier: AGPL-3.0-or-later
   // An uploaded logo replaces the mark and the name. Otherwise the built-in
   // mark (a hexagon holding stacked print layers) sits on an accent tile beside
@@ -8,7 +8,7 @@
 
   let { size = 36, wordmark = true } = $props();
 
-  const text = $derived($branding?.wordmark || $branding?.siteName || 'ArtisanHub Farm');
+  const text = $derived($branding?.wordmark || $branding?.siteName || 'OpenPrintHQ Farm');
   const custom = $derived($activeLogo || '');
 </script>
 

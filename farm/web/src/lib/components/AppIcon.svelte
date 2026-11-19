@@ -1,5 +1,5 @@
 <script>
-  // An icon from artisanhub-ui's set or this app's few extras, same drawing rules.
+  // An icon from openprinthq-ui's set or this app's few extras, same drawing rules.
   // SPDX-License-Identifier: AGPL-3.0-or-later
   import { ICONS } from '$lib/icons.js';
   /** @type {{ name: string, size?: number, label?: string }} */

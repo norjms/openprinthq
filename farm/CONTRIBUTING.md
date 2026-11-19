@@ -1,8 +1,7 @@
-# Contributing to ArtisanHub Farm
+# Contributing to OpenPrintHQ Farm
 
-ArtisanHub Farm is the print farm that ships with ArtisanHub: a fork of
-[OpenPrintHQ](https://github.com/norjms/openprinthq) built to be served under the hub's name. Changes that
-are not specific to ArtisanHub are best made in OpenPrintHQ itself; this fork takes them from there.
+OpenPrintHQ Farm is the print farm part of OpenPrintHQ, served under the hub's name. It grew from the standalone
+[OpenPrintHQ](https://github.com/norjms/openprinthq) project, which is retired: changes are made here.
 
 ## How changes get in
 

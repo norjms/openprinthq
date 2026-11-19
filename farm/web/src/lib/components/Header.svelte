@@ -7,7 +7,7 @@
   <div class="container inner">
     <a href="{basePath}/app" class="brand"><Logo size={30} /></a>
     <div class="actions">
-      <a href="/" class="btn btn-ghost btn-sm" data-sveltekit-reload>ArtisanHub</a>
+      <a href="/" class="btn btn-ghost btn-sm" data-sveltekit-reload>OpenPrintHQ</a>
       <a href="{basePath}/app" class="btn btn-primary btn-sm">Open the farm</a>
     </div>
   </div>

@@ -16,16 +16,16 @@ const port = Number(process.argv[3] || process.env.PORT || 4173);
 const BASE = process.env.BASE_PATH || '';
 const { handler } = await import(pathToFileURL(path.join(buildDir, 'handler.js')).href);
 // With HUB=1 the hub answers at the site root (nav and counts), as in an
-// ArtisanHub install; without it the hub is unreachable and the farm falls back
+// OpenPrintHQ install; without it the hub is unreachable and the farm falls back
 // to its built-in sidebar.
 const HUB = process.env.HUB === '1';
 const hubNav = JSON.parse(fs.readFileSync(new URL('../../web/src/lib/hub-nav.json', import.meta.url), 'utf8'));
 function hubAnswer(p) {
   if (p === '/api/nav/v1') {
-    const farm = { kind: 'openprinthq', label: 'ArtisanHub Farm', app: 'http://127.0.0.1:' + port + BASE };
+    const farm = { kind: 'openprinthq', label: 'Farm', app: 'http://127.0.0.1:' + port + BASE };
     const groups = hubNav.groups.map((g) => ({ ...g, items: g.items.map((i) => (i.farm_path
       ? { ...i, href: farm.app + i.farm_path, app: 'farm' } : { ...i, app: 'hub' })) }));
-    return { version: 1, product: 'ArtisanHub', installation: 'Artisan Prints', farm, groups };
+    return { version: 1, product: 'OpenPrintHQ', installation: 'Artisan Prints', farm, groups };
   }
   if (p === '/api/stats') return F.hubStats;
   return undefined;

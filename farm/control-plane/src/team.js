@@ -1,7 +1,7 @@
-// ArtisanHub Farm control-plane - team mode
+// OpenPrintHQ Farm control-plane - team mode
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// An ArtisanHub installation is one team. In team mode (OPHQ_TEAM_MODE=1, with
+// An OpenPrintHQ installation is one team. In team mode (OPHQ_TEAM_MODE=1, with
 // one engine for everyone, OPHQ_ENGINE_URL) the farm is one farm for that team:
 // every person signed in works on the owner's printers, queue and library, and
 // never gets a farm of their own.

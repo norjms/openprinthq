@@ -1,6 +1,6 @@
 <script>
   import { base as basePath } from '$app/paths';
-  // ArtisanHub Farm - a single model in the tenant's library.
+  // OpenPrintHQ Farm - a single model in the tenant's library.
   // SPDX-License-Identifier: AGPL-3.0-or-later
   //
   // Preview, files, downloads and send-to-queue. Meshes go to ModelViewer

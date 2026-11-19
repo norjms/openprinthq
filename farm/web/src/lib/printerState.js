@@ -1,5 +1,5 @@
 // How a printer's live status reads on a card: a short label and a tone
-// (live, ok, warn, bad or neutral, the chip tones of artisanhub-ui).
+// (live, ok, warn, bad or neutral, the chip tones of openprinthq-ui).
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { recentlyOnline } from '$lib/online.js';
 

@@ -1,4 +1,4 @@
-# ArtisanHub Farm's slicing service: OrcaSlicer's command line behind a small HTTP API.
+# OpenPrintHQ Farm's slicing service: OrcaSlicer's command line behind a small HTTP API.
 #
 # OrcaSlicer is the official release, unmodified, taken from its Linux AppImage and
 # checked against the release's SHA-256. The version and checksums come from
@@ -62,11 +62,11 @@ ENV PORT=3000 \
     DATA_PATH=/app/data \
     NODE_ENV=production \
     ORCASLICER_VERSION=${ORCASLICER_VERSION}
-LABEL org.opencontainers.image.title="artisan-hub-farm-slicer" \
+LABEL org.opencontainers.image.title="openprinthq-farm-slicer" \
       org.opencontainers.image.version="${ORCASLICER_VERSION}" \
       org.opencontainers.image.licenses="AGPL-3.0-or-later" \
-      org.artisanhub.orcaslicer.version="${ORCASLICER_VERSION}" \
-      org.artisanhub.orca-slicer-api.revision="${ORCA_SLICER_API_COMMIT}"
+      org.openprinthq.orcaslicer.version="${ORCASLICER_VERSION}" \
+      org.openprinthq.orca-slicer-api.revision="${ORCA_SLICER_API_COMMIT}"
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD curl -fsS http://localhost:3000/health || exit 1

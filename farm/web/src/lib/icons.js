@@ -1,7 +1,7 @@
-// Stroke icons this app needs beyond artisanhub-ui's set, drawn the same way
+// Stroke icons this app needs beyond openprinthq-ui's set, drawn the same way
 // (24 grid, stroke 1.7, round caps). Never emoji.
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { ICONS as SHARED } from 'artisanhub-ui';
+import { ICONS as SHARED } from 'openprinthq-ui';
 
 export const EXTRA_ICONS = {
   play: '<path d="M7 5v14l11-7z"/>',

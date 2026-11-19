@@ -1,5 +1,5 @@
 <script>
-  // ArtisanHub Farm, Obico AI print-failure (spaghetti) detection config.
+  // OpenPrintHQ Farm, Obico AI print-failure (spaghetti) detection config.
   // SPDX-License-Identifier: AGPL-3.0-or-later
   import { onMount } from 'svelte';
   import { api } from '$lib/api';

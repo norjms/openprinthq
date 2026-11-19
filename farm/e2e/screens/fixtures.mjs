@@ -111,7 +111,7 @@ export const cameras = {
 };
 
 // The hub, at the site root, for the farm's sidebar: GET /api/nav/v1 answers its
-// list (docs/nav-api.md in artisan-hub) and GET /api/stats its counts.
+// list (docs/nav-api.md in the hub's repository) and GET /api/stats its counts.
 export const hubStats = { plate_checks: 2, jobs_failed: 0, quotes_waiting: 1, licenses_attention: 0, live_out_of_supplies: 0, open_orders: 3 };
 
 export const stats = {

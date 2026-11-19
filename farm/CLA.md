@@ -1,6 +1,6 @@
-# ArtisanHub Farm Individual Contributor License Agreement
+# OpenPrintHQ Farm Individual Contributor License Agreement
 
-Thank you for contributing to ArtisanHub Farm (the "Project"), maintained by James Norman (the "Maintainer").
+Thank you for contributing to OpenPrintHQ Farm, formerly OpenPrintHQ Farm (the "Project"), maintained by James Norman (the "Maintainer").
 This agreement makes clear the terms under which you give us your contributions. It protects you as a
 contributor as well as the Project and its users. It does not change your rights to use your own
 contributions for any other purpose.

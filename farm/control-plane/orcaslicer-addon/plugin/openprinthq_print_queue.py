@@ -7,7 +7,7 @@
 # name = "OpenPrintHQ Print Queue"
 # description = "Printer agent that sends OrcaSlicer prints to an OpenPrintHQ print farm through its API: Print puts the job first in line on the mapped printer, Send adds it to that printer's queue."
 # author = "Norman Networks"
-# version = "0.15.0"
+# version = "0.15.1"
 # ///
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """OpenPrintHQ Print Queue: an OrcaSlicer printer-agent plugin.
@@ -81,7 +81,7 @@ import zipfile
 
 import orca
 
-VERSION = "0.15.0"
+VERSION = "0.15.1"
 AGENT_ID = "openprinthq"   # printer presets store it in printer_agent (0.14.0)
 AGENT_NAME = "OpenPrintHQ"
 CONTROL_PLANE_API = "/api/engine/api/v1"   # an ophqk_ key, through the OpenPrintHQ control plane
@@ -95,7 +95,7 @@ ENGINE_API = "/api/v1"                     # a bb_ key, straight to an engine
 # covers every path on the host for good. Orca accepts it only while it loads the module, so it
 # runs at import time below. Answering No makes Orca skip loading the plugin. The address on the
 # Config page is set at run time, after loading, so only this farm's address can be declared here;
-# another OpenPrintHQ address, and an ArtisanHub address, still prompt per URL
+# another farm address, and a hub address, still prompt per URL
 # (docs/KNOWN_ISSUES.md).
 DECLARED_NETWORK = ("https://openprinthq.com",)
 
@@ -173,8 +173,8 @@ DEFAULT_CONFIG = {
     "filament_check": True,
     "maintenance_check": True,
     "nozzle_check": True,
-    # v0.11: optional ArtisanHub connection. 0.13.0 removed the look settings ("look", "look_mode"): every page
-    # uses artisanhub-ui's glass-dark theme, and saved values are ignored.
+    # v0.11: optional hub connection. 0.13.0 removed the look settings ("look", "look_mode"): every page
+    # uses openprinthq-ui's glass-dark theme, and saved values are ignored.
     "hub_url": "",
     "hub_key": "",
 }
@@ -192,7 +192,7 @@ TERMINAL = TERMINAL_OK | TERMINAL_BAD | TERMINAL_CANCEL
 API_KEY_RE = re.compile(r"^(ophqk_|bb_)[A-Za-z0-9_-]{8,}$")
 
 
-# A managed install (0.15.0), such as OrcaSlicer in the browser on an ArtisanHub hub, gives the address and key in
+# A managed install (0.15.0), such as OrcaSlicer in the browser on an OpenPrintHQ hub, gives the address and key in
 # the environment OrcaSlicer starts with. They fill only what the Config page leaves blank, are never written to the
 # plugin's settings, and never sync to other computers.
 MANAGED_URL_ENV = "OPENPRINTHQ_URL"
@@ -1101,7 +1101,7 @@ SYNC_INTERVAL_S = 30
 
 
 class OpenPrintHQError(Exception):
-    """An API call failed (OpenPrintHQ or ArtisanHub). `code` is the HTTP status (0 for network errors)."""
+    """An API call failed (the farm or the hub). `code` is the HTTP status (0 for network errors)."""
 
     def __init__(self, message, code=0, error_code=""):
         super().__init__(message)
@@ -1834,20 +1834,20 @@ class OpenPrintHQClient:
         return self.request("POST", "/queue/preflight", body) or {}
 
 
-# ---------------------------------------------------------------- ArtisanHub (optional, 0.11.0)
+# ---------------------------------------------------------------- The hub (optional, 0.11.0)
 #
-# ArtisanHub is an edge service that works with the farm: plate checks after every print, staggered
+# The hub, the rest of OpenPrintHQ around the farm, adds: plate checks after every print, staggered
 # start, a farm timeline with order due dates, maintenance, real filament use, a Spoolman spool sync
 # and reports. With a hub address and a hub API key (ahk_...) on the Config page, the OpenPrintHQ tab
 # shows those next to the farm's own views. Without them
 # the plugin works exactly as before.
 
 HUB_KEY_RE = re.compile(r"^ahk_[0-9a-f]{8}_[A-Za-z0-9_-]{20,}$")
-THEME = "glass-dark"   # artisanhub-ui's only theme; the 0.11 skins and light mode were removed in 0.13.0
+THEME = "glass-dark"   # openprinthq-ui's only theme; the 0.11 skins and light mode were removed in 0.13.0
 
 
-class ArtisanHubClient:
-    """Minimal ArtisanHub client (stdlib only): one summary call plus the farm actions."""
+class HubClient:
+    """Minimal hub client (stdlib only): one summary call plus the farm actions."""
 
     def __init__(self, base_url, api_key, timeout=20):
         self.base_url = base_url.rstrip("/")
@@ -1880,15 +1880,15 @@ class ArtisanHubClient:
                 detail = "; ".join(str(d.get("msg", d)) for d in detail)
             if exc.code == 401:
                 detail = "the hub refused the API key (check it on the Config page)"
-            raise OpenPrintHQError("ArtisanHub: %s" % (detail or exc.reason or "HTTP %d" % exc.code), exc.code) from None
+            raise OpenPrintHQError("Hub: %s" % (detail or exc.reason or "HTTP %d" % exc.code), exc.code) from None
         except (urllib.error.URLError, OSError) as exc:
-            raise OpenPrintHQError("cannot reach ArtisanHub at %s: %s" % (self.base_url, getattr(exc, "reason", exc))) from None
+            raise OpenPrintHQError("cannot reach the hub at %s: %s" % (self.base_url, getattr(exc, "reason", exc))) from None
         if raw:
             return data
         try:
             return json.loads(data.decode("utf-8")) if data else {}
         except ValueError:
-            raise OpenPrintHQError("ArtisanHub sent a non-JSON answer for %s (HTTP %d)" % (path, status), status) from None
+            raise OpenPrintHQError("The hub sent a non-JSON answer for %s (HTTP %d)" % (path, status), status) from None
 
     def farm(self, timeout=None):
         return self._request("GET", "/api/plugin/farm", timeout=timeout)
@@ -1937,8 +1937,8 @@ def hub_connection(cfg):
 
 
 def resolve_look(cfg=None, hub_look=None):
-    """The look of the plugin's pages. Since 0.13.0 there is one: artisanhub-ui's glass-dark theme, the same as every
-    other ArtisanHub app. The 0.11 settings (look, look_mode) and the skin chosen in the hub are ignored."""
+    """The look of the plugin's pages. Since 0.13.0 there is one: openprinthq-ui's glass-dark theme, the same as every
+    other OpenPrintHQ app. The 0.11 settings (look, look_mode) and the skin chosen in the hub are ignored."""
     return {"theme": THEME}
 
 
@@ -2242,7 +2242,7 @@ class Hub:
         self._session_key = None
         self._cache = {}
         self.session_error = ""
-        self.hub_data = None         # ArtisanHub summary (0.11.0)
+        self.hub_data = None         # the hub's summary (0.11.0)
         self.hub_error = ""
         self.hub_at = 0.0
 
@@ -2594,13 +2594,13 @@ class Hub:
                                                          ", ".join("#%s" % i for i in ids))
         raise OpenPrintHQError("unknown request: %s" % cmd)
 
-    # ---- ArtisanHub (0.11.0) -----------------------------------------------
+    # ---- The hub (0.11.0) --------------------------------------------------
     def hub_client(self):
         cfg = self.config()
         url, key = hub_connection(cfg)
         if not url:
             return None
-        return ArtisanHubClient(url, key, timeout=min(20, cfg.get("request_timeout_seconds", 30)))
+        return HubClient(url, key, timeout=min(20, cfg.get("request_timeout_seconds", 30)))
 
     def refresh_hub(self, max_age=20.0):
         """The hub's farm summary, at most every max_age seconds; None when the hub is not set up."""
@@ -2645,7 +2645,7 @@ class Hub:
             try:
                 client = self.hub_client()
                 if client is None:
-                    raise OpenPrintHQError("ArtisanHub is not connected")
+                    raise OpenPrintHQError("The hub is not connected")
                 raw = client.photo(check_id)
                 out["data"] = "data:image/jpeg;base64," + base64.b64encode(raw).decode("ascii")
             except Exception as exc:
@@ -2659,7 +2659,7 @@ class Hub:
     def _do_hub(self, cmd, msg):
         client = self.hub_client()
         if client is None:
-            raise OpenPrintHQError("ArtisanHub is not connected: add its address and an API key on the plugin's Config page")
+            raise OpenPrintHQError("The hub is not connected: add its address and an API key on the plugin's Config page")
 
         def fresh(text):
             with self.lock:
@@ -3092,7 +3092,7 @@ class OpenPrintHQAgent(orca.printer_agent.PrinterAgentBase):
         return data
 
     def _hub_page_status(self):
-        """A live ArtisanHub check for the Config page (the page itself cannot reach the hub)."""
+        """A live hub check for the Config page (the page itself cannot reach the hub)."""
         cfg = self._config()
         url, key = hub_connection(cfg)
         status = {"configured": bool(url), "url": url, "ok": False, "error": "", "team": "", "look": None,
@@ -3100,7 +3100,7 @@ class OpenPrintHQAgent(orca.printer_agent.PrinterAgentBase):
         if not url:
             return status
         try:
-            data = ArtisanHubClient(url, key, timeout=6).farm(timeout=6) or {}
+            data = HubClient(url, key, timeout=6).farm(timeout=6) or {}
             status.update({"ok": True, "team": data.get("team") or "", "look": data.get("look"),
                            "can_act": bool(data.get("can_act"))})
             with HUB.lock:
@@ -3709,10 +3709,10 @@ button.link{border:none;background:none;color:var(--ah-link);padding:0 4px;heigh
 </section>
 
 <section>
-  <h2>ArtisanHub</h2>
-  <p class="muted">Not required. ArtisanHub is a farm service that works with OpenPrintHQ. Connected, the OpenPrintHQ tab gains plate checks with the
+  <h2>OpenPrintHQ hub</h2>
+  <p class="muted">Not required. The hub is the rest of OpenPrintHQ around the farm. Connected, the OpenPrintHQ tab gains plate checks with the
   camera photo, staggered start, a timeline with order due dates, maintenance, real filament use and the spool sync, and report
-  totals. Leave it empty to use the plugin with OpenPrintHQ alone.</p>
+  totals. Leave it empty to use the plugin with the farm alone.</p>
   <div class="grid">
     <label for="hurl">Hub address</label><div><input id="hurl" type="text" autocomplete="off" spellcheck="false" placeholder="https://hub.example.com"></div>
     <label for="hkey">Hub API key</label>
@@ -4026,13 +4026,13 @@ if (ctx.readOnly) setMsg("Read only", "warn");
 """
 
 
-# ---- artisanhub-ui: generated by tools/sync_ui.py, do not edit by hand ----
-# artisanhub-ui 0.1.0 (MIT), https://github.com/norjms/artisanhub-ui: dist/theme.css and the bundled fonts.
+# ---- openprinthq-ui: generated by tools/sync_ui.py, do not edit by hand ----
+# openprinthq-ui 0.2.0 (MIT), https://github.com/norjms/artisanhub-ui: dist/theme.css and the bundled fonts.
 # Fonts, SIL Open Font License 1.1 (https://openfontlicense.org), latin subsets from @fontsource:
 #   Manrope: Copyright 2019 The Manrope Project Authors (https://github.com/sharanda/manrope)
 #   Sora: Copyright 2019 The Sora Project Authors (https://github.com/sora-xor/sora-font)
 #   JetBrains Mono: Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono)
-AH_UI_VERSION = "0.1.0"
+AH_UI_VERSION = "0.2.0"
 AH_THEME_CSS = r"""
 :root,
 [data-theme="glass-dark"] {
@@ -4908,11 +4908,11 @@ AH_FONT_CSS = (
     'f5pHTsTp4XNPC4PEcO2pn8JdeIH90xp0injd9LQkJtXnF2j6r6Ov96t/rxchLAUA'
     ') format("woff2")}'
 )
-# ---- end of artisanhub-ui ----
+# ---- end of openprinthq-ui ----
 
 
-# 0.13.0: every page uses artisanhub-ui's glass-dark theme ("glass over a live feed"), as every ArtisanHub app does.
-# The old colour variable names (--fg, --muted, --accent ...) are mapped onto artisanhub-ui's values so the pages'
+# 0.13.0: every page uses openprinthq-ui's glass-dark theme ("glass over a live feed"), as every OpenPrintHQ app does.
+# The old colour variable names (--fg, --muted, --accent ...) are mapped onto openprinthq-ui's values so the pages'
 # own rules keep working. Glass needs backdrop-filter; a web view without it (some WebKitGTK builds) gets solid
 # panels, as does the system's "reduce transparency" setting.
 SHARED_CSS = AH_THEME_CSS + r"""
@@ -4963,7 +4963,7 @@ background:linear-gradient(var(--ah-chip-live-bg),var(--ah-chip-live-bg)),var(--
 
 
 def themed(html, look=None, hub_url=""):
-    """A page in artisanhub-ui's glass-dark theme, with its fonts embedded. Nothing is fetched (OrcaSlicer may be
+    """A page in openprinthq-ui's glass-dark theme, with its fonts embedded. Nothing is fetched (OrcaSlicer may be
     offline): not the hub's fonts, not a stylesheet. look and hub_url are accepted for older callers and ignored."""
     html = html.replace("<html>", '<html lang="en" data-theme="%s">' % THEME, 1)
     return html.replace("<head>", "<head><style>" + AH_FONT_CSS + "</style>", 1)
@@ -5435,7 +5435,7 @@ function moveJob(id, targetId, after){
 function editing(){ var a = document.activeElement; return dragId != null || !!(a && a.closest && a.closest("#queue") && (a.tagName === "INPUT" || a.tagName === "SELECT")); }
 function nozzleFocus(){ var a = document.activeElement; return !!(a && a.tagName === "SELECT" && a.closest && a.closest("#printers")); }
 function render(){ if (!openDD) renderHub(); else renderTabs(); renderAlerts(); if (!openDD && !nozzleFocus()) renderPrinters(); renderJobs(); if (!openDD && !editing()) renderQueue(); if (state) { var np = (state.printers || []).length; $("ver").textContent = "plugin " + state.version + (np ? "  \u00b7  " + np + (np === 1 ? " printer" : " printers") : ""); } }
-// ---- 0.11.0: ArtisanHub views (plate checks, timeline, maintenance, filament, reports) and the look ----
+// ---- 0.11.0: the hub's views (plate checks, timeline, maintenance, filament, reports) and the look ----
 var VIEWS = [["farm", "Farm"], ["checks", "Plate checks"], ["timeline", "Timeline"], ["maint", "Maintenance"],
              ["filament", "Filament"], ["reports", "Reports"]];
 var view = "farm";
@@ -5464,7 +5464,7 @@ function renderTabs(){
   });
   var h = hub();
   var s = el("span", {"class": "hubstate " + (h.configured ? (h.ok ? "ok" : "bad") : "")},
-             h.configured ? (h.ok ? "ArtisanHub" + (hd() && hd().team ? ": " + hd().team : "") : "ArtisanHub unreachable") : "");
+             h.configured ? (h.ok ? "Hub" + (hd() && hd().team ? ": " + hd().team : "") : "Hub unreachable") : "");
   if (h.configured && !h.ok && h.error) s.title = h.error;
   t.appendChild(s);
 }
@@ -5476,8 +5476,8 @@ function needHub(box){
   if (h.configured && hd()) return false;
   box.innerHTML = "";
   box.appendChild(el("div", {"class": "locked"}, h.configured
-    ? "ArtisanHub did not answer" + (h.error ? ": " + h.error : ".") + " The view fills in when it does."
-    : "This view comes from ArtisanHub, the farm service that works with OpenPrintHQ (plate checks, staggered start, timeline, maintenance, real filament use, reports). Add the hub's address and an API key on the plugin's Config page to see it here."));
+    ? "The hub did not answer" + (h.error ? ": " + h.error : ".") + " The view fills in when it does."
+    : "This view comes from the OpenPrintHQ hub (plate checks, staggered start, timeline, maintenance, real filament use, reports). Add the hub's address and an API key on the plugin's Config page to see it here."));
   return true;
 }
 function section(box, title, note){
@@ -5496,7 +5496,7 @@ function act(o, text){ hubSend(o); msg(text, ""); }
 function renderChecks(){
   var box = $("v-checks"); if (needHub(box)) return; box.innerHTML = "";
   var d = hd();
-  if (d.plate_checks_on === false) box.appendChild(el("div", {"class": "alert"}, "Plate checks are turned off in ArtisanHub (Farm, Settings). Printers are set Ready by hand in OpenPrintHQ."));
+  if (d.plate_checks_on === false) box.appendChild(el("div", {"class": "alert"}, "Plate checks are turned off in the hub (Farm, Settings). Printers are set Ready by hand in OpenPrintHQ."));
   var st = d.stagger || {};
   section(box, "Waiting for a plate check", "Clear the plate, then record what came off it. Passing sets the printer Ready" +
           (st.minutes ? ", " + st.minutes + " minutes apart from the last start (staggered start)." : "."));
@@ -5690,7 +5690,7 @@ function renderReports(){
   var box = $("v-reports"); if (needHub(box)) return; box.innerHTML = "";
   var d = hd(), r = d.report;
   if (!r) { box.appendChild(el("div", {"class": "locked"}, "Reports are not available: " + ((d.errors || {}).report || ""))); return; }
-  section(box, "Last 30 days", "From ArtisanHub's Reports page, which has the per-printer, per-model and profit detail.");
+  section(box, "Last 30 days", "From the hub's Reports page, which has the per-printer, per-model and profit detail.");
   var top = el("div", {"class": "kpis"});
   [["Prints", r.jobs], ["Success rate", r.success_rate != null ? r.success_rate + "%" : "n/a"], ["Print hours", r.print_hours], ["Filament", grams(r.filament_g)],
    ["Measured filament", r.measured_jobs ? grams(r.measured_g) + " on " + r.measured_jobs + " prints" : "none yet"], ["Failed", r.failed],

@@ -4,7 +4,7 @@
   import { api } from '$lib/api';
   import PageTitle from '$lib/components/PageTitle.svelte';
   import PageHead from '$lib/components/PageHead.svelte';
-  import { WidgetCard, ProgressBar } from 'artisanhub-ui';
+  import { WidgetCard, ProgressBar } from 'openprinthq-ui';
   import Icon from '$lib/components/AppIcon.svelte';
   import { branding } from '$lib/stores/appearance';
   import { printerLabel } from '$lib/models.js';
@@ -113,7 +113,7 @@
   <div class="card card-pad provision">
     <span class="eyebrow">Almost there</span>
     <h2>Enter your invite code</h2>
-    <p>You are signed in. ArtisanHub Farm is invite only: enter the code you were given to create your private HQ.{#if !needsInvite} You are the first user, so no code is needed. Just continue.{/if}</p>
+    <p>You are signed in. OpenPrintHQ Farm is invite only: enter the code you were given to create your private HQ.{#if !needsInvite} You are the first user, so no code is needed. Just continue.{/if}</p>
     {#if needsInvite}
       <label class="sr-only" for="claim-code">Invite code</label>
       <input id="claim-code" class="input claim-input" placeholder="Invite code" bind:value={inviteCode} onkeydown={(e) => { if (e.key === 'Enter') claim(); }} />
@@ -125,7 +125,7 @@
   <div class="card card-pad provision">
     <span class="eyebrow">Welcome</span>
     <h2>Set up your private HQ</h2>
-    <p>You do not have an instance yet. ArtisanHub Farm provisions an isolated one, with its own database and workspace, just for you.</p>
+    <p>You do not have an instance yet. OpenPrintHQ Farm provisions an isolated one, with its own database and workspace, just for you.</p>
     <button class="btn btn-primary" onclick={provision} disabled={provisioning}>
       {provisioning ? 'Provisioning' : 'Provision my instance'}
     </button>

@@ -1,6 +1,6 @@
 <script>
   // Integration keys (control-plane /api/api-keys): one key per app that drives this farm, such as
-  // ArtisanHub, n8n or a script. A key works on the whole engine API through ArtisanHub Farm, limited by its
+  // the OpenPrintHQ hub, n8n or a script. A key works on the whole engine API through the farm, limited by its
   // scope; account settings never take one. The secret is shown once, at creation.
   // SPDX-License-Identifier: AGPL-3.0-or-later
   import { onMount } from 'svelte';
@@ -9,11 +9,11 @@
   const SCOPES = [
     { key: 'read', label: 'Read', help: 'See printers, the queue, files, spools and history. Changes nothing.' },
     { key: 'submit', label: 'Submit', help: 'Read, plus upload files and add or reprint jobs.' },
-    { key: 'control', label: 'Control', help: 'Submit, plus printer commands, queue changes and settings. What ArtisanHub needs.' }
+    { key: 'control', label: 'Control', help: 'Submit, plus printer commands, queue changes and settings. What the hub needs.' }
   ];
 
   let keys = $state([]);
-  let label = $state('ArtisanHub');
+  let label = $state('OpenPrintHQ hub');
   let scope = $state('control');
   let expiresInDays = $state(0);
   let busy = $state(false);
@@ -58,7 +58,7 @@
 <div class="card card-pad">
   <span class="eyebrow">Integration keys</span>
   <p class="muted">
-    For apps that run this farm for you, such as ArtisanHub, n8n or your own scripts. The app sends the key as
+    For apps that run this farm for you, such as the OpenPrintHQ hub, n8n or your own scripts. The app sends the key as
     <code>Authorization: Bearer ophqk_</code> and can use OpenPrintHQ's API as far as the key's scope allows.
     Sign-in, people, keys and backups always need you, never a key.
   </p>
@@ -72,7 +72,7 @@
         <button class="btn btn-ghost btn-sm" onclick={() => (fresh = null)}>Done</button>
       </div>
       <p class="muted tiny">{fresh.label}, {scopeLabel(fresh.scope)}{fresh.expiresAt ? `, until ${fmt(fresh.expiresAt)}` : ', no expiry'}.
-        The installer connects ArtisanHub for you. To do it by hand: in ArtisanHub, Settings, Connected services, OpenPrintHQ.</p>
+        The installer connects the hub for you. To do it by hand: in the hub, Settings, Connected services, Farm.</p>
     </div>
   {/if}
 

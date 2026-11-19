@@ -1,10 +1,10 @@
 <script>
   import { base as basePath } from '$app/paths';
-  // ArtisanHub Farm - collections in the tenant's library.
+  // OpenPrintHQ Farm - collections in the tenant's library.
   // SPDX-License-Identifier: AGPL-3.0-or-later
   //
   // The library calls these projects. They are named collections here because
-  // ArtisanHub Farm already has a Projects tab meaning something else, and two
+  // OpenPrintHQ Farm already has a Projects tab meaning something else, and two
   // things called the same word in one application is the confusion this whole
   // rewrite exists to remove.
   import { onMount } from 'svelte';

@@ -1,6 +1,6 @@
 <script>
   import Icon from '$lib/components/AppIcon.svelte';
-  // ArtisanHub Farm, locate an offline printer on the network and relink it.
+  // OpenPrintHQ Farm, locate an offline printer on the network and relink it.
   // SPDX-License-Identifier: AGPL-3.0-or-later
   import { relocate, relink, canAutoRelocate, markAutoRelocate } from '$lib/relocate.js';
   import { api } from '$lib/api';

@@ -5,7 +5,7 @@
   // filter per printer. The Timelapses page renders it under its own head.
   // SPDX-License-Identifier: AGPL-3.0-or-later
   import { onMount } from 'svelte';
-  import { Toggle } from 'artisanhub-ui';
+  import { Toggle } from 'openprinthq-ui';
   import { api } from '$lib/api';
   import EngineError from '$lib/components/EngineError.svelte';
 
