@@ -36,7 +36,8 @@ async function shot(page, info, name) {
 test('the Farm group follows Print when the hub links to an installed farm', async ({ page }, info) => {
   await page.route('**/api/nav/v1', async (route) => {
     const list = await (await page.request.get('/nav.json')).json();
-    const groups = list.groups.map((g) => ({ ...g, items: g.items.map((i) => (i.farm_path
+    // As the hub answers with no optional craft on: the crafts' groups are left out (docs/crafts.md).
+    const groups = list.groups.filter((g) => !g.craft).map((g) => ({ ...g, items: g.items.map((i) => (i.farm_path
       ? { ...i, href: FARM + i.farm_path, app: 'farm' } : { ...i, app: 'hub' })) }));
     await route.fulfill({ json: { version: 1, product: 'OpenPrintHQ', installation: 'Artisan Prints',
       farm: { kind: 'openprinthq', label: 'Farm', app: FARM }, groups } });
@@ -59,6 +60,29 @@ test('the Farm group follows Print when the hub links to an installed farm', asy
   expect(r.pageScroll, 'the page scrolls').toBe(false);
   expect(r.clipped, 'cut off').toEqual([]);
   // The last item can be reached: the sidebar scrolls inside itself when the list is taller than the window.
+  const settings = page.locator('.ah-sidebar__nav a.ah-nav', { hasText: /^Settings$/ });
+  await settings.scrollIntoViewIfNeeded();
+  await expect(settings).toBeInViewport();
+});
+
+test('with every craft on, their groups follow Farm and the sidebar still fits', async ({ page }, info) => {
+  await page.route('**/api/nav/v1', async (route) => {
+    const list = await (await page.request.get('/nav.json')).json();
+    const groups = list.groups.map((g) => ({ ...g, items: g.items.map((i) => (i.farm_path
+      ? { ...i, href: FARM + i.farm_path, app: 'farm' } : { ...i, app: i.app || 'hub' })) }));
+    await route.fulfill({ json: { version: 1, product: 'OpenPrintHQ', installation: 'Artisan Prints',
+      farm: { kind: 'openprinthq', label: 'Farm', app: FARM }, groups } });
+  });
+  await page.goto('/', { waitUntil: 'networkidle' });
+  await page.evaluate(() => document.fonts.ready);
+  await expect(page.locator('.ah-sidebar__nav .ah-group-label')).toHaveText(
+    ['Print', 'Farm', 'Laser Crafting', 'Sublimation', 'Graphic Art', 'Library', 'Shop', 'Admin']);
+  await expect(page.locator('.ah-sidebar__nav a.ah-nav', { hasText: /^Convert files$/ })).toHaveAttribute('href', '/apps/laser/');
+  await expect(page.locator('.ah-sidebar__nav a.ah-nav', { hasText: /^Sublimation tools$/ })).toHaveAttribute('href', '/crafts/sublimation');
+  await shot(page, info, 'sidebar-with-crafts');
+  const r = await page.evaluate(fits);
+  expect(r.pageScroll, 'the page scrolls').toBe(false);
+  expect(r.clipped, 'cut off').toEqual([]);
   const settings = page.locator('.ah-sidebar__nav a.ah-nav', { hasText: /^Settings$/ });
   await settings.scrollIntoViewIfNeeded();
   await expect(settings).toBeInViewport();
