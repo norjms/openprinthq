@@ -1,0 +1,20 @@
+{
+  "name": "openprinthq-laser",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "description": "OpenPrintHQ Laser: convert laser projects between Bambu Suite, xTool Studio, Falcon Design Space and SVG, in the browser.",
+  "scripts": {
+    "test": "node --test test/convert.test.js",
+    "test:samples": "node test/run.js"
+  },
+  "dependencies": {
+    "@fontsource/manrope": "^5.3.0",
+    "@fontsource/sora": "^5.3.0",
+    "jszip": "^3.10.1"
+  },
+  "devDependencies": {
+    "@xmldom/xmldom": "^0.9.12"
+  }
+}

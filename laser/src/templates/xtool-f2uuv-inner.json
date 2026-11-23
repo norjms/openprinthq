@@ -1,0 +1,187 @@
+{
+ "label": "xTool F2 Ultra UV (inner engraving)",
+ "kind": "3d",
+ "version": "1.10.21",
+ "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) xToolStudio/1.10.21 Chrome/136.0.7103.49 Electron/36.2.0 Safari/537.36",
+ "minRequiredVersion": "2.6.0",
+ "extId": "GS009-CLASS-4",
+ "extName": "F2 Ultra UV",
+ "device": {
+  "id": "GS009-CLASS-4-1",
+  "deviceCode": "GS009-CLASS-4",
+  "extId": "GS009-CLASS-4",
+  "extName": "F2 Ultra UV",
+  "power": [
+   5
+  ]
+ },
+ "mode": "INNER_LASER",
+ "modeData": {
+  "material": 0,
+  "lightSourceMode": "uv",
+  "thickness": null,
+  "processPath": "auto",
+  "pathPlanning": "noSupport",
+  "fillPlanning": "separate",
+  "xcsUsed": []
+ },
+ "extendInfo": {
+  "type": "3d",
+  "consumable": {
+   "type": "Cylinder",
+   "radius": 35,
+   "sizeZ": 80,
+   "x": 0,
+   "y": 0,
+   "z": 0
+  },
+  "version": "1.0.56",
+  "gridSize": 70
+ },
+ "params": {
+  "INNER_THREE_D": {
+   "materialType": "customize",
+   "materialId": 0,
+   "paramSource": "customParams",
+   "planType": "dot_cloud",
+   "parameter": {
+    "customize": {
+     "subdivide": 0.05,
+     "speed": 80,
+     "dotDuration": 200,
+     "layer_h": 0.03,
+     "power": 60,
+     "repeat": 1,
+     "frequency": 40,
+     "refractive_index": 1.5,
+     "isPrintTexture": true,
+     "innerProcessMode": "dot_cloud",
+     "strengthenEnable": false,
+     "strengthDirection": 1,
+     "strengthenMultiple": 1,
+     "isWhiteModel": false,
+     "supportWhiteModel": true,
+     "xySubdivideEnable": false,
+     "xySubdivide": 300,
+     "depthCompensation": false,
+     "compensationStrength": "standard"
+    }
+   }
+  },
+  "INNER_THREE_D_FILL": {
+   "materialType": "customize",
+   "materialId": 0,
+   "paramSource": "customParams",
+   "planType": "dot_cloud",
+   "parameter": {
+    "customize": {
+     "density": 300,
+     "speed": 80,
+     "dotDuration": 200,
+     "layer_h": 0.1,
+     "power": 1,
+     "repeat": 1,
+     "frequency": 40,
+     "depthCompensation": false,
+     "compensationStrength": "standard"
+    }
+   }
+  }
+ },
+ "activeType": "INNER_THREE_D",
+ "display": {
+  "id": "2c981079-6933-4a08-8e4e-476e11c93e26",
+  "type": "MODEL_3D",
+  "matrix": [
+   0.012542922075592112,
+   1.3302712574629012e-18,
+   7.680324685914275e-19,
+   0,
+   -1.5360649371828557e-18,
+   0.010862489155151407,
+   0.006271461037796056,
+   0,
+   1.8811370086034644e-34,
+   -0.006271461037796056,
+   0.010862489155151405,
+   0,
+   34.99999999999999,
+   46.992791662858096,
+   35.573188546282275,
+   1
+  ],
+  "x": 34.99999999999999,
+  "z": 46,
+  "y": 35.000000108176835,
+  "sizeX": 45.999999999999986,
+  "sizeZ": 28.602789594882577,
+  "sizeY": 43.068044940563304,
+  "processId": "",
+  "groupTag": "fb95a395-fde8-478b-9ce2-e21e61c9336b",
+  "visible": true,
+  "visibleState": true,
+  "lockState": false,
+  "enableTransform": true,
+  "zOrder": 1,
+  "sourceId": "",
+  "lockRatio": true,
+  "name": "",
+  "alpha": 1,
+  "resourceId": "5d4dca2e-119f-4108-b6b1-b75af110baee",
+  "modelDataRef": "resources/bbf46b59bfc3fe8663d95034fb5ef2bd055e5300395306fab435d28fe98c54cc.json",
+  "isWhiteModel": false,
+  "isPointCloudModel": false,
+  "displayMode": "simplified",
+  "hasSimplifiedModel": false
+ },
+ "xs": {
+  "versionInfo": {
+   "source": "pc",
+   "appVersion": "1.10.21",
+   "savedAt": 1795108247547,
+   "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) xToolStudio/1.10.21 Chrome/136.0.7103.49 Electron/36.2.0 Safari/537.36",
+   "minRequiredVersion": "2.6.0",
+   "appMinRequiredVersion": "",
+   "webMinRequiredVersion": ""
+  },
+  "persistenceMeta": {
+   "schemaVersion": "2.0.0",
+   "protocol": "xcs-workspace-v2"
+  },
+  "format": "v2",
+  "baseProfiles": {
+   "INNER_THREE_D": {
+    "subdivide": 0.05,
+    "speed": 80,
+    "dotDuration": 200,
+    "layer_h": 0.03,
+    "power": 60,
+    "repeat": 1,
+    "frequency": 40,
+    "refractive_index": 1.5,
+    "isPrintTexture": true,
+    "innerProcessMode": "dot_cloud",
+    "strengthenEnable": false,
+    "strengthDirection": 1,
+    "strengthenMultiple": 1,
+    "isWhiteModel": false,
+    "supportWhiteModel": true,
+    "xySubdivideEnable": false,
+    "xySubdivide": 300,
+    "depthCompensation": false,
+    "compensationStrength": "standard"
+   },
+   "INNER_THREE_D_FILL": {
+    "density": 300,
+    "speed": 80,
+    "dotDuration": 200,
+    "layer_h": 0.1,
+    "power": 1,
+    "repeat": 1,
+    "frequency": 40,
+    "depthCompensation": false,
+    "compensationStrength": "standard"
+   }
+  }
+ }
+}

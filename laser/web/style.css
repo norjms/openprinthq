@@ -1,0 +1,95 @@
+/* OpenPrintHQ Laser on top of openprinthq-ui v0.3.0 (vendor/openprinthq-ui): the hub's shell and sidebar,
+   with the converter in the content column. Every colour, radius and
+   font comes from the --ah- tokens; only the preview's operation colours are app-specific. */
+
+:root {
+  /* Preview colours for laser operations. Cut keeps the laser-world red convention, lightened for the dark
+     stage and kept apart from --ah-failure; score uses the live-data accent. */
+  --lc-cut: #ff9a7a;
+  --lc-score: var(--ah-accent);
+  --lc-fill: rgba(236, 243, 248, 0.78);
+  --lc-stage: rgba(10, 16, 22, 0.55);
+}
+
+html, body { margin: 0; height: 100%; }
+body { min-height: 100vh; }
+.hidden { display: none !important; }
+
+
+/* Three cards across, landscape */
+.lc-privacy { gap: 6px; padding: 5px 12px; font-size: 13px; flex: none; }
+.ah-sidebar__brand { text-decoration: none; }
+.lc-brandtile { width: 36px; height: 36px; }
+.lc-titletext { flex: 1; min-width: 0; }
+.lc-desc { margin: 4px 0 0; }
+.lc-grid { flex: 1; display: grid; grid-template-columns: minmax(280px, 1fr) minmax(440px, 2.1fr) minmax(300px, 1.15fr); gap: 14px; min-height: 0; }
+.lc-col { min-height: 0; overflow: hidden; gap: 12px; }
+.lc-step { display: flex; align-items: center; gap: 10px; min-height: 30px; }
+.lc-num { width: 26px; height: 26px; flex: none; border-radius: 9px; display: grid; place-items: center; font: 600 13px var(--ah-font-display); background: var(--ah-chip-live-bg); color: var(--ah-accent); }
+
+/* Drop zone */
+.lc-drop { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 18px 14px; text-align: center; cursor: pointer; border-radius: var(--ah-radius-choice); border: 1.5px dashed var(--ah-field-line); background: var(--ah-panel); color: var(--ah-text); transition: border-color 0.15s, background 0.15s; flex: none; }
+.lc-drop svg { color: var(--ah-accent); }
+.lc-drop strong { font-size: 15px; font-weight: 600; }
+.lc-drop:hover, .lc-drop.over { border-color: var(--ah-accent); background: var(--ah-chip-live-bg); }
+.lc-drop:focus-visible { outline: none; box-shadow: var(--ah-focus); }
+.lc-drop.busy { pointer-events: none; opacity: 0.6; }
+
+.lc-side { display: flex; flex-direction: column; gap: 10px; flex: 1; padding-right: 2px; }
+.lc-info { display: flex; flex-direction: column; gap: 10px; }
+.lc-title { font-family: var(--ah-font-display); font-weight: 500; font-size: 19px; letter-spacing: -0.02em; line-height: 1.25; word-break: break-word; margin: 0; }
+.lc-kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; font-size: 13px; }
+.lc-kv dt { color: var(--ah-text-2); }
+.lc-kv dd { margin: 0; word-break: break-word; }
+.lc-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.lc-info .ah-banner { align-items: flex-start; padding: 10px 12px; font-size: 13px; line-height: 1.45; }
+.lc-busy { display: flex; align-items: center; gap: 10px; color: var(--ah-text-2); font-size: 13px; }
+.lc-spin { width: 14px; height: 14px; flex: none; border-radius: 50%; border: 2px solid var(--ah-track); border-top-color: var(--ah-accent); animation: lc-sp 0.8s linear infinite; }
+@keyframes lc-sp { to { transform: rotate(360deg); } }
+
+.lc-note { padding: 10px 14px; }
+.lc-note summary { cursor: pointer; font-weight: 600; font-size: 13px; color: var(--ah-text); }
+.lc-note ul { margin: 8px 0 2px; padding-left: 18px; font-size: 13px; line-height: 1.5; color: var(--ah-text-2); }
+.lc-note li + li { margin-top: 4px; }
+.lc-note b { color: var(--ah-text); font-weight: 600; }
+
+/* Preview */
+.lc-legend { margin-left: auto; display: flex; gap: 14px; font-size: 12px; color: var(--ah-text-2); }
+.lc-sw { display: inline-block; width: 14px; height: 3px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+.lc-sw--cut { background: var(--lc-cut); }
+.lc-sw--score { background: var(--lc-score); }
+.lc-sw--fill { background: var(--lc-fill); height: 9px; }
+.lc-tabs { flex-wrap: wrap; align-self: flex-start; max-width: 100%; border-radius: var(--ah-radius-choice); }
+.lc-stage { position: relative; flex: 1; min-height: 0; border-radius: var(--ah-radius-choice); background: var(--lc-stage); border: 1px solid var(--ah-panel-line); overflow: hidden; }
+.lc-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.lc-empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--ah-text-3-large); font-size: 14px; }
+
+/* Targets */
+.lc-targets { display: flex; flex-direction: column; gap: 6px; flex: 1; padding-right: 2px; }
+.lc-targets .ah-group-label { margin: 8px 4px 2px; }
+.lc-targets .ah-group-label:first-child { margin-top: 0; }
+.lc-t { display: grid; grid-template-columns: 18px 1fr; gap: 10px; align-items: start; padding: 9px 12px; border-radius: var(--ah-radius-btn); border: 1px solid var(--ah-panel-line); background: var(--ah-panel); cursor: pointer; }
+.lc-t:hover { border-color: var(--ah-field-line); }
+.lc-t:focus-within { box-shadow: var(--ah-focus); }
+.lc-t input { margin: 3px 0 0; accent-color: var(--ah-accent); }
+.lc-t b { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.lc-t small { color: var(--ah-text-2); font-size: 12px; }
+.lc-t .ah-chip { font-size: 11px; line-height: 15px; padding: 1px 8px; font-weight: 600; }
+.lc-t.off { opacity: 0.45; cursor: not-allowed; }
+.lc-t.sel { border-color: var(--ah-chip-live-line); background: linear-gradient(var(--ah-chip-live-bg), var(--ah-chip-live-bg)), var(--ah-panel); }
+
+.lc-go { width: 100%; height: 44px; font-size: 15px; flex: none; }
+.lc-results { display: flex; flex-direction: column; gap: 6px; flex: none; max-height: 32%; overflow-y: auto; }
+.lc-results:empty { display: none; }
+.lc-dl { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 12px; border-radius: var(--ah-radius-btn); border: 1px solid var(--ah-chip-ok-line); background: linear-gradient(var(--ah-chip-ok-bg), var(--ah-chip-ok-bg)), var(--ah-chip-underlay); font-size: 13px; color: var(--ah-chip-ok-text); }
+.lc-dl span { word-break: break-all; }
+.lc-dl .ah-btn { color: var(--ah-on-accent); }
+
+@media (max-width: 1099px) {
+  .lc-grid { grid-template-columns: 1fr 1fr; }
+  .lc-grid > :nth-child(2) { grid-column: 1 / -1; order: 3; min-height: 480px; }
+  .lc-col { overflow: visible; }
+}
+@media (max-width: 720px) {
+  .lc-grid { grid-template-columns: 1fr; }
+}

@@ -1,0 +1,8 @@
+/* Self-hosted fonts (SIL Open Font License), same families as openprinthq-ui: Manrope for text, Sora for display.
+   The WOFF2 files are copied from @fontsource packages by tools/build.sh. */
+@font-face { font-family: Manrope; font-style: normal; font-weight: 400; font-display: swap; src: url(manrope-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: Manrope; font-style: normal; font-weight: 500; font-display: swap; src: url(manrope-latin-500-normal.woff2) format("woff2"); }
+@font-face { font-family: Manrope; font-style: normal; font-weight: 600; font-display: swap; src: url(manrope-latin-600-normal.woff2) format("woff2"); }
+@font-face { font-family: Manrope; font-style: normal; font-weight: 700; font-display: swap; src: url(manrope-latin-700-normal.woff2) format("woff2"); }
+@font-face { font-family: Sora; font-style: normal; font-weight: 500; font-display: swap; src: url(sora-latin-500-normal.woff2) format("woff2"); }
+@font-face { font-family: Sora; font-style: normal; font-weight: 600; font-display: swap; src: url(sora-latin-600-normal.woff2) format("woff2"); }
