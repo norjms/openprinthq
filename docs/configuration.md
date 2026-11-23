@@ -152,7 +152,7 @@ Push alerts (ntfy, Telegram) are set per team in the UI.
 | Variable | Default | Meaning |
 |---|---|---|
 | `HUB_THEME_PROXY_KEY` | empty | *Secret.* Key a reverse proxy sends, with the signed-in person's email, to fetch that person's look for the supporting apps (`/theme/apps.css`, `/theme/apps.js`). Empty turns it off. |
-| `HUB_WORDMARK` | `/theme/openprinthq-wordmark.svg` | Path or URL of the wordmark the phone apps draw. |
+| `HUB_WORDMARK` | `/theme/openprinthq-wordmark.svg` | Path or URL of the wordmark the phone apps draw when the shop has not uploaded its own logo (`docs/brand.md`). |
 
 ## Phone app links
 

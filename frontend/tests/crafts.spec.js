@@ -25,6 +25,13 @@ test('Settings, Crafts turns Laser Crafting on and off and the sidebar follows',
   await expect(groups(page).filter({ hasText: /^Laser Crafting$/ })).toHaveCount(0);
 });
 
+test('the shop logo card is on Settings, Shop and crafts', async ({ page }) => {
+  await page.goto('/settings?tab=crafts', { waitUntil: 'networkidle' });
+  await expect(page.getByRole('heading', { name: "Your shop's logo" })).toBeVisible();
+  await expect(page.getByText('No logo yet')).toBeVisible();
+  await expect(page.getByText('Upload a logo')).toBeVisible();
+});
+
 test('a craft that is off says so on its page', async ({ page }) => {
   await page.goto('/crafts/sublimation', { waitUntil: 'networkidle' });
   await expect(page.getByRole('heading', { name: 'Sublimation', level: 2 })).toBeVisible();
