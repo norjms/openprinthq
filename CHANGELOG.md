@@ -4,6 +4,8 @@ Notable changes to Artisan Hub. Versions follow the tags of this repository.
 
 ## Unreleased: first public release
 
+- Your shop's logo (`docs/brand.md`): upload an SVG or PNG on Settings, Shop and crafts, and the phone app draws it
+  in place of the OpenPrintHQ wordmark. Kept in the hub's data folder; unsafe SVGs are refused.
 - Crafts (`docs/crafts.md`): 3D Printing is always on, and Laser Crafting, Sublimation and Graphic Art can be
   turned on for the installation, at first-run setup (`crafts` in `POST /api/setup/v1/initialize`), on Settings,
   Crafts, or with `PUT /api/crafts/v1`. A craft that is off is left out of the sidebar. Laser Crafting links to

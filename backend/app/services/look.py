@@ -119,8 +119,10 @@ def skin_look(css: str, skin: str) -> dict:
 
 
 def _wordmark() -> str:
+    """The shop's own logo when the owner uploaded one (services.brand), else HUB_WORDMARK."""
     from ..config import settings
-    return settings().wordmark or "/theme/openprinthq-wordmark.svg"
+    from . import brand
+    return brand.url() or settings().wordmark or "/theme/openprinthq-wordmark.svg"
 
 
 def build(skin: str, mode: str, all_skins: bool = False) -> dict | None:

@@ -6,7 +6,7 @@
   import { THEMES, REDUCE, look, setLook } from '$lib/theme.svelte.js';
   import Page from '$lib/Page.svelte';
   import { loadNav } from '$lib/nav.svelte.js';
-  const TABS = [['general', 'General'], ['crafts', 'Crafts'], ['slicing', 'Slicing and costs'], ['sites', 'Model sites'], ['keys', 'API keys']];
+  const TABS = [['general', 'General'], ['crafts', 'Shop and crafts'], ['slicing', 'Slicing and costs'], ['sites', 'Model sites'], ['keys', 'API keys']];
   let tab = $state(TABS.some((t) => t[0] === page.url.searchParams.get('tab')) ? page.url.searchParams.get('tab') : 'general');
   function pick(t) { tab = t; const u = new URL(location.href); u.searchParams.set('tab', t); history.replaceState(history.state, '', u); }
   const farmName = 'the farm';
@@ -24,6 +24,26 @@
   let mwBusy = $state(false);
   let crafts = $state(null);
   async function loadCrafts() { try { crafts = await api.get('/api/crafts/v1'); } catch { crafts = null; } }
+  // The shop's own logo (docs/brand.md): the phone app draws it in place of the OpenPrintHQ wordmark.
+  let logo = $state(null);
+  async function loadLogo() { try { logo = (await api.get('/api/brand/v1')).wordmark; } catch { logo = null; } }
+  async function uploadLogo(e) {
+    const f = e.currentTarget.files?.[0];
+    e.currentTarget.value = '';
+    if (!f) return;
+    const fd = new FormData();
+    fd.append('file', f, f.name);
+    try {
+      const r = await attempt(async () => {
+        const res = await fetch('/api/brand/v1/wordmark', { method: 'PUT', body: fd, credentials: 'same-origin' });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.detail || `${res.status}`);
+        return body;
+      }, 'Logo saved');
+      logo = r.wordmark;
+    } catch {}  // attempt already said what went wrong
+  }
+  async function removeLogo() { if (confirm('Remove the logo? The phone app goes back to the OpenPrintHQ wordmark.')) { try { await attempt(() => api.del('/api/brand/v1/wordmark'), 'Logo removed'); logo = null; } catch {} } }
   async function toggleCraft(c) {
     const enabled = crafts.crafts.filter((x) => !x.always_on && (x.id === c.id ? !x.enabled : x.enabled)).map((x) => x.id);
     crafts = await attempt(() => api.put('/api/crafts/v1', { enabled }), `${c.label} ${c.enabled ? 'off' : 'on'}`);
@@ -60,7 +80,7 @@
   async function loadBl() { bl = await api.get('/api/import-blocklist'); }
   async function unblock(code) { bl = await attempt(() => api.post('/api/import-blocklist/remove', { code }), `${code} can be imported again`); }
   async function recheck() { await attempt(() => api.post('/api/actions/license-recheck'), 'Checking every MakerWorld model license; you get an email if any changed'); }
-  onMount(() => { load(); loadBl(); loadSrcs(); loadCrafts(); });
+  onMount(() => { load(); loadBl(); loadSrcs(); loadCrafts(); loadLogo(); });
   async function matchAll() { await attempt(() => api.post('/api/filaments/match-all'), 'Matching every model in the background'); }
   async function save() { s = await attempt(() => api.put('/api/settings', s), 'Saved'); }
   async function mk() { const r = await attempt(() => api.post('/api/keys', { name: newKey || 'client' })); created = r.key; createdNote = ''; newKey = ''; load(); }
@@ -79,6 +99,21 @@
   </div>
 
   {#if tab === 'crafts'}
+    <section class="ah-glass ah-card" id="logo">
+      <h2 class="ah-card-title">Your shop's logo</h2>
+      <p class="ah-muted" style="margin-top:-6px">Everyone's. The phone app shows it in place of the OpenPrintHQ wordmark. An SVG or PNG, wide rather than tall, at most 256 KB.</p>
+      <div class="ah-kv" style="gap:16px;align-items:center">
+        <div class="panel" style="width:320px;height:64px;flex:none;display:grid;place-items:center;padding:8px">
+          {#if logo}<img src={logo} alt="Your shop's logo" style="max-width:100%;max-height:48px" />{:else}<span class="ah-muted">No logo yet</span>{/if}
+        </div>
+        {#if crafts?.can_change}
+          <label class="btn sm">Upload a logo<input type="file" accept="image/svg+xml,image/png" hidden onchange={uploadLogo} /></label>
+          {#if logo}<button type="button" class="btn sm ghost" onclick={removeLogo}>Remove</button>{/if}
+        {:else}
+          <span class="ah-muted">Only the hub owner or an admin of the first team can change it.</span>
+        {/if}
+      </div>
+    </section>
     <section class="ah-glass ah-card" id="crafts">
       <h2 class="ah-card-title">Crafts</h2>
       <p class="ah-muted" style="margin-top:-6px">What this hub is for. Everyone's: a craft that is off is left out of the sidebar for everybody. Turning one on installs nothing; the OpenPrintHQ installer adds Laser Crafting's tools when you choose it there.</p>

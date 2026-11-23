@@ -893,6 +893,7 @@ def test_sync_printer_locations_job_runs_when_a_printer_comes_online(farm, key):
         set_setting(db, "ophq_locations_synced_at", time.time() - 3600)
     with session_scope() as db:
         assert "locations" in spool_library.sync_printer_locations(db)
+    import app.tasks  # noqa: F401  (registers the job handlers; the worker imports it, a test run alone does not)
     from app.jobs import HANDLERS, PERIODIC
     assert "farm.sync_locations" in HANDLERS and any(k == "farm.sync_locations" for k, _, _ in PERIODIC)
 
