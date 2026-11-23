@@ -6,7 +6,7 @@ const groups = (page) => page.locator('.ah-sidebar__nav .ah-group-label');
 
 test('Settings, Crafts turns Laser Crafting on and off and the sidebar follows', async ({ page }) => {
   await page.goto('/settings?tab=crafts', { waitUntil: 'networkidle' });
-  await expect(page.getByText('Always on')).toBeVisible();
+  await expect(page.getByText('Always on', { exact: true })).toBeVisible();
   const laser = page.getByRole('switch', { name: 'Laser Crafting' });
   await expect(laser).toHaveAttribute('aria-checked', 'false');
   await expect(groups(page)).not.toContainText(['Laser Crafting']);
