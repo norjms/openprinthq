@@ -125,6 +125,7 @@ MIGRATIONS: list[tuple[int, str]] = [
     (21, "ALTER TABLE installation ADD COLUMN IF NOT EXISTS installer_key_id integer"),
     (22, "ALTER TABLE membership ADD COLUMN IF NOT EXISTS printers json"),
     (23, "ALTER TABLE installation ADD COLUMN IF NOT EXISTS crafts json"),
+    (24, "ALTER TABLE installation ADD COLUMN IF NOT EXISTS apps json"),
 ]
 
 # Data migrations written in Python, so they run the same on Postgres and in the tests' SQLite. Numbered from 1001

@@ -101,6 +101,24 @@
     users = await api.get('/api/platform/users');
     invites = await api.get('/api/platform/invites');
     await loadOrca();
+    await loadApps();
+  }
+  // Every other desktop app the installation runs (docs/apps.md): who may open each, as for OrcaSlicer.
+  let deskApps = $state([]);
+  let appOn = $state({});        // by app id, then person
+  let appBusy = $state(null);
+  async function loadApps() {
+    try { deskApps = (await api.get('/api/platform/apps')).apps || []; } catch { deskApps = []; }
+    appOn = Object.fromEntries(deskApps.map((a) => [a.id, Object.fromEntries(users.map((u) => [u.id, (a.allowed || []).includes(u.id)]))]));
+  }
+  async function setApp(a, u, on) {
+    appBusy = `${a.id}:${u.id}`;
+    try {
+      await attempt(() => api.put(`/api/platform/users/${u.id}/apps/${a.id}`, { allowed: on }),
+        on ? `${u.name} can now open ${a.title}` : `${u.name} can no longer open ${a.title}`);
+    } catch { /* attempt shows the error */ }
+    appBusy = null;
+    await loadApps();
   }
   // OrcaSlicer in the browser, when this installation runs it: who may open it. The hub's owners always may; anyone
   // else when the owner turns it on here (they join its group in the hub's user directory).
@@ -422,7 +440,7 @@
           <span>It lets them choose a new password for the login {pwLink.user}. It works once, for {pwLink.expires_in_minutes} minutes, and replaces any older link.</span>
         </div>
       {/if}
-      <table class="grid"><thead><tr><th>Person</th><th>Teams</th>{#if orca.available}<th>OrcaSlicer in the browser</th>{/if}{#if liveShares.length}<th>Shared folders</th>{/if}<th>Last sign-in</th><th></th></tr></thead><tbody>
+      <table class="grid"><thead><tr><th>Person</th><th>Teams</th>{#if orca.available}<th>OrcaSlicer in the browser</th>{/if}{#each deskApps as a (a.id)}<th>{a.title}</th>{/each}{#if liveShares.length}<th>Shared folders</th>{/if}<th>Last sign-in</th><th></th></tr></thead><tbody>
         {#each users as u}
           <tr><td>{u.name}{#if u.platform_admin} <span class="chip live">Hub owner</span>{/if}<div class="ah-muted">{u.email || ''}</div></td>
             <td>{u.teams.map((m) => `${teamName(m.team_id)} (${ROLE_LABEL[m.role]})`).join(', ') || 'None'}</td>
@@ -435,6 +453,15 @@
                 {/if}
               </div></td>
             {/if}
+            {#each deskApps as a (a.id)}
+              <td><div class="flex items-center gap-2">
+                {#if u.platform_admin}
+                  <Toggle checked={true} disabled label="{a.title} for {u.name}" /><span class="ah-muted">Hub owners always have it</span>
+                {:else}
+                  <Toggle bind:checked={appOn[a.id][u.id]} disabled={appBusy === `${a.id}:${u.id}` || !!a.error} label="{a.title} for {u.name}" onchange={(on) => setApp(a, u, on)} />
+                {/if}
+              </div></td>
+            {/each}
             {#if liveShares.length}
               <td>{#if u.platform_admin}<span class="ah-muted">All, read and write</span>
                 {:else}<div class="flex items-center gap-2"><span>{mineText(u)}</span><button class="btn sm ghost" onclick={() => (picking = u)} aria-label="Choose shared folders for {u.name}">Choose</button></div>{/if}</td>

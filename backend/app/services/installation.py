@@ -57,8 +57,8 @@ def _now() -> datetime:
 
 
 def state() -> dict:
-    """{"farm", "farm_source", "setup_complete", "crafts"} for the installation, cached for a few seconds.
-    crafts is the optional crafts that are on (services.crafts)."""
+    """{"farm", "farm_source", "setup_complete", "crafts", "apps"} for the installation, cached for a few seconds.
+    crafts is the optional crafts that are on (services.crafts); apps the desktop apps it runs (services.apps)."""
     t = time.time()
     with _lock:
         hit = _cache.get("state")
@@ -71,7 +71,8 @@ def state() -> dict:
         row = s.get(Installation, 1)
         st = {"farm": row.farm if row else None, "farm_source": row.farm_source if row else None,
               "setup_complete": bool(row and row.setup_completed_at),
-              "crafts": list(row.crafts or []) if row else []}
+              "crafts": list(row.crafts or []) if row else [],
+              "apps": list(row.apps or []) if row else []}
     finally:
         s.close()
     # Cache only settled states. "Not chosen yet" ends at setup, which runs in one process; the others must

@@ -9,7 +9,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from .config import settings
 from .db import init_db
 from . import auth
-from .routers import account, catalog, ops, sourcing, slicing, mcp, oauth, teams, farm, quotes, plugin, mobile, mobile_control, phone_pages, plates, manual_orders, clipper, setup, nav, crafts, brand, shares, filament_mapping
+from .routers import account, catalog, ops, sourcing, slicing, mcp, oauth, teams, farm, quotes, plugin, mobile, mobile_control, phone_pages, plates, manual_orders, clipper, setup, nav, crafts, apps, brand, shares, filament_mapping
 from .routers import push as push_router
 from .routers import alerts as alerts_router
 
@@ -42,6 +42,7 @@ app.include_router(mobile_control.router)
 app.include_router(clipper.router)        # browser add-on: add a model by URL, send files
 app.include_router(nav.router)            # the sidebar as data, shared with the farm
 app.include_router(crafts.router)         # crafts the installation shows tools for (docs/crafts.md)
+app.include_router(apps.router)           # desktop apps the installer runs (docs/apps.md)
 app.include_router(brand.router)          # the shop's own logo (docs/brand.md)
 app.include_router(phone_pages.pages)   # /pair, /get-app, /.well-known app links (public)
 

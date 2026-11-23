@@ -564,6 +564,7 @@ class Installation(Base):
     setup_token_hash: Mapped[str | None] = mapped_column(String(64))   # a generated first-run token, until setup completes
     installer_key_id: Mapped[int | None] = mapped_column(Integer)      # the API key setup minted (password links)
     crafts: Mapped[list | None] = mapped_column(JSON)                   # optional crafts that are on (services.crafts)
+    apps: Mapped[list | None] = mapped_column(JSON)                     # desktop apps the installer runs (services.apps)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 

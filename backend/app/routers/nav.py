@@ -50,17 +50,31 @@ def farm_info() -> dict:
     return {"kind": kind, "label": label, "app": app}
 
 
-def resolve(nav: dict, farm: dict, crafts: list[str] | tuple[str, ...] = ("3d_printing",)) -> dict:
+def _app_items(apps: list[dict], craft: str) -> list[dict]:
+    """The sidebar's items for the desktop apps of one craft (docs/apps.md), each opening its desktop."""
+    return [{"id": f"app-{a['id']}", "label": a["title"], "href": f"{a['path']}/", "icon": "tv", "app": a["id"],
+             "desktop": True, **({"experimental": True} if a.get("experimental") else {})}
+            for a in apps if a["craft"] == craft]
+
+
+def resolve(nav: dict, farm: dict, crafts: list[str] | tuple[str, ...] = ("3d_printing",),
+            apps: list[dict] | tuple[dict, ...] = ()) -> dict:
     """Every item gets its "app": "hub", "farm", or the app the list names (laser), and farm items the farm's own
     link when there is one. Items the list marks "app": "farm" are pages only the farm has (the Farm group): without
     a link to the farm's own pages they are left out, and so is a group left with no items. A group with "craft"
-    is left out unless that craft is in crafts."""
+    is left out unless that craft is in crafts. Each desktop app in apps is added to its craft's group (the group
+    with that craft, or for 3D printing the first group with none), after the group's own items."""
     out = copy.deepcopy(nav)
     out.pop("notes", None)
     groups = []
+    placed_3d = False
     for g in out["groups"]:
         if g.get("craft") and g["craft"] not in crafts:
             continue
+        craft = g.get("craft")
+        if not craft and not placed_3d:
+            craft, placed_3d = "3d_printing", True
+        g["items"] = list(g["items"]) + (_app_items(list(apps), craft) if craft else [])
         items = []
         for it in g["items"]:
             farm_only = it.get("app") == "farm"
@@ -71,6 +85,8 @@ def resolve(nav: dict, farm: dict, crafts: list[str] | tuple[str, ...] = ("3d_pr
                 continue
             elif it.get("app") in (None, "hub"):
                 it["app"] = "hub"
+            elif it.get("desktop"):
+                it.pop("desktop")
             items.append(it)
         if items:
             groups.append({**g, "items": items})
@@ -89,8 +105,8 @@ def nav(request: Request, db: Session = Depends(get_db)):
     if p:
         tenant.set_team(p["team_id"])
     farm = farm_info() if p else {"kind": None, "label": "The farm", "app": None}
-    from ..services import crafts
-    doc = resolve(load(), farm, crafts.chosen())
+    from ..services import apps, crafts
+    doc = resolve(load(), farm, crafts.chosen(), apps.registered())
     doc["installation"] = (p.get("team_name") if p else None)
     doc["farm"] = farm
     return doc
