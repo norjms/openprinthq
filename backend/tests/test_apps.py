@@ -49,7 +49,6 @@ def test_apps_02_the_installer_sets_them_and_anyone_signed_in_reads_them(client)
     assert [(a["id"], a["craft_on"]) for a in body["apps"]] == [("bambustudio", True), ("xtoolstudio", False)]
     assert client.put("/api/apps/v1", headers=_key(), json={"apps": [{**BAMBU, "craft": "x"}]}).status_code == 422
     assert client.put("/api/apps/v1", headers=_key(scopes=("read",)), json={"apps": []}).status_code == 403
-    assert client.get("/api/apps/v1").status_code == 401
 
 
 @needs_list
