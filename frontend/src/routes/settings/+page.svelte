@@ -5,7 +5,8 @@
   import { page } from '$app/state';
   import { THEMES, REDUCE, look, setLook } from '$lib/theme.svelte.js';
   import Page from '$lib/Page.svelte';
-  const TABS = [['general', 'General'], ['slicing', 'Slicing and costs'], ['sites', 'Model sites'], ['keys', 'API keys']];
+  import { loadNav } from '$lib/nav.svelte.js';
+  const TABS = [['general', 'General'], ['crafts', 'Crafts'], ['slicing', 'Slicing and costs'], ['sites', 'Model sites'], ['keys', 'API keys']];
   let tab = $state(TABS.some((t) => t[0] === page.url.searchParams.get('tab')) ? page.url.searchParams.get('tab') : 'general');
   function pick(t) { tab = t; const u = new URL(location.href); u.searchParams.set('tab', t); history.replaceState(history.state, '', u); }
   const farmName = 'the farm';
@@ -21,6 +22,13 @@
   let mwStep = $state('creds');
   let mwMsg = $state('');
   let mwBusy = $state(false);
+  let crafts = $state(null);
+  async function loadCrafts() { try { crafts = await api.get('/api/crafts/v1'); } catch { crafts = null; } }
+  async function toggleCraft(c) {
+    const enabled = crafts.crafts.filter((x) => !x.always_on && (x.id === c.id ? !x.enabled : x.enabled)).map((x) => x.id);
+    crafts = await attempt(() => api.put('/api/crafts/v1', { enabled }), `${c.label} ${c.enabled ? 'off' : 'on'}`);
+    loadNav();
+  }
   async function load() {
     s = await api.get('/api/settings'); mw = await api.get('/api/makerworld/status');
     try { keys = (await api.get('/api/mobile/v1/keys')).keys; conns = await api.get('/api/oauth/connections'); } catch { keys = []; conns = []; }
@@ -52,7 +60,7 @@
   async function loadBl() { bl = await api.get('/api/import-blocklist'); }
   async function unblock(code) { bl = await attempt(() => api.post('/api/import-blocklist/remove', { code }), `${code} can be imported again`); }
   async function recheck() { await attempt(() => api.post('/api/actions/license-recheck'), 'Checking every MakerWorld model license; you get an email if any changed'); }
-  onMount(() => { load(); loadBl(); loadSrcs(); });
+  onMount(() => { load(); loadBl(); loadSrcs(); loadCrafts(); });
   async function matchAll() { await attempt(() => api.post('/api/filaments/match-all'), 'Matching every model in the background'); }
   async function save() { s = await attempt(() => api.put('/api/settings', s), 'Saved'); }
   async function mk() { const r = await attempt(() => api.post('/api/keys', { name: newKey || 'client' })); created = r.key; createdNote = ''; newKey = ''; load(); }
@@ -69,6 +77,24 @@
   <div class="ah-tabs" role="tablist" aria-label="Settings">
     {#each TABS as [k, l]}<button role="tab" aria-selected={tab === k} onclick={() => pick(k)}>{l}</button>{/each}
   </div>
+
+  {#if tab === 'crafts'}
+    <section class="ah-glass ah-card" id="crafts">
+      <h2 class="ah-card-title">Crafts</h2>
+      <p class="ah-muted" style="margin-top:-6px">What this hub is for. Everyone's: a craft that is off is left out of the sidebar for everybody. Turning one on installs nothing; the OpenPrintHQ installer adds Laser Crafting's tools when you choose it there.</p>
+      {#if crafts}
+        <div style="display:grid;gap:10px">
+          {#each crafts.crafts as c (c.id)}
+            <div class="panel ah-kv" style="padding:12px 16px"><div><div style="font-weight:600">{c.label}</div><div class="ah-muted">{c.summary}</div></div>
+              {#if c.always_on}<span class="ah-muted">Always on</span>
+              {:else}<button class="toggle {c.enabled ? 'on' : ''}" role="switch" aria-checked={c.enabled} aria-label={c.label} disabled={!crafts.can_change} onclick={() => toggleCraft(c)}></button>{/if}
+            </div>
+          {/each}
+        </div>
+        {#if !crafts.can_change}<p class="ah-muted">Only the hub owner or an admin of the first team can change the crafts.</p>{/if}
+      {/if}
+    </section>
+  {/if}
 
   {#if tab === 'general'}
     <section class="ah-glass ah-card" id="appearance">

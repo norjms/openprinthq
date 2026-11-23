@@ -2,7 +2,8 @@
 
 GET /api/nav/v1 answers anyone: the groups and items are the same for everybody. Signed in, it also carries the
 installation's name and, when the installation's farm is OpenPrintHQ with a public address (an installed
-The farm at /apps/farm), each farm item's link to the farm's own page. The list itself is
+The farm at /apps/farm), each farm item's link to the farm's own page. Groups of an optional craft
+(docs/crafts.md) are there only when the installation has that craft on. The list itself is
 frontend/static/nav.json, the file the hub's own sidebar is built from.
 """
 import copy
@@ -49,14 +50,17 @@ def farm_info() -> dict:
     return {"kind": kind, "label": label, "app": app}
 
 
-def resolve(nav: dict, farm: dict) -> dict:
-    """Every item gets "app": "hub" or "farm", and farm items the farm's own link when there is one. Items the
-    list marks "app": "farm" are pages only the farm has (the Farm group): without a link to the farm's own pages
-    they are left out, and so is a group left with no items."""
+def resolve(nav: dict, farm: dict, crafts: list[str] | tuple[str, ...] = ("3d_printing",)) -> dict:
+    """Every item gets its "app": "hub", "farm", or the app the list names (laser), and farm items the farm's own
+    link when there is one. Items the list marks "app": "farm" are pages only the farm has (the Farm group): without
+    a link to the farm's own pages they are left out, and so is a group left with no items. A group with "craft"
+    is left out unless that craft is in crafts."""
     out = copy.deepcopy(nav)
     out.pop("notes", None)
     groups = []
     for g in out["groups"]:
+        if g.get("craft") and g["craft"] not in crafts:
+            continue
         items = []
         for it in g["items"]:
             farm_only = it.get("app") == "farm"
@@ -65,7 +69,7 @@ def resolve(nav: dict, farm: dict) -> dict:
                 it["app"] = "farm"
             elif farm_only:
                 continue
-            else:
+            elif it.get("app") in (None, "hub"):
                 it["app"] = "hub"
             items.append(it)
         if items:
@@ -85,7 +89,8 @@ def nav(request: Request, db: Session = Depends(get_db)):
     if p:
         tenant.set_team(p["team_id"])
     farm = farm_info() if p else {"kind": None, "label": "The farm", "app": None}
-    doc = resolve(load(), farm)
+    from ..services import crafts
+    doc = resolve(load(), farm, crafts.chosen())
     doc["installation"] = (p.get("team_name") if p else None)
     doc["farm"] = farm
     return doc

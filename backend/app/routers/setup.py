@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 from ..auth import need, new_api_key
 from ..db import get_db
 from ..models import Installation, ReachCheck, Team
-from ..services import installation
+from ..services import crafts, installation
 from ..services.teams import slugify
 from ..tenant import unscoped, use_team
 
@@ -48,19 +48,21 @@ class Status(BaseModel):
     api_version: int
     setup_complete: bool
     farm: str | None
+    crafts: list[str]   # the crafts that are on, 3d_printing always among them (docs/crafts.md)
 
 
 @router.get("/status", response_model=Status)
 def status(db: Session = Depends(get_db)) -> Status:
     row = db.get(Installation, 1)
     return Status(api_version=API_VERSION, setup_complete=bool(row and row.setup_completed_at),
-                  farm=row.farm if row else None)
+                  farm=row.farm if row else None, crafts=crafts.enabled(row.crafts if row else None))
 
 
 class InitializeIn(BaseModel):
     farm: Literal["openprinthq"] = "openprinthq"   # the farm, the only farm; kept for older installers
     team_name: str = Field(min_length=1, max_length=120)
     key_name: str = Field(default="OpenPrintHQ installer", min_length=1, max_length=80)
+    crafts: list[str] | None = Field(default=None, max_length=20)   # optional crafts to turn on; 3D printing always is
 
 
 class TeamOut(BaseModel):
@@ -72,14 +74,15 @@ class TeamOut(BaseModel):
 class InitializeOut(BaseModel):
     team: TeamOut
     farm: str
+    crafts: list[str]
     api_key: str
     note: str
 
 
 @router.post("/initialize", response_model=InitializeOut)
 def initialize(body: InitializeIn, request: Request, db: Session = Depends(get_db)) -> InitializeOut:
-    """Choose the installation's farm (invariant 1), name the first team, and mint an API key for whoever runs
-    setup, so they can go on to connect services through the normal API. Works once."""
+    """Choose the installation's farm (invariant 1) and crafts, name the first team, and mint an API key for whoever
+    runs setup, so they can go on to connect services through the normal API. Works once."""
     _limit(request)
     row = db.get(Installation, 1)
     if row is None:
@@ -90,6 +93,11 @@ def initialize(body: InitializeIn, request: Request, db: Session = Depends(get_d
     token = auth[7:].strip() if auth.lower().startswith("bearer ") else ""
     if not token or not installation.token_ok(row, token):
         raise HTTPException(401, "wrong setup token")
+
+    try:
+        picked = crafts.normalise(body.crafts)
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from e
 
     name = body.team_name.strip()
     with unscoped():
@@ -103,11 +111,14 @@ def initialize(body: InitializeIn, request: Request, db: Session = Depends(get_d
         from ..models import ApiKey
         row.installer_key_id = db.execute(select(ApiKey.id).where(ApiKey.prefix == raw.split("_")[1])).scalar()
     row.farm, row.farm_source = body.farm, "setup"
+    if body.crafts is not None:
+        row.crafts = picked
     row.setup_completed_at = datetime.now(timezone.utc)
     row.setup_token_hash = None
     db.commit()
     installation.forget()
-    return InitializeOut(team=TeamOut(id=1, name=name, slug=slug), farm=body.farm, api_key=raw,
+    return InitializeOut(team=TeamOut(id=1, name=name, slug=slug), farm=body.farm,
+                         crafts=crafts.enabled(row.crafts), api_key=raw,
                          note="Shown once. Use as: Authorization: Bearer <key>")
 
 

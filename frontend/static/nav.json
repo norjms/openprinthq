@@ -1,7 +1,7 @@
 {
   "version": 1,
   "product": "OpenPrintHQ",
-  "notes": "The hub's sidebar, one list for the hub and the Farm. href is a path on the hub. Items with farm_path open the installed farm's own page (farm app base + farm_path) when the hub reports one, else the hub's page at href. Items whose app is farm are pages only the farm has: they have no href and are left out unless the installed farm's own pages can be linked. badge names a count in /api/stats; perm is the permission an item needs.",
+  "notes": "The hub's sidebar, one list for the hub and the Farm. href is a path on the hub. Items with farm_path open the installed farm's own page (farm app base + farm_path) when the hub reports one, else the hub's page at href. Items whose app is farm are pages only the farm has: they have no href and are left out unless the installed farm's own pages can be linked. badge names a count in /api/stats; perm is the permission an item needs. A group with craft belongs to an optional craft (docs/crafts.md) and is left out unless the installation has that craft on. Items whose app is laser are the OpenPrintHQ Laser app's pages at /apps/laser, which the installer adds with Laser Crafting.",
   "groups": [
     {
       "label": "Print",
@@ -24,6 +24,28 @@
         { "id": "print-reports", "label": "Print reports", "icon": "file-text", "app": "farm", "farm_path": "/app/reports" },
         { "id": "timelapses", "label": "Timelapses", "icon": "film", "app": "farm", "farm_path": "/app/timelapses" },
         { "id": "farm-settings", "label": "Farm settings", "icon": "cog", "app": "farm", "farm_path": "/app/settings" }
+      ]
+    },
+    {
+      "label": "Laser Crafting",
+      "craft": "laser",
+      "items": [
+        { "id": "laser", "label": "Laser overview", "href": "/crafts/laser", "icon": "laser" },
+        { "id": "laser-convert", "label": "Convert files", "href": "/apps/laser/", "icon": "swap", "app": "laser" }
+      ]
+    },
+    {
+      "label": "Sublimation",
+      "craft": "sublimation",
+      "items": [
+        { "id": "sublimation", "label": "Sublimation tools", "href": "/crafts/sublimation", "icon": "shirt" }
+      ]
+    },
+    {
+      "label": "Graphic Art",
+      "craft": "graphic_art",
+      "items": [
+        { "id": "graphic-art", "label": "Graphic Art tools", "href": "/crafts/graphic-art", "icon": "palette" }
       ]
     },
     {
