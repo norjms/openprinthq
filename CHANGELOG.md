@@ -4,6 +4,9 @@ Notable changes to Artisan Hub. Versions follow the tags of this repository.
 
 ## Unreleased: first public release
 
+- Desktop apps (`docs/apps.md`): the installer tells the hub which slicers and design apps it runs as desktops in a
+  browser tab (`PUT /api/apps/v1`). Each is in its craft's sidebar group, and People gives each to anyone through its
+  group in the user directory, as for OrcaSlicer.
 - Your shop's logo (`docs/brand.md`): upload an SVG or PNG on Settings, Shop and crafts, and the phone app draws it
   in place of the OpenPrintHQ wordmark. Kept in the hub's data folder; unsafe SVGs are refused.
 - Crafts (`docs/crafts.md`): 3D Printing is always on, and Laser Crafting, Sublimation and Graphic Art can be

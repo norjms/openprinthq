@@ -655,6 +655,79 @@ def set_orcaslicer_access(user_id: int, body: OrcaIn, db: Session = Depends(get_
     return {"user_id": u.id, "allowed": body.allowed, "changed": changed}
 
 
+# ---------- Every other desktop app (docs/apps.md): who may open it ----------
+
+
+def _app(app_id: str):
+    """A desktop app the installer told the hub it runs, its group and the LLDAP client; 404 when there is none."""
+    from ..services import apps
+    found = next((a for a in apps.registered() if a["id"] == app_id), None)
+    if found is None or app_id == "orcaslicer":
+        raise HTTPException(404, "This hub doesn't run that app")
+    from ..clients import lldap_api
+    ld = lldap_api.client()
+    if not ld:
+        raise HTTPException(404, "This hub has no user directory to give apps through")
+    return found, apps.group(app_id), ld
+
+
+@router.get("/platform/apps")
+def apps_access(db: Session = Depends(get_db), p: Principal = Depends(need("platform"))):
+    """Who may open each desktop app besides OrcaSlicer: the hub's owners always, and everyone in its group."""
+    from ..services import apps
+    users = list(db.execute(select(User).order_by(User.id)).scalars())
+    owners = [u.id for u in users if u.platform_admin]
+    out = []
+    for a in apps.registered():
+        if a["id"] == "orcaslicer":
+            continue
+        try:
+            _, group, ld = _app(a["id"])
+        except HTTPException:
+            return {"apps": []}  # no user directory: no app can be given to anyone
+        try:
+            emails = {(x.get("email") or "").strip().lower() for x in ld.group_members(group)}
+            error = None
+        except Exception as e:  # noqa: BLE001
+            emails, error = set(), _directory_error(e)
+        allowed = [u.id for u in users if u.platform_admin or (u.email or "").strip().lower() in emails]
+        out.append({**a, "group": group, "owners": owners, "allowed": allowed, "error": error})
+    return {"apps": out}
+
+
+@router.put("/platform/users/{user_id}/apps/{app_id}")
+def set_app_access(user_id: int, app_id: str, body: OrcaIn, db: Session = Depends(get_db),
+                   p: Principal = Depends(need("platform"))):
+    """Give someone a desktop app, or take it away: they join or leave its group. Asking for what is already so
+    changes nothing."""
+    app, group, ld = _app(app_id)
+    u = db.get(User, user_id)
+    if not u:
+        raise HTTPException(404)
+    if u.platform_admin:
+        raise HTTPException(400, f"Hub owners can always open {app['title']}")
+    if not u.email:
+        raise HTTPException(400, f"{u.label} has no email, so their login can't be found")
+    try:
+        login = ld.user_by_email(u.email)
+        if not login:
+            raise HTTPException(400, f"{u.label} has no login in the hub's user directory")
+        has = group in {g.get("displayName") for g in login.get("groups") or []}
+        if body.allowed and not has:
+            ld.add_to_group(login["id"], group)
+        elif has and not body.allowed:
+            ld.remove_from_group(login["id"], group)
+    except HTTPException:
+        raise
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, _directory_error(e))
+    changed = has != body.allowed
+    if changed:
+        event(db, "team", f"{u.label}: {app['title']} {'on' if body.allowed else 'off'}", actor=p.actor)
+        db.commit()
+    return {"user_id": u.id, "app": app_id, "allowed": body.allowed, "changed": changed}
+
+
 @router.post("/platform/users/{user_id}/remove")
 def platform_remove_person(user_id: int, db: Session = Depends(get_db), p: Principal = Depends(need("platform"))):
     """Take someone out of every team and out of the hub-users group. Teams they alone own are kept, ownerless,

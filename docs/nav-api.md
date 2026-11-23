@@ -29,7 +29,7 @@ installed farm's own links.
 | Field | Meaning |
 |---|---|
 | `groups[].items[].href` | Where the item goes. A path on the hub, or for `app: "farm"` the farm's own page. |
-| `app` | Which app serves the page: `hub`, `farm`, or `laser` (OpenPrintHQ Laser at `/apps/laser`). |
+| `app` | Which app serves the page: `hub`, `farm`, `laser` (OpenPrintHQ Laser at `/apps/laser`), or a desktop app's id (`docs/apps.md`). |
 | `farm_path` | The item's page inside the farm (Printers, Cameras, Print queue, Filament, and the Farm group). The hub links there when the installation's farm is OpenPrintHQ with a public address, as an installed farm at `/apps/farm` has; otherwise to its own page at `href`. |
 | `icon` | A stroke icon name from `openprinthq-ui`. |
 | `badge` | The name of a count in `GET /api/stats` shown next to the item when it is not zero. |
@@ -48,5 +48,7 @@ empty, is left out.
 Groups of an optional craft (Laser Crafting, Sublimation, Graphic Art) come after Farm and are in the answer only
 while the installation has that craft on, for everybody, signed in or not. Laser Crafting's Convert files item has
 `"app": "laser"` and `href` `/apps/laser/`, the OpenPrintHQ Laser app the installer adds with Laser Crafting.
+Each desktop app the installer runs (`docs/apps.md`) is an item in its craft's group, after the group's own items,
+with `"app"` its id, `href` `/apps/<id>/`, the icon `tv`, and `"experimental": true` when the installer says so.
 
 The groups and items only change with a new `version` when a field changes meaning; new items may appear at any time.
