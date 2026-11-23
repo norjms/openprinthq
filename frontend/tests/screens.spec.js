@@ -10,7 +10,8 @@ const ROUTES = [
   '/slicing', '/slicing?tab=grid', '/slicing?tab=problems', '/slicing?tab=printers',
   '/orders', '/quotes', '/inventory', '/planner', '/reports',
   '/sync', '/people', '/people?view=hub', '/connections', '/devices',
-  '/settings', '/settings?tab=slicing', '/settings?tab=sites', '/settings?tab=keys',
+  '/settings', '/settings?tab=slicing', '/settings?tab=sites', '/settings?tab=keys', '/settings?tab=crafts',
+  '/crafts/laser', '/crafts/sublimation', '/crafts/graphic-art',
   '/setup', '/invite/not-a-real-invite'
 ];
 const MOVED = { '/team': '/people', '/platform': '/people?view=hub', '/add-on': '/devices', '/tv?code=ABCD1234': '/devices?code=ABCD1234', '/printers': '/slicing?tab=printers' };

@@ -24,27 +24,31 @@ address.
 No authentication.
 
 ```json
-{"api_version": 1, "setup_complete": false, "farm": null}
+{"api_version": 1, "setup_complete": false, "farm": null, "crafts": ["3d_printing"]}
 ```
+
+`crafts` is the crafts that are on, `3d_printing` always among them (`docs/crafts.md`).
 
 ## `POST /api/setup/v1/initialize`
 
 `Authorization: Bearer <setup token>`
 
 ```json
-{"farm": "openprinthq", "team_name": "My workshop", "key_name": "OpenPrintHQ installer"}
+{"farm": "openprinthq", "team_name": "My workshop", "key_name": "OpenPrintHQ installer", "crafts": ["laser"]}
 ```
 
 - `farm`: `openprinthq` (the farm), the only print farm the hub supports; it may be left out. Any other
   value answers 422. See `docs/farm.md`.
 - `team_name`: the first workspace's name.
 - `key_name`: optional; the name the API key shows under in the hub's settings.
+- `crafts`: optional; the optional crafts to turn on: `laser`, `sublimation`, `graphic_art` (`docs/crafts.md`).
+  3D printing is always on. Left out, only 3D printing is on. An unknown craft answers 422 and nothing is set up.
 
 Answer, with the API key shown once:
 
 ```json
 {"team": {"id": 1, "name": "My workshop", "slug": "my-workshop"}, "farm": "openprinthq",
- "api_key": "ahk_...", "note": "Shown once. Use as: Authorization: Bearer <key>"}
+ "crafts": ["3d_printing", "laser"], "api_key": "ahk_...", "note": "Shown once. Use as: Authorization: Bearer <key>"}
 ```
 
 The key has the `read`, `write` and `admin` scopes for the first workspace, which covers connecting outside
@@ -55,7 +59,7 @@ settings when it is no longer needed.
 |---|---|
 | 401 | Missing or wrong setup token |
 | 409 | Setup is already complete |
-| 422 | A field is missing or invalid, such as an unknown farm |
+| 422 | A field is missing or invalid, such as an unknown farm or craft |
 | 429 | Too many attempts from this address; wait a minute |
 | 503 | The hub is still starting |
 

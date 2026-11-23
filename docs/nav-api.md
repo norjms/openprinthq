@@ -29,13 +29,14 @@ installed farm's own links.
 | Field | Meaning |
 |---|---|
 | `groups[].items[].href` | Where the item goes. A path on the hub, or for `app: "farm"` the farm's own page. |
-| `app` | `hub` or `farm`: which app serves the page. |
+| `app` | Which app serves the page: `hub`, `farm`, or `laser` (OpenPrintHQ Laser at `/apps/laser`). |
 | `farm_path` | The item's page inside the farm (Printers, Cameras, Print queue, Filament, and the Farm group). The hub links there when the installation's farm is OpenPrintHQ with a public address, as an installed farm at `/apps/farm` has; otherwise to its own page at `href`. |
 | `icon` | A stroke icon name from `openprinthq-ui`. |
 | `badge` | The name of a count in `GET /api/stats` shown next to the item when it is not zero. |
 | `perm` | The permission the item needs; leave the item out for people without it. |
 | `match` | Older paths that also count as this item's page. |
 | `installation` | The installation's name, or `null` when the caller is not signed in. |
+| `groups[].craft` | The optional craft the group belongs to (`docs/crafts.md`). Groups without it are always there. |
 | `farm` | The installation's farm: `kind` (`openprinthq`, or `null` before first-run setup), a display `label`, and `app`, the farm's own address or `null`. |
 
 The **Farm** group, after Print, holds the pages only the farm has: Files, Slicer, Projects, Statistics, Print
@@ -43,5 +44,9 @@ reports, Timelapses and Farm settings. In `nav.json` its items carry `"app": "fa
 The answer has the group only under the same rule as the Print group's farm links: signed in, with the installation's
 farm OpenPrintHQ with a public address (an installed farm). Otherwise the group, and any group left
 empty, is left out.
+
+Groups of an optional craft (Laser Crafting, Sublimation, Graphic Art) come after Farm and are in the answer only
+while the installation has that craft on, for everybody, signed in or not. Laser Crafting's Convert files item has
+`"app": "laser"` and `href` `/apps/laser/`, the OpenPrintHQ Laser app the installer adds with Laser Crafting.
 
 The groups and items only change with a new `version` when a field changes meaning; new items may appear at any time.

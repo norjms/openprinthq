@@ -36,9 +36,9 @@ def _set(**fields):
 def new_install():
     """The installation as a brand-new hub sees it: no farm, setup not done, a generated setup token."""
     s, row = _row()
-    saved = {k: getattr(row, k) for k in ("farm", "farm_source", "setup_completed_at", "setup_token_hash")}
+    saved = {k: getattr(row, k) for k in ("farm", "farm_source", "setup_completed_at", "setup_token_hash", "crafts")}
     s.close()
-    _set(farm=None, farm_source=None, setup_completed_at=None, setup_token_hash=hashlib.sha256(TOKEN.encode()).hexdigest())
+    _set(farm=None, farm_source=None, setup_completed_at=None, setup_token_hash=hashlib.sha256(TOKEN.encode()).hexdigest(), crafts=None)
     yield
     _set(**saved)
 
@@ -51,7 +51,7 @@ def client():
 
 def test_status_before_setup(new_install, client):
     body = client.get("/api/setup/v1/status").json()
-    assert body == {"api_version": 1, "setup_complete": False, "farm": None}
+    assert body == {"api_version": 1, "setup_complete": False, "farm": None, "crafts": ["3d_printing"]}
 
 
 def test_a_new_install_has_no_farm_until_setup_chooses_one(new_install):
@@ -92,7 +92,8 @@ def test_setup_chooses_the_farm_names_the_team_and_mints_a_key_once(new_install,
     assert re.fullmatch(r"ahk_[0-9a-f]{8}_\S+", body["api_key"])
 
     assert farm_kind() == "openprinthq"
-    assert client.get("/api/setup/v1/status").json() == {"api_version": 1, "setup_complete": True, "farm": "openprinthq"}
+    assert client.get("/api/setup/v1/status").json() == {"api_version": 1, "setup_complete": True, "farm": "openprinthq",
+                                                         "crafts": ["3d_printing"]}
     s = SessionLocal()
     try:
         with unscoped():

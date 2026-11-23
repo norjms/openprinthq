@@ -4,6 +4,11 @@ Notable changes to Artisan Hub. Versions follow the tags of this repository.
 
 ## Unreleased: first public release
 
+- Crafts (`docs/crafts.md`): 3D Printing is always on, and Laser Crafting, Sublimation and Graphic Art can be
+  turned on for the installation, at first-run setup (`crafts` in `POST /api/setup/v1/initialize`), on Settings,
+  Crafts, or with `PUT /api/crafts/v1`. A craft that is off is left out of the sidebar. Laser Crafting links to
+  OpenPrintHQ Laser at `/apps/laser`, which the installer adds; Sublimation and Graphic Art have pages saying their
+  tools are coming. Uses `openprinthq-ui` 0.3.0 for the new icons.
 - First public release of Artisan Hub under the GNU AGPL-3.0.
 - Shopify and Etsy beside WooCommerce (`docs/stores.md`): push products, one shared stock pool, orders in from
   webhooks and a regular check, and Mark shipped to fulfil an order in its store. Each product can be kept off a
