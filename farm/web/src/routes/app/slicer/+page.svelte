@@ -12,12 +12,12 @@
   let presetCats = $state([]);
   let connected = $state(false);
 
-  // OpenPrintHQ Farm has one slicer, OrcaSlicer. The slicing service runs its
-  // command line; when the OpenPrintHQ installer added the OrcaSlicer desktop,
-  // the same version runs in the browser too, and info.desktop_url says where.
+  // OpenPrintHQ Farm has one slicer, OrcaSlicer, run headless: the slicing
+  // service runs its command line. This page is that service and its settings:
+  // how slicers send to the queue. When the installer added the OrcaSlicer
+  // desktop (info.desktop_url), it opens in the hub, from the sidebar.
   let info = $state({ version: null, desktop_url: null, print_host: null, desktop_print_host: null, print_host_keys: 0,
                       addon: null, desktop: null });
-  let full = $state(false);
   let keyBusy = $state(false);
   let keyError = $state(null);
   let newKey = $state(null);
@@ -79,51 +79,15 @@
     try { return new Date(at).toLocaleString(); } catch { return at; }
   }
 
-  function onKey(e) { if (e.key === 'Escape') full = false; }
+  // The OrcaSlicer desktop itself is the hub's page for it, from the sidebar (the hub's docs/apps.md).
+  const DESKTOP_PAGE = '/open/orcaslicer';
 
-  // The desktop in a window of its own (B49): moved there, not copied, as the desktop takes one screen at a
-  // time. The page shows it again when that window closes.
-  let popup = null;
-  let popped = $state(false);
-  let watchPopup = null;
-  function popOut() {
-    const w = Math.min(1600, window.screen?.availWidth || 1600);
-    const h = Math.min(1000, window.screen?.availHeight || 1000);
-    popup = window.open(info.desktop_url, 'openprinthq-orcaslicer', `popup=yes,width=${w},height=${h}`);
-    if (!popup) return; // a pop-up blocker: the page keeps it
-    popped = true; full = false;
-    clearInterval(watchPopup);
-    watchPopup = setInterval(() => { if (!popup || popup.closed) { popped = false; clearInterval(watchPopup); } }, 1000);
-  }
-  function bringBack() { try { popup?.close(); } catch { /* */ } popped = false; clearInterval(watchPopup); }
-
-  // Its height on the page, dragged at its bottom edge, kept for next time in this browser.
-  let frameHeight = $state(null);
-  const HEIGHT_KEY = 'ahi.slicer.desktopHeight';
-  function rememberHeight(el) {
-    try { const h = Number(localStorage.getItem(HEIGHT_KEY)); if (h >= 320) frameHeight = h; } catch { /* */ }
-    const seen = new ResizeObserver(() => {
-      if (full || !el.offsetHeight) return;
-      try { localStorage.setItem(HEIGHT_KEY, String(el.offsetHeight)); } catch { /* */ }
-    });
-    seen.observe(el);
-    return { destroy: () => seen.disconnect() };
-  }
-
-  // Sent from a file's "Open in OrcaSlicer" (B49): say so while the desktop opens it.
-  let sent = $state('');
-
-  onMount(() => {
-    try { sent = new URLSearchParams(window.location.search).get('sent') || ''; } catch { /* */ }
-    load();
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  });
+  onMount(load);
 </script>
 
 <PageTitle page="Slicer" />
 
-<PageHead title="Slicer" description="OrcaSlicer{info.version ? ' ' + info.version : ''}, built in: slice on the server, no desktop app needed.">
+<PageHead title="Slicer" description="OrcaSlicer{info.version ? ' ' + info.version : ''} on the server: the farm slices with it, no desktop app needed. Here are its settings and how slicers send to the queue.">
   {#snippet actions()}
     <button class="btn" onclick={load}><Icon name="refresh" size={16} />Refresh</button>
   {/snippet}
@@ -136,37 +100,6 @@
 {:else if error}
   <div class="card card-pad"><h3>Slicer unreachable</h3><p class="muted">{error}</p><button class="btn btn-ghost btn-sm" onclick={load}>Retry</button></div>
 {:else}
-  {#if info.desktop_url}
-    <div class="card workspace" class:full>
-      <div class="wsbar">
-        <div class="flex center gap">
-          <span class="dot on"></span>
-          <b>OrcaSlicer desktop</b>
-          {#if info.version}<span class="muted small">{info.version}</span>{/if}
-        </div>
-        <div class="flex center gap">
-          {#if popped}
-            <button class="btn btn-ghost btn-sm" onclick={bringBack}><Icon name="back" size={15} />Bring it back here</button>
-          {:else}
-            <button class="btn btn-ghost btn-sm" onclick={popOut} data-testid="pop-out"><Icon name="external" size={15} />Pop out</button>
-            <a class="btn btn-ghost btn-sm" href={info.desktop_url} target="_blank" rel="noopener"><Icon name="external" size={15} />Open in a new tab</a>
-            <button class="btn btn-ghost btn-sm" onclick={() => (full = !full)}><Icon name="expand" size={15} />{full ? 'Exit full screen' : 'Full screen'}</button>
-          {/if}
-        </div>
-      </div>
-      {#if sent}
-        <p class="sent muted small" data-testid="desktop-sent">Opening <b>{sent}</b> in OrcaSlicer. It also stays in Files, From the farm.</p>
-      {/if}
-      {#if popped}
-        <p class="popped muted">OrcaSlicer is open in its own window. Resize it as you like; close it to have it here again.</p>
-      {:else}
-        <div class="frame" use:rememberHeight style={frameHeight && !full ? `height:${frameHeight}px` : ''} data-testid="desktop-frame">
-          <iframe title="OrcaSlicer desktop" src={info.desktop_url} allow="clipboard-read; clipboard-write; fullscreen"></iframe>
-        </div>
-      {/if}
-    </div>
-  {/if}
-
   <div class="card card-pad status">
     <div class="flex between center">
       <div class="flex center gap">
@@ -184,8 +117,8 @@
     <div class="card card-pad send" data-testid="desktop-queue">
       <span class="eyebrow">Print from OrcaSlicer in the browser</span>
       {#if info.desktop.pending}
-        <p><b>Almost connected.</b> Close OrcaSlicer in the desktop above (File, Quit): it opens again, connected to
-          your <a href="{basePath}/app/queue">print queue</a>.</p>
+        <p><b>Almost connected.</b> Close OrcaSlicer in <a href={DESKTOP_PAGE} data-sveltekit-reload>its desktop</a> (File, Quit): it opens
+          again, connected to your <a href="{basePath}/app/queue">print queue</a>.</p>
       {:else if info.desktop.connected}
         <p><b>Connected</b>{info.desktop.at ? ' since ' + when(info.desktop.at) : ''}. In OrcaSlicer, choose a printer
           ending in "OpenPrintHQ Farm", slice, then <b>Print</b> puts the plate first in line on that printer and
@@ -210,9 +143,14 @@
           the queue: reorder, cancel and printer controls stay here.</p>
       {/if}
       {#if connectError}<p class="muted">{connectError}</p>{/if}
-      <button class="btn btn-sm" onclick={connectDesktop} disabled={connectBusy} data-testid="desktop-connect">
-        <Icon name="link" size={15} />{connectBusy ? 'Connecting' : (info.desktop.connected || info.desktop.pending ? 'Connect again' : 'Connect it')}
-      </button>
+      <div class="flex center gap wrap">
+        <button class="btn btn-sm" onclick={connectDesktop} disabled={connectBusy} data-testid="desktop-connect">
+          <Icon name="link" size={15} />{connectBusy ? 'Connecting' : (info.desktop.connected || info.desktop.pending ? 'Connect again' : 'Connect it')}
+        </button>
+        {#if info.desktop_url}
+          <a class="btn btn-ghost btn-sm" href={DESKTOP_PAGE} data-sveltekit-reload data-testid="desktop-open"><Icon name="external" size={15} />Open OrcaSlicer</a>
+        {/if}
+      </div>
     </div>
   {/if}
 
@@ -291,15 +229,7 @@
 {/if}
 
 <style>
-  .workspace { margin-bottom: 1.2rem; overflow: hidden; }
   .wsbar { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; padding: 0.7rem 1rem; border-bottom: 1px solid var(--ah-row-line); }
-  /* Drag the bottom right corner to change its height (B49); the desktop fits itself to the new size. */
-  .workspace .frame { height: 72vh; min-height: 320px; max-height: 2400px; resize: vertical; overflow: hidden; }
-  .workspace iframe { display: block; width: 100%; height: 100%; border: 0; background: var(--ah-solid-panel); }
-  .workspace.full { position: fixed; inset: 0; z-index: 200; margin: 0; border-radius: 0; display: flex; flex-direction: column; }
-  .workspace.full .frame { flex: 1; height: auto !important; min-height: 0; resize: none; }
-  .workspace .popped { padding: 1.4rem 1rem; margin: 0; }
-  .workspace .sent { padding: 0.5rem 1rem 0; margin: 0; }
   .send { margin-bottom: 1.2rem; }
   .send p { margin: 0.4rem 0; }
   .send code { font-family: var(--ah-font-mono); font-size: 0.88em; padding: 0.1rem 0.35rem;

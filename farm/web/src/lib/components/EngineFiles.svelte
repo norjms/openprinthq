@@ -1,6 +1,5 @@
 <script>
   import { base as basePath } from '$app/paths';
-  import { goto } from '$app/navigation';
   import Icon from '$lib/components/AppIcon.svelte';
   import PageHead from '$lib/components/PageHead.svelte';
   import { onMount } from 'svelte';
@@ -288,7 +287,8 @@
   function closeSlice() { sliceFile = null; }
 
   // Open in OrcaSlicer (B49): the file goes to the person's OrcaSlicer desktop, which opens it, and the page
-  // goes to the desktop. Offered when the installer added the desktop.
+  // goes to the desktop: the hub's page for it (the hub's docs/apps.md), which names the file while it opens.
+  // Offered when the installer added the desktop.
   let desktopOpen = $state(false);
   let opening = $state(false);
   onMount(async () => {
@@ -300,7 +300,7 @@
       const r = await api.desktopOpen(sliceFile.id, sliceFile.name);
       const name = r?.sent || sliceFile.name;
       closeSlice();
-      goto(basePath + '/app/slicer?sent=' + encodeURIComponent(name));
+      window.location.href = '/open/orcaslicer?sent=' + encodeURIComponent(name);
     } catch (e) { sliceErr = e.message || 'could not send it to OrcaSlicer'; }
     finally { opening = false; }
   }
