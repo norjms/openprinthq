@@ -51,9 +51,11 @@ def farm_info() -> dict:
 
 
 def _app_items(apps: list[dict], craft: str) -> list[dict]:
-    """The sidebar's items for the desktop apps of one craft (docs/apps.md), each opening its desktop."""
-    return [{"id": f"app-{a['id']}", "label": a["title"], "href": f"{a['path']}/", "icon": "tv", "app": a["id"],
-             "desktop": True, **({"experimental": True} if a.get("experimental") else {})}
+    """The sidebar's items for the desktop apps of one craft (docs/apps.md). Each opens the hub's page for it,
+    /open/<id>, which shows the desktop at "frame" (the app's own address) inside the hub, with Pop out, Open in a
+    new tab and Full screen."""
+    return [{"id": f"app-{a['id']}", "label": a["title"], "href": f"/open/{a['id']}", "icon": "tv", "app": "hub",
+             "frame": f"{a['path']}/", **({"experimental": True} if a.get("experimental") else {})}
             for a in apps if a["craft"] == craft]
 
 
@@ -85,8 +87,6 @@ def resolve(nav: dict, farm: dict, crafts: list[str] | tuple[str, ...] = ("3d_pr
                 continue
             elif it.get("app") in (None, "hub"):
                 it["app"] = "hub"
-            elif it.get("desktop"):
-                it.pop("desktop")
             items.append(it)
         if items:
             groups.append({**g, "items": items})
