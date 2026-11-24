@@ -27,6 +27,9 @@ The item opens the hub's page for the app, `/open/<id>`: the hub's sidebar and h
 until it closes), Open in a new tab, and Full screen (Escape leaves it). Its height can be dragged and is kept for
 each app in that browser. `"experimental": true` marks an app the installer still calls experimental. A file the
 farm sends to OrcaSlicer opens this page with `?sent=<file name>`, which it names while the desktop opens it.
+A tab left in the background lets go of the desktop after 30 seconds and connects again when it is in front,
+so the installer can park the desktop while nobody looks at it (its app paused as it is, its memory free for
+the rest of the machine) and wake it when someone does.
 
 ## Who may open them
 

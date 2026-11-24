@@ -18,6 +18,18 @@
   let full = $state(false);
   function onKey(e) { if (e.key === 'Escape') full = false; }
 
+  // A tab in the background lets go of its desktop after RELEASE_MS, so the installer can park it (its app
+  // paused, its memory free for the rest of the machine) until someone looks at it again; back in front, the
+  // page connects again and the desktop wakes. A popped-out window keeps it.
+  const RELEASE_MS = 30_000;
+  let away = $state(false);
+  let releasing = null;
+  function onVisibility() {
+    clearTimeout(releasing);
+    if (document.visibilityState === 'hidden') releasing = setTimeout(() => (away = true), RELEASE_MS);
+    else away = false;
+  }
+
   // The desktop in a window of its own: moved there, not copied, as a desktop shows on one screen at a time. The
   // page shows it again when that window closes.
   let popup = null;
@@ -50,7 +62,12 @@
   onMount(() => {
     const t = setTimeout(() => (loaded = true), 3000);
     window.addEventListener('keydown', onKey);
-    return () => { clearTimeout(t); clearInterval(watch); window.removeEventListener('keydown', onKey); };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      clearTimeout(t); clearTimeout(releasing); clearInterval(watch);
+      window.removeEventListener('keydown', onKey);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   });
   $effect(() => { if (item) loaded = true; });
 </script>
@@ -79,6 +96,9 @@
       {/if}
       {#if popped}
         <p class="note ah-muted">{item.label} is open in its own window. Resize it as you like; close it to have it here again.</p>
+      {:else if away}
+        <p class="note ah-muted" data-testid="app-away">{item.label} is paused while this tab is in the background,
+          exactly as you left it. It comes back when you return to this tab.</p>
       {:else}
         <div class="frame" use:rememberHeight style={height && !full ? `height:${height}px` : ''} data-testid="app-frame">
           <iframe title={item.label} src={item.frame} allow="clipboard-read; clipboard-write; fullscreen"></iframe>

@@ -54,3 +54,21 @@ test('an app this hub does not run says so', async ({ page }) => {
   await page.goto('/open/nothing', { waitUntil: 'networkidle' });
   await expect(page.getByText('This hub has no app called nothing')).toBeVisible({ timeout: 6000 });
 });
+
+test('a tab in the background lets go of the desktop, and connects again when it is back', async ({ page }) => {
+  await page.clock.install();
+  await page.goto('/open/bambustudio', { waitUntil: 'networkidle' });
+  await expect(page.getByTestId('app-frame')).toBeVisible();
+  const hide = (state) => page.evaluate((s) => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => s });
+    document.dispatchEvent(new Event('visibilitychange'));
+  }, state);
+  await hide('hidden');
+  await page.clock.fastForward(20_000);
+  await expect(page.getByTestId('app-frame')).toBeVisible();
+  await page.clock.fastForward(11_000);
+  await expect(page.getByTestId('app-away')).toBeVisible();
+  await expect(page.getByTestId('app-frame')).toHaveCount(0);
+  await hide('visible');
+  await expect(page.frameLocator('[data-testid="app-frame"] iframe').getByText('the desktop')).toBeVisible();
+});
