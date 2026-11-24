@@ -57,13 +57,15 @@ def test_apps_03_each_app_is_in_its_crafts_sidebar_group(client):
     _set(apps=[BAMBU, XTOOL])
     groups = {g["label"]: g["items"] for g in client.get("/api/nav/v1", headers=_key()).json()["groups"]}
     item = groups["Print"][-1]
-    assert item == {"id": "app-bambustudio", "label": "Bambu Studio", "href": "/apps/bambustudio/", "icon": "tv",
-                    "app": "bambustudio"}
+    # It opens the hub's page for the app, which shows its desktop inside the hub.
+    assert item == {"id": "app-bambustudio", "label": "Bambu Studio", "href": "/open/bambustudio", "icon": "tv",
+                    "app": "hub", "frame": "/apps/bambustudio/"}
     assert "Laser Crafting" not in groups
     _set(crafts=["laser"])
     groups = {g["label"]: g["items"] for g in client.get("/api/nav/v1", headers=_key()).json()["groups"]}
     xtool = groups["Laser Crafting"][-1]
-    assert xtool["href"] == "/apps/xtoolstudio/" and xtool["experimental"] is True
+    assert xtool["href"] == "/open/xtoolstudio" and xtool["frame"] == "/apps/xtoolstudio/"
+    assert xtool["experimental"] is True
 
 
 def test_apps_04_the_owner_gives_an_app_on_people(orca, real_auth):  # noqa: F811

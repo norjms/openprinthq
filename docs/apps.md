@@ -22,8 +22,11 @@ Each `id` is lower-case letters and digits, named once; `craft` is one of the cr
 
 Each app is an item in its craft's sidebar group (`GET /api/nav/v1`, `docs/nav-api.md`), after the group's own
 items: a 3D printing app in the Print group, another craft's in that craft's group, so only while the craft is on.
-The item opens `/apps/<id>/`, the app's own page (`"app": "<id>"`), with `"experimental": true` for an app the
-installer still calls experimental.
+The item opens the hub's page for the app, `/open/<id>`: the hub's sidebar and header stay, and the app's desktop
+(`/apps/<id>/`, the item's `frame`) is shown below a bar with its name and Pop out (a window of its own, moved there
+until it closes), Open in a new tab, and Full screen (Escape leaves it). Its height can be dragged and is kept for
+each app in that browser. `"experimental": true` marks an app the installer still calls experimental. A file the
+farm sends to OrcaSlicer opens this page with `?sent=<file name>`, which it names while the desktop opens it.
 
 ## Who may open them
 
