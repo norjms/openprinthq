@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" fill="none" role="img" aria-label="OpenPrintHQ">
+  <rect width="64" height="64" rx="14" fill="#8fd3ff"/>
+  <path d="M32 10 L50 20 V44 L32 54 L14 44 V20 Z" stroke="#1d2a34" stroke-width="3" stroke-linejoin="round"/>
+  <rect x="22" y="38" width="20" height="4" rx="1.5" fill="#1d2a34"/>
+  <rect x="24.5" y="31" width="15" height="4" rx="1.5" fill="#1d2a34"/>
+  <rect x="27" y="24" width="10" height="4" rx="1.5" fill="#1d2a34" opacity="0.75"/>
+</svg>

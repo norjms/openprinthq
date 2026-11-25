@@ -1,0 +1,22 @@
+name: name-check
+
+# The product is OpenPrintHQ. This fails (or, in report mode, counts) where its old name is still written,
+# outside the names that must stay: see .name-check.json and tools/name_check.py.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  name-check:
+    name: name check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Self-test
+        run: python3 tools/name_check.py --self-test
+      - name: Old name
+        run: python3 tools/name_check.py
