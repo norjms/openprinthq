@@ -58,7 +58,9 @@ services:
     depends_on: [postgres, engine]
 
   engine:
-    image: ${OPHQ_ENGINE_IMAGE:-ghcr.io/norjms/openprinthq-engine:prod}
+    # The engine the OpenPrintHQ installer pins (OPHQ_ENGINE_IMAGE in the installer's components.py); move
+    # this with it. The registry's old :prod tag is a stale build and is not published any more.
+    image: ${OPHQ_ENGINE_IMAGE:-ghcr.io/norjms/openprinthq-engine:sha-9761863}
     restart: unless-stopped
     environment:
       - PORT=8000
