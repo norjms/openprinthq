@@ -1,0 +1,278 @@
+/*
+ * OpenPrintHQ styles
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * The look comes from openprinthq-ui ("glass over a live feed"): its design
+ * values (--ah-*), its base classes (ah-*) and its fonts. This file maps the
+ * app's own --ophq-* names onto those values, so every component keeps its
+ * variable names and takes the shared look, and styles the app's own classes
+ * (.card, .btn, .chip, .input) the same way as the shared ones.
+ *
+ * One theme, glass-dark, selected by data-theme on <html>. Transparency follows
+ * the device's "reduce transparency" setting unless the user chose otherwise
+ * (data-transparency="on" or "off"); off swaps glass for solid panels.
+ * data-a11y-* attributes on <html> toggle the accessibility behaviours below.
+ */
+@import 'openprinthq-ui/fonts.css';
+@import 'openprinthq-ui/theme.css';
+@import 'openprinthq-ui/base.css';
+
+/* ---- the app's names for the shared values ------------------------------ */
+:root {
+  --font-ui: var(--ah-font-sans);
+  --font-display: var(--ah-font-display);
+  --font-mono: var(--ah-font-mono);
+
+  --radius: var(--ah-radius-choice);
+  --radius-sm: var(--ah-radius-btn-sm);
+  --radius-lg: var(--ah-radius-card);
+  --maxw: 1200px;
+
+  /* global text-size scale (Settings, Appearance, text size). 1 = 100%. */
+  --ophq-text-scale: 1;
+
+  --ophq-bg: var(--ah-page);
+  --ophq-bg-2: var(--ah-panel);
+  --ophq-surface: var(--ah-glass);
+  --ophq-surface-2: var(--ah-glass);
+  --ophq-surface-3: var(--ah-segment);
+  --ophq-border: var(--ah-glass-line);
+  --ophq-border-soft: var(--ah-row-line);
+
+  --ophq-primary: var(--ah-accent);
+  --ophq-primary-2: var(--ah-link);
+  --ophq-primary-dim: var(--ah-chip-live-bg);
+  --ophq-on-primary: var(--ah-on-accent);
+  /* Attention orange (#ffb38a) is for bars and marks; as text it uses its light tint to pass 4.5:1. */
+  --ophq-accent: var(--ah-chip-warn-text);
+  --ophq-success: var(--ah-success-2);
+  --ophq-ok: var(--ah-success-2);
+  --ophq-warn: var(--ah-chip-warn-text);
+  --ophq-warning: var(--ah-chip-warn-text);
+  /* Failure red (#e66767) is too dark for text on glass; text uses its light tint. */
+  --ophq-danger: var(--ah-chip-bad-text);
+  --ophq-err: var(--ah-chip-bad-text);
+  --ophq-info: var(--ah-accent);
+
+  --ophq-text: var(--ah-text);
+  --ophq-text-2: var(--ah-text-2);
+  --ophq-muted: var(--ah-text-3);
+  --ophq-faint: var(--ah-text-3);
+
+  --ophq-glass: var(--ah-glass);
+  --ophq-shadow: none;
+  --ophq-shadow-glow: none;
+  --shadow: none;
+  --shadow-glow: none;
+  --ophq-tooltip-bg: var(--ah-solid-panel);
+  --ophq-tooltip-fg: var(--ah-text);
+}
+
+* { box-sizing: border-box; }
+
+/* Global text-size scaling: all rem-based sizing follows this root. */
+html {
+  font-size: calc(16px * var(--ophq-text-scale, 1));
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--ah-page);
+  color: var(--ah-text);
+  font-family: var(--ah-font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+body { min-height: 100vh; background: var(--ah-page-gradient) fixed, var(--ah-page); }
+
+a { color: var(--ah-link); text-decoration: none; text-underline-offset: 2px; }
+a:hover { color: var(--ah-text); }
+
+h1, h2, h3, h4 { line-height: 1.2; margin: 0 0 0.4em; font-weight: 600; color: var(--ah-text); }
+h1 { font-family: var(--ah-font-display); font-weight: 500; letter-spacing: -0.03em; font-size: clamp(24px, 3vh, 40px); line-height: 1.1; }
+h2 { font-size: 20px; }
+h3 { font-size: 17px; }
+h4 { font-size: 15px; }
+p { color: var(--ah-text-2); }
+
+.mono { font-family: var(--ah-font-mono); }
+/* JetBrains Mono is for code and G-code. Numbers and meta lines marked .mono
+   read in the UI font with even-width digits; code, inputs and consoles keep
+   the monospace face. */
+.ah-root .mono:not(input):not(textarea):not(pre):not(code) { font-family: var(--ah-font-sans); font-variant-numeric: tabular-nums; }
+.ah-root code, .ah-root pre, .ah-root .code, .ah-root .code .mono { font-family: var(--ah-font-mono); }
+.muted { color: var(--ah-text-3); }
+.container { width: 100%; max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
+
+/* ---- buttons (the app's names, the shared look) ---- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  font: 600 14px var(--ah-font-sans); height: 38px; padding: 0 16px;
+  border-radius: var(--ah-radius-btn); border: 1px solid var(--ah-field-line);
+  background: var(--ah-glass); color: var(--ah-text);
+  cursor: pointer; text-decoration: none; white-space: nowrap;
+}
+.btn:hover { color: var(--ah-text); border-color: rgba(255, 255, 255, 0.4); }
+.btn:disabled, .btn[aria-disabled='true'] { opacity: 0.55; cursor: not-allowed; }
+.btn-primary, a.btn-primary { background: var(--ah-accent); border-color: var(--ah-accent); color: var(--ah-on-accent); }
+.btn-primary:hover, a.btn-primary:hover { color: var(--ah-on-accent); filter: brightness(1.06); }
+.btn-ghost { background: transparent; border-color: rgba(255, 255, 255, 0.25); color: var(--ah-text); }
+.btn-danger { background: var(--ah-danger-bg); border-color: var(--ah-chip-bad-line); color: var(--ah-chip-bad-text); }
+.btn-danger:hover { color: var(--ah-chip-bad-text); }
+/* Inside the shell, links styled as buttons keep the button's colours. */
+.ah-root a.btn, .ah-root a.btn:hover { color: var(--ah-text); }
+.ah-root a.btn-primary, .ah-root a.btn-primary:hover { color: var(--ah-on-accent); }
+.ah-root a.btn-danger, .ah-root a.btn-danger:hover { color: var(--ah-chip-bad-text); }
+.ah-root a.chip { text-decoration: none; }
+.btn-xs { height: 28px; padding: 0 10px; border-radius: 8px; font-size: 12px; }
+.btn-sm { height: 32px; padding: 0 12px; border-radius: var(--ah-radius-btn-sm); font-size: 13px; }
+
+/* ---- cards are glass ---- */
+.card {
+  background: var(--ah-glass);
+  border: 1px solid var(--ah-glass-line);
+  border-radius: var(--ah-radius-card);
+  backdrop-filter: var(--ah-blur);
+  -webkit-backdrop-filter: var(--ah-blur);
+  min-width: 0;
+}
+.card .card { background: var(--ah-panel); border-color: var(--ah-panel-line); border-radius: var(--ah-radius-choice); backdrop-filter: none; -webkit-backdrop-filter: none; }
+.card-pad { padding: var(--ah-card-pad) clamp(14px, 1.6vh, 22px); }
+
+/* ---- chips: every tint sits on the dark underlay so its text passes ---- */
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 500; line-height: 18px; padding: 2px 9px;
+  border-radius: var(--ah-radius-pill); border: 1px solid var(--ah-field-line);
+  color: var(--ah-text);
+  background: linear-gradient(var(--ah-chip-neutral-bg), var(--ah-chip-neutral-bg)), var(--ah-chip-underlay);
+  white-space: nowrap;
+}
+.chip.primary, .chip.live, .chip.info { background: linear-gradient(var(--ah-chip-live-bg), var(--ah-chip-live-bg)), var(--ah-chip-underlay); border-color: var(--ah-chip-live-line); color: var(--ah-chip-live-text); }
+.chip.ok, .chip.success { background: linear-gradient(var(--ah-chip-ok-bg), var(--ah-chip-ok-bg)), var(--ah-chip-underlay); border-color: var(--ah-chip-ok-line); color: var(--ah-chip-ok-text); }
+.chip.accent, .chip.warn { background: linear-gradient(var(--ah-chip-warn-bg), var(--ah-chip-warn-bg)), var(--ah-chip-underlay); border-color: var(--ah-chip-warn-line); color: var(--ah-chip-warn-text); }
+.chip.danger, .chip.bad, .chip.err { background: linear-gradient(var(--ah-chip-bad-bg), var(--ah-chip-bad-bg)), var(--ah-chip-underlay); border-color: var(--ah-chip-bad-line); color: var(--ah-chip-bad-text); }
+
+/* ---- forms ---- */
+.input, .field input, .field select, .field textarea, select.input, textarea.input {
+  width: 100%; min-height: 38px; background: var(--ah-field); border: 1px solid var(--ah-field-line);
+  color: var(--ah-text); border-radius: var(--ah-radius-btn-sm); padding: 0 12px;
+  font: 14px var(--ah-font-sans);
+}
+textarea.input, .field textarea { padding: 8px 12px; }
+.input:focus, .field input:focus, .field select:focus, .field textarea:focus { outline: none; box-shadow: var(--ah-focus); }
+.field { margin-bottom: 1rem; }
+.field label { display: block; font-size: 12px; color: var(--ah-text-2); margin-bottom: 6px; font-weight: 500; }
+input, select, textarea, button { font-family: inherit; }
+select option { background: var(--ah-solid-panel); color: var(--ah-text); }
+
+/* ---- utility ---- */
+.grid { display: grid; gap: 14px; }
+.flex { display: flex; }
+.between { justify-content: space-between; align-items: center; }
+.center { align-items: center; }
+.gap { gap: 1rem; }
+.stack > * + * { margin-top: 14px; }
+.eyebrow { text-transform: uppercase; letter-spacing: 0.12em; font-size: 12px; font-weight: 600; color: var(--ah-group-label); }
+.divider { height: 1px; background: var(--ah-row-line); border: 0; margin: 1.5rem 0; }
+.num { font-variant-numeric: tabular-nums; }
+.big { font-family: var(--ah-font-display); font-weight: 500; letter-spacing: -0.03em; font-size: 34px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+
+/* Scrollbars stay thin on glass. */
+* { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.25) transparent; }
+
+/* ---- accessibility behaviours (toggled by data-a11y-* on <html>) --------- */
+:focus-visible { outline: none; box-shadow: var(--ah-focus); border-radius: 4px; }
+[data-a11y-underline='on'] a { text-decoration: underline; }
+[data-a11y-underline='on'] .btn, [data-a11y-underline='on'] .ah-nav { text-decoration: none; }
+[data-a11y-focus='strong'] :focus-visible {
+  outline: 3px solid var(--ah-attention);
+  outline-offset: 3px;
+}
+[data-a11y-targets='large'] .btn,
+[data-a11y-targets='large'] button,
+[data-a11y-targets='large'] .ah-nav,
+[data-a11y-targets='large'] select,
+[data-a11y-targets='large'] .input { min-height: 44px; }
+[data-a11y-font='legible'] {
+  --ah-font-sans: 'Atkinson Hyperlegible', 'Verdana', 'Tahoma', system-ui, sans-serif;
+  --font-ui: var(--ah-font-sans);
+  letter-spacing: 0.01em;
+}
+[data-a11y-motion='reduce'] *,
+[data-a11y-motion='reduce'] *::before,
+[data-a11y-motion='reduce'] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+.sr-only {
+  position: absolute !important; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0);
+  white-space: nowrap; border: 0;
+}
+
+/* ---- instant tooltips (data-tip) ----------------------------------------- */
+/* The bubble is in the CSSOM from page load, so it shows with no delay on hover
+   and on keyboard focus. Pair every data-tip with an aria-label or visible text. */
+[data-tip] { position: relative; }
+[data-tip]::after,
+[data-tip]::before {
+  position: absolute;
+  left: 50%;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  z-index: 70;
+  transition: none;
+}
+[data-tip]::after {
+  content: attr(data-tip);
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
+  background: var(--ophq-tooltip-bg);
+  color: var(--ophq-tooltip-fg);
+  border: 1px solid var(--ah-glass-line);
+  padding: 5px 9px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+  max-width: 16rem;
+}
+[data-tip]::before {
+  content: '';
+  bottom: calc(100% + 3px);
+  transform: translateX(-50%) rotate(45deg);
+  width: 8px;
+  height: 8px;
+  background: var(--ophq-tooltip-bg);
+  border-right: 1px solid var(--ah-glass-line);
+  border-bottom: 1px solid var(--ah-glass-line);
+}
+[data-tip][data-tip-pos='below']::after { bottom: auto; top: calc(100% + 8px); }
+[data-tip][data-tip-pos='below']::before {
+  bottom: auto; top: calc(100% + 3px);
+  transform: translateX(-50%) rotate(225deg);
+}
+[data-tip]:hover::after,
+[data-tip]:hover::before,
+[data-tip]:focus-visible::after,
+[data-tip]:focus-visible::before {
+  opacity: 1;
+  visibility: visible;
+}
+[data-tip]:disabled::after,
+[data-tip]:disabled::before { display: none; }

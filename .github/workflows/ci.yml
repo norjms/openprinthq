@@ -1,6 +1,7 @@
 name: ci
 
-# Tests, secret scan and provenance check for every pull request and every push to main.
+# Tests, secret scan and provenance check for every pull request and every push to main: the hub, the farm
+# (farm/), OpenPrintHQ Laser (laser/) and the shared look (ui/).
 # GitHub-hosted runners only. Never point this repository at a self-hosted runner: a pull request from a fork
 # would run its code there.
 on:
@@ -96,6 +97,145 @@ jobs:
       - name: Hub log
         if: failure()
         run: tail -n 100 /tmp/hub/hub.log
+
+  ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: actions/setup-node@v4.4.0
+        with:
+          node-version: 22
+      - name: Build and test the shared look
+        working-directory: ui
+        run: |
+          npm ci --no-audit --no-fund
+          npm test
+
+  farm-web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: actions/setup-node@v4.4.0
+        with:
+          node-version: 22
+      - name: Install
+        working-directory: farm/web
+        run: npm ci --no-audit --no-fund
+      - name: Build (at the site root)
+        working-directory: farm/web
+        run: npm run build
+      - name: Build under /apps/farm, as the hub serves it
+        working-directory: farm/web
+        env:
+          BASE_PATH: /apps/farm
+        run: npm run build
+
+  farm-control-plane:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: actions/setup-node@v4.4.0
+        with:
+          node-version: 22
+      # No package-lock.json committed, so npm ci is not usable here.
+      - name: Install
+        working-directory: farm/control-plane
+        run: npm install --no-audit --no-fund
+      - name: Syntax check
+        working-directory: farm/control-plane
+        run: |
+          set -euo pipefail
+          find src -name '*.js' -o -name '*.mjs' -print0 | xargs -0 -r -n1 node --check
+          node --check src/server.js
+      # The signing parity suite checks the control plane against the connector agent that shipped, in its own
+      # (archived) repository.
+      - name: Fetch the shipped connector agent
+        run: |
+          set -euo pipefail
+          curl -sSfL https://raw.githubusercontent.com/norjms/openprinthq-cloud-client/main/agent/src/agent.js \
+            -o "$RUNNER_TEMP/agent.js"
+      - name: Tests
+        working-directory: farm/control-plane
+        env:
+          OPHQ_AGENT_SRC: ${{ runner.temp }}/agent.js
+        run: npm test
+
+  farm-orcaslicer-addon:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: actions/setup-python@v5.6.0
+        with:
+          python-version: "3.12"
+      - name: Tests
+        working-directory: farm/control-plane/orcaslicer-addon
+        run: python3 -I -m unittest discover -s tests
+
+  farm-images:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: web
+            context: .
+            file: farm/web/Dockerfile
+          - name: control-plane
+            context: farm/control-plane
+            file: farm/control-plane/Dockerfile
+          - name: router
+            context: farm/infra/router
+            file: farm/infra/router/Dockerfile
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: docker/setup-buildx-action@v3
+      - name: Build ${{ matrix.name }}
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          push: false
+          tags: openprinthq-farm-${{ matrix.name }}:ci
+          cache-from: type=gha,scope=farm-${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=farm-${{ matrix.name }}
+
+  laser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: actions/setup-node@v4.4.0
+        with:
+          node-version: 22
+      - name: Round trips, and the page
+        working-directory: laser
+        run: |
+          npm ci --no-audit --no-fund
+          npm test
+          sh tools/build.sh
+      - name: Image, served under /apps/laser
+        run: |
+          docker build -t openprinthq-laser:ci laser
+          docker run -d --name laser -p 8080:80 openprinthq-laser:ci
+          for i in $(seq 1 20); do curl -fs http://127.0.0.1:8080/healthz >/dev/null && break; sleep 1; done
+          curl -fs http://127.0.0.1:8080/apps/laser/ | grep -q 'Convert files'
+          curl -fs http://127.0.0.1:8080/apps/laser/healthz | grep -q '"app":"openprinthq-laser"'
+          curl -fs -o /dev/null http://127.0.0.1:8080/apps/laser/vendor/openprinthq-ui/icons.js
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/)" = 404
+          test "$(curl -s -o /dev/null -w '%{redirect_url}' http://127.0.0.1:8080/apps/laser)" = "http://127.0.0.1:8080/apps/laser/"
+
+  # A hub image built from the repository root, with ui/ beside the frontend.
+  hub-image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: openprinthq:ci
+          cache-from: type=gha,scope=hub
+          cache-to: type=gha,mode=max,scope=hub
 
   secrets:
     runs-on: ubuntu-latest

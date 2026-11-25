@@ -1,0 +1,487 @@
+<script>
+  import { base as basePath } from '$app/paths';
+  // OpenPrintHQ Farm - a single model in the tenant's library.
+  // SPDX-License-Identifier: AGPL-3.0-or-later
+  //
+  // Preview, files, downloads and send-to-queue. Meshes go to ModelViewer
+  // (three, loaded with this route); g-code reuses GcodeViewer, the canvas
+  // parser the queue already uses, rather than a second implementation.
+  import { onMount } from 'svelte';
+  import { page } from '$app/stores';
+  import PageTitle from '$lib/components/PageTitle.svelte';
+  import PageHead from '$lib/components/PageHead.svelte';
+  import Icon from '$lib/components/AppIcon.svelte';
+  import { setCrumb } from '$lib/stores/crumb';
+  import ModelViewer from '$lib/components/ModelViewer.svelte';
+  import GcodeViewer from '$lib/components/GcodeViewer.svelte';
+  import { library, libraryAsset, previewFile, PREVIEWABLE,
+           objectKeyFor, deleteLibraryObject, fileStates, setFileState,
+           libraryIntegrity, integrityForFile, describeFindings } from '$lib/library.js';
+  import { goto } from '$app/navigation';
+
+  let materials = $state([]);
+  let collections = $state([]);
+  let addingPrint = $state(false);
+  let printMaterial = $state('');
+  let printOk = $state(true);
+  let printNotes = $state('');
+  let addTo = $state('');
+
+  let model = $state(null);
+  let error = $state(null);
+  let loading = $state(true);
+  let selected = $state(null);   // the file being previewed
+  let sending = $state(null);    // file id currently being queued
+  let notice = $state(null);
+  let busy = $state(null);
+  // Mesh integrity comes from the engine, not the library. Loaded alongside the
+  // model rather than per file, since it is one request for the whole tenant.
+  let integrity = $state({ enabled: false, results: {} });
+
+  /** One line of plain English about a file's mesh, or null to say nothing. */
+  function meshLine(f) {
+    const r = integrityForFile(integrity.results, f);
+    if (!r) return null;
+    if (r.status === 'problems') {
+      return { bad: true, text: `Mesh problem: ${describeFindings(r.findings)}.` };
+    }
+    if (r.status === 'ok') return { bad: false, text: 'Mesh checked, no problems found.' };
+    // unsupported, unreadable, too_large. Not a fault, and saying so plainly
+    // matters: a STEP file reported as broken would be a lie about the file.
+    return { bad: false, text: `Mesh not checked: ${r.reason || r.status}.` };
+  }
+
+  // Creator, licence and source site live in the library's custom_meta rather
+  // than in columns of their own. The library is a fork we keep merging
+  // upstream into, and a column added here is a conflict carried forever;
+  // custom_meta is a JSON blob upstream already maintains.
+  const meta = $derived.by(() => {
+    const raw = model?.custom_meta;
+    if (!raw) return {};
+    try { return typeof raw === 'string' ? JSON.parse(raw) : raw; } catch { return {}; }
+  });
+
+  async function editMeta(field, label) {
+    const value = prompt(label, meta[field] || '');
+    if (value === null) return;
+    try {
+      const next = { ...meta };
+      if (value.trim()) next[field] = value.trim(); else delete next[field];
+      await library.updateModel(model.id, { custom_meta: next });
+      await load();
+    } catch (e) {
+      notice = `Could not save: ${e.message}`;
+    }
+  }
+
+  async function editSource() {
+    const value = prompt('Source URL', model.source_url || '');
+    if (value === null) return;
+    try {
+      await library.updateModel(model.id, { source_url: value.trim() });
+      await load();
+    } catch (e) {
+      notice = `Could not save: ${e.message}`;
+    }
+  }
+
+  const id = $derived($page.params.id);
+  const isGcode = $derived(selected && (selected.file_type === 'gcode' || selected.file_type === 'bgcode'));
+
+  async function load() {
+    loading = true;
+    try {
+      model = await library.model(id);
+      selected = previewFile(model);
+      error = null;
+      // Side lists for the print form and the collection picker. A failure in
+      // either must not stop the model rendering, which is the point of the
+      // page.
+      library.materials().then((m) => { materials = m || []; }).catch(() => {});
+      library.projects.list().then((c) => { collections = c || []; }).catch(() => {});
+    } catch (e) {
+      error = e.message;
+      model = null;
+    } finally {
+      loading = false;
+    }
+  }
+
+  async function send(f) {
+    sending = f.id;
+    notice = null;
+    try {
+      const r = await library.files.sendToPrinter(f.id);
+      // print_started reflects whether the job actually STARTED, which it does
+      // not: the queue stages it. Saying "printing" here would be a lie the
+      // person acts on by walking to the printer.
+      notice = r?.print_started ? `${f.filename} started printing.` : `${f.filename} added to the queue.`;
+    } catch (e) {
+      notice = `Could not queue ${f.filename}: ${e.message}`;
+    } finally {
+      sending = null;
+    }
+  }
+
+  function fmtSize(n) {
+    if (!n && n !== 0) return '';
+    const u = ['B', 'KB', 'MB', 'GB'];
+    let i = 0, v = n;
+    while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+    return `${v < 10 && i > 0 ? v.toFixed(1) : Math.round(v)} ${u[i]}`;
+  }
+
+  const queueable = (f) => ['gcode', 'bgcode', '3mf'].includes(f.file_type);
+  const states = $derived(fileStates(model));
+  const stateOf = (f) => states[objectKeyFor(f)] || 'untested';
+
+  async function markFile(f, state) {
+    try {
+      await setFileState(model, f, state);
+      await load();
+    } catch (e) {
+      notice = `Could not mark ${f.filename}: ${e.message}`;
+    }
+  }
+
+  async function removeFile(f) {
+    if (!confirm(`Delete ${f.filename} from your storage? This cannot be undone.`)) return;
+    busy = f.id;
+    try {
+      await deleteLibraryObject(objectKeyFor(f));
+      notice = `Deleted ${f.filename}.`;
+      await load();
+    } catch (e) {
+      notice = `Could not delete ${f.filename}: ${e.message}`;
+    } finally {
+      busy = null;
+    }
+  }
+
+  async function rename() {
+    const name = prompt('Model name', model.name);
+    if (!name || name === model.name) return;
+    try {
+      await library.updateModel(model.id, { name });
+      await load();
+    } catch (e) {
+      notice = `Could not rename: ${e.message}`;
+    }
+  }
+
+  async function removeModel() {
+    if (!confirm(`Remove "${model.name}" from the library index? The files stay in your storage.`)) return;
+    try {
+      // deleteDisk is deliberately false: the library's bucket mount is
+      // read-only, so asking it to unlink fails, and the object store is where
+      // a real delete has to happen. This removes the index entry only.
+      await library.deleteModel(model.id, false);
+      goto(basePath + '/app/files');
+    } catch (e) {
+      notice = `Could not remove the model: ${e.message}`;
+    }
+  }
+
+  async function addPrint() {
+    try {
+      await library.prints.add(model.id, {
+        material_id: printMaterial ? Number(printMaterial) : null,
+        successful: printOk,
+        notes: printNotes
+      });
+      addingPrint = false; printNotes = ''; printMaterial = '';
+      await load();
+    } catch (e) {
+      notice = `Could not record the print: ${e.message}`;
+    }
+  }
+
+  async function removePrint(pid) {
+    try {
+      await library.prints.remove(pid);
+      await load();
+    } catch (e) {
+      notice = `Could not remove that entry: ${e.message}`;
+    }
+  }
+
+  async function addToCollection() {
+    if (!addTo) return;
+    try {
+      await library.projects.addModel(Number(addTo), model.id);
+      const c = collections.find((x) => String(x.id) === String(addTo));
+      notice = `Added to ${c ? c.name : 'the collection'}.`;
+      addTo = '';
+    } catch (e) {
+      notice = `Could not add to that collection: ${e.message}`;
+    }
+  }
+
+  function fmtDate(v) {
+    if (!v) return '';
+    const d = new Date(v);
+    return isNaN(d) ? String(v) : d.toLocaleString();
+  }
+
+  onMount(() => {
+    load();
+    libraryIntegrity().then((r) => { integrity = r; });
+  });
+  $effect(() => { if (model?.name) setCrumb(model.name); });
+</script>
+
+<PageTitle page={model ? model.name : 'Model'} />
+
+<PageHead title={model ? model.name : 'Model'} description={model?.category_name || ''}>
+  {#snippet actions()}
+    <a class="btn btn-ghost" href="{basePath}/app/files"><Icon name="back" size={16} />Back to library</a>
+  {/snippet}
+</PageHead>
+
+{#if loading}
+  <p class="muted">Loading</p>
+{:else if error}
+  <p class="warn">{error}</p>
+{:else if model}
+  <div class="layout">
+    <div class="preview">
+      {#if selected && PREVIEWABLE.has(selected.file_type)}
+        {#if isGcode}
+          {#key selected.id}
+            <GcodeViewer url={libraryAsset(selected.url)} name={selected.filename} />
+          {/key}
+        {:else}
+          {#key selected.id}
+            <ModelViewer
+              url={libraryAsset(selected.url)}
+              fileType={selected.file_type}
+              fallbackThumb={libraryAsset(model.thumbnail)}
+            />
+          {/key}
+        {/if}
+        <p class="previewing muted">Previewing {selected.filename}</p>
+      {:else if model.thumbnail}
+        <img class="hero" src={libraryAsset(model.thumbnail)} alt="" />
+      {:else}
+        <div class="nopreview muted">No previewable file.</div>
+      {/if}
+    </div>
+
+    <div class="info card card-pad">
+      <h2 class="ah-card-title">Details</h2>
+      <div class="chips">
+        {#if model.category_name}<span class="chip">{model.category_name}</span>{/if}
+        {#each model.tags || [] as t (t.id ?? t.name)}<span class="chip">{t.name ?? t}</span>{/each}
+      </div>
+      {#if model.description}<p class="desc">{model.description}</p>{/if}
+      <dl class="prov">
+        <dt>Creator</dt>
+        <dd>
+          {meta.creator || '-'}
+          <button class="link" onclick={() => editMeta('creator', 'Creator')}>edit</button>
+        </dd>
+        <dt>Licence</dt>
+        <dd>
+          {meta.license || '-'}
+          <button class="link" onclick={() => editMeta('license', 'Licence')}>edit</button>
+        </dd>
+        <dt>Source</dt>
+        <dd>
+          {#if model.source_url}
+            <a href={model.source_url} target="_blank" rel="noreferrer noopener">
+              {meta.source_site || 'original listing'}
+            </a>
+          {:else}-{/if}
+          <button class="link" onclick={editSource}>edit</button>
+        </dd>
+      </dl>
+      {#if model.print_tips}
+        <h3>Print tips</h3>
+        <p class="desc">{model.print_tips}</p>
+      {/if}
+      <div class="modelActions">
+        <button class="act" onclick={rename}>Rename</button>
+        <button class="act danger" onclick={removeModel}>Remove from library</button>
+      </div>
+    </div>
+  </div>
+
+  {#if notice}<p class="notice">{notice}</p>{/if}
+
+  <section>
+    <h3>Files</h3>
+    {#if (model.files || []).length === 0}
+      <p class="muted">No files.</p>
+    {:else}
+      <ul class="files">
+        {#each model.files as f (f.id)}
+          <li class:active={selected?.id === f.id}>
+            <span class="ftype">{f.file_type}</span>
+            {#if PREVIEWABLE.has(f.file_type)}
+              <button class="fname link" onclick={() => (selected = f)} title="Preview">{f.filename}</button>
+            {:else}
+              <span class="fname" title={f.filename}>{f.filename}</span>
+            {/if}
+            <span class="fsize muted">{fmtSize(f.file_size)}</span>
+            {#if meshLine(f)}
+              {@const line = meshLine(f)}
+              <span class="mesh" class:bad={line.bad}>{line.text}</span>
+            {/if}
+            {#if queueable(f)}
+              <select
+                class="state"
+                data-state={stateOf(f)}
+                value={stateOf(f)}
+                onchange={(e) => markFile(f, e.currentTarget.value)}
+              >
+                <option value="untested">Untested</option>
+                <option value="known-good">Known good</option>
+                <option value="failed">Failed</option>
+                <option value="archived">Archived</option>
+              </select>
+            {/if}
+            {#if queueable(f)}
+              <button class="act" onclick={() => send(f)} disabled={sending === f.id}>
+                {sending === f.id ? 'Queueing' : 'Send to queue'}
+              </button>
+            {/if}
+            <a class="act" href={libraryAsset(f.url)} download={f.filename}>Download</a>
+            <button class="act danger" onclick={() => removeFile(f)} disabled={busy === f.id}>
+              {busy === f.id ? 'Deleting' : 'Delete'}
+            </button>
+          </li>
+        {/each}
+      </ul>
+    {/if}
+  </section>
+
+  {#if collections.length > 0}
+    <section>
+      <h3>Collections</h3>
+      <div class="inline">
+        <select bind:value={addTo}>
+          <option value="">Choose a collection</option>
+          {#each collections as c (c.id)}<option value={c.id}>{c.name}</option>{/each}
+        </select>
+        <button class="act" onclick={addToCollection} disabled={!addTo}>Add this model</button>
+      </div>
+    </section>
+  {/if}
+
+  <section>
+    <h3>Print log</h3>
+    {#if addingPrint}
+      <div class="inline">
+        <select bind:value={printMaterial}>
+          <option value="">No material</option>
+          {#each materials as m (m.id)}<option value={m.id}>{m.name}</option>{/each}
+        </select>
+        <label class="chk"><input type="checkbox" bind:checked={printOk} /> Successful</label>
+        <input class="notes" placeholder="Notes (optional)" bind:value={printNotes} />
+        <button class="act" onclick={addPrint}>Save</button>
+        <button class="act" onclick={() => (addingPrint = false)}>Cancel</button>
+      </div>
+    {:else}
+      <button class="act" onclick={() => (addingPrint = true)}>Record a print</button>
+    {/if}
+
+    {#if (model.prints || []).length === 0}
+      <p class="muted">Nothing recorded yet.</p>
+    {:else}
+      <ul class="prints">
+        {#each model.prints as p (p.id)}
+          <li>
+            <span class="pstate" class:bad={!p.successful}>{p.successful ? 'ok' : 'failed'}</span>
+            <span>{fmtDate(p.printed_at)}</span>
+            {#if p.material_name}<span class="muted">{p.material_name}</span>{/if}
+            <span class="pnotes muted">{p.notes ?? ''}</span>
+            <button class="act" onclick={() => removePrint(p.id)}>Remove</button>
+          </li>
+        {/each}
+      </ul>
+    {/if}
+  </section>
+{/if}
+
+<style>
+  .back { margin: 0 0 0.8rem; }
+  .layout { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 1.4rem; margin-bottom: 1.4rem; }
+  @media (max-width: 780px) { .layout { grid-template-columns: 1fr; } }
+
+  .previewing { font-size: 0.78rem; margin: 0.4rem 0 0; }
+  .hero, .nopreview {
+    width: 100%; aspect-ratio: 4 / 3; object-fit: contain;
+    border: 1px solid var(--ophq-border); border-radius: 12px; background: var(--ophq-bg-2);
+  }
+  .nopreview { display: grid; place-items: center; font-size: 0.85rem; }
+
+  h2 { margin: 0 0 0.5rem; }
+  h3 { margin: 1rem 0 0.5rem; font-size: 1rem; }
+  section { margin-bottom: 1.4rem; }
+  .desc { color: var(--ophq-text-2); white-space: pre-wrap; }
+  .chips { margin-bottom: 0.5rem; }
+  .chip {
+    display: inline-block; margin: 0 0.35rem 0.35rem 0; padding: 0.12rem 0.5rem;
+    border: 1px solid var(--ophq-border); border-radius: 999px;
+    font-size: 0.75rem; color: var(--ophq-text-2);
+  }
+
+  .files, .prints { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.35rem; }
+  .files li, .prints li {
+    display: flex; gap: 0.7rem; align-items: center;
+    padding: 0.5rem 0.7rem;
+    border: 1px solid var(--ophq-border); border-radius: 8px; background: var(--ophq-surface);
+  }
+  .files li.active { border-color: var(--ophq-primary); }
+
+  .mesh { font-size: 0.78rem; color: var(--ophq-text-2); }
+  .mesh.bad { color: var(--ophq-danger, #c0392b); }
+  .state {
+    font-size: 0.75rem; padding: 0.15rem 0.35rem; border-radius: 6px;
+    border: 1px solid var(--ophq-border); background: var(--ophq-surface); color: var(--ophq-text-2);
+  }
+  .state[data-state='known-good'] { color: var(--ophq-success); border-color: var(--ophq-success); }
+  .state[data-state='failed'] { color: var(--ophq-danger); border-color: var(--ophq-danger); }
+  .state[data-state='archived'] { opacity: 0.6; }
+  .ftype {
+    text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.05em;
+    color: var(--ophq-primary); min-width: 3.2rem;
+  }
+  .fname { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+  .link { background: none; border: 0; color: inherit; cursor: pointer; padding: 0; font: inherit; text-decoration: underline; }
+  .fsize { font-size: 0.8rem; }
+  .act {
+    white-space: nowrap; font-size: 0.8rem;
+    padding: 0.25rem 0.6rem; border: 1px solid var(--ophq-border); border-radius: 6px;
+    background: var(--ophq-surface); color: var(--ophq-text); cursor: pointer; text-decoration: none;
+  }
+  .act:disabled { opacity: 0.5; cursor: default; }
+  .act.danger { color: var(--ophq-danger); border-color: color-mix(in srgb, var(--ophq-danger) 40%, var(--ophq-border)); }
+  .modelActions { display: flex; gap: 0.5rem; margin-top: 0.8rem; flex-wrap: wrap; }
+  .inline { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-bottom: 0.6rem; }
+  .inline select, .notes {
+    padding: 0.35rem 0.6rem; border: 1px solid var(--ophq-border); border-radius: 8px;
+    background: var(--ophq-surface); color: var(--ophq-text); font: inherit; font-size: 0.85rem;
+  }
+  .notes { flex: 1 1 12rem; }
+  .chk { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: var(--ophq-text-2); }
+  .pstate {
+    text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.05em;
+    color: var(--ophq-success); min-width: 3.2rem;
+  }
+  .pstate.bad { color: var(--ophq-danger); }
+  .pnotes { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .prov {
+    display: grid; grid-template-columns: auto 1fr; gap: 0.2rem 0.8rem;
+    margin: 0.6rem 0; font-size: 0.86rem;
+  }
+  .prov dt { color: var(--ophq-muted); }
+  .prov dd { margin: 0; }
+  .link {
+    background: none; border: 0; padding: 0 0 0 0.4rem; font: inherit; font-size: 0.78rem;
+    color: var(--ophq-primary); cursor: pointer;
+  }
+  .notice { color: var(--ophq-text-2); }
+  .muted { color: var(--ophq-muted); }
+  .warn { color: var(--ophq-warn); }
+</style>

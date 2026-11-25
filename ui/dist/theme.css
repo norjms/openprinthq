@@ -1,0 +1,73 @@
+/* Generated from tokens/tokens.json by scripts/build.mjs. Do not edit.
+*/
+:root,
+[data-theme="glass-dark"] {
+  --ah-page: #172028;
+  --ah-page-mid: #273642;
+  --ah-page-top: #3f566a;
+  --ah-glass: rgba(255,255,255,0.08);
+  --ah-glass-line: rgba(255,255,255,0.16);
+  --ah-panel: rgba(12,20,26,0.24);
+  --ah-panel-line: rgba(255,255,255,0.12);
+  --ah-row-line: rgba(255,255,255,0.08);
+  --ah-table-head: rgba(38,52,63,0.96);
+  --ah-field: rgba(20,30,38,0.5);
+  --ah-field-line: rgba(255,255,255,0.2);
+  --ah-segment: rgba(255,255,255,0.06);
+  --ah-selected: rgba(255,255,255,0.9);
+  --ah-text-on-selected: #1d2a34;
+  --ah-track: rgba(255,255,255,0.1);
+  --ah-solid-panel: #26343f;
+  --ah-text: #f1f6fa;
+  --ah-text-2: rgba(236,243,248,0.85);
+  --ah-text-3: rgba(236,243,248,0.85);
+  --ah-text-3-large: rgba(236,243,248,0.75);
+  --ah-group-label: rgba(236,243,248,0.85);
+  --ah-link: #bfe6ff;
+  --ah-accent: #8fd3ff;
+  --ah-on-accent: #1d2a34;
+  --ah-attention: #ffb38a;
+  --ah-failure: #e66767;
+  --ah-success: #9be28f;
+  --ah-success-2: #a8e6b0;
+  --ah-chip-underlay: rgba(12,20,26,0.3);
+  --ah-chip-ok-bg: rgba(155,226,143,0.16);
+  --ah-chip-ok-line: rgba(155,226,143,0.55);
+  --ah-chip-ok-text: #d3f5cc;
+  --ah-chip-warn-bg: rgba(255,179,138,0.16);
+  --ah-chip-warn-line: rgba(255,179,138,0.55);
+  --ah-chip-warn-text: #ffd9c4;
+  --ah-chip-bad-bg: rgba(230,103,103,0.18);
+  --ah-chip-bad-line: rgba(230,103,103,0.55);
+  --ah-chip-bad-text: #ffd0d0;
+  --ah-chip-live-bg: rgba(143,211,255,0.16);
+  --ah-chip-live-line: rgba(143,211,255,0.55);
+  --ah-chip-live-text: #d4efff;
+  --ah-chip-neutral-bg: rgba(255,255,255,0.08);
+  --ah-danger-bg: rgba(230,103,103,0.14);
+  --ah-space-1: 4px;
+  --ah-space-2: 8px;
+  --ah-space-3: 12px;
+  --ah-space-4: 16px;
+  --ah-space-5: 20px;
+  --ah-space-6: 24px;
+  --ah-radius-sidebar: 28px;
+  --ah-radius-card: 22px;
+  --ah-radius-choice: 18px;
+  --ah-radius-btn: 12px;
+  --ah-radius-btn-sm: 10px;
+  --ah-radius-pill: 999px;
+  --ah-font-sans: Manrope, system-ui, sans-serif;
+  --ah-font-display: Sora, Manrope, system-ui, sans-serif;
+  --ah-font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  --ah-page-gradient: radial-gradient(80% 75% at 55% 35%, var(--ah-page-top) 0%, var(--ah-page-mid) 50%, var(--ah-page) 100%);
+  --ah-blur: blur(24px);
+  --ah-card-pad: clamp(12px, 1.6vh, 20px);
+  --ah-focus: 0 0 0 2px var(--ah-page), 0 0 0 4px var(--ah-accent);
+  color-scheme: dark;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root:not([data-transparency="on"]) { --ah-glass: var(--ah-solid-panel); --ah-blur: none; }
+}
+[data-transparency="off"] { --ah-glass: var(--ah-solid-panel); --ah-blur: none; }

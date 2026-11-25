@@ -1,9 +1,9 @@
 # The screens are the same on every platform, so they are built once, natively.
 FROM --platform=$BUILDPLATFORM node:22-alpine AS ui
-WORKDIR /ui
-# git: the shared look (openprinthq-ui) is a dependency pinned by git tag.
-RUN apk add --no-cache git
-COPY frontend/package.json frontend/package-lock.json* ./
+# The shared look (openprinthq-ui) is ui/ in this repository, beside the frontend, as in the source tree.
+COPY ui/ /src/ui/
+WORKDIR /src/frontend
+COPY frontend/package.json frontend/package-lock.json* frontend/.npmrc ./
 RUN npm install --no-audit --no-fund
 COPY frontend/ ./
 RUN npm run build
@@ -18,7 +18,7 @@ WORKDIR /app
 COPY backend/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/app ./app
-COPY --from=ui /ui/build ./static
+COPY --from=ui /src/frontend/build ./static
 RUN groupadd -g 1000 hub && useradd -u 1000 -g 1000 -G 0 -M -d /app hub \
  && mkdir -p /data /srv/library /srv/orcaslicer-outbox/shared /srv/orcaslicer-outbox/people \
  && chown 1000:1000 /data /srv/library /srv/orcaslicer-outbox/shared /srv/orcaslicer-outbox/people

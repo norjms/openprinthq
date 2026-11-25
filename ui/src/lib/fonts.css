@@ -1,0 +1,8 @@
+/* Bundled fonts, all SIL Open Font License. Apps that must not load fonts (the offline installer) skip this file. */
+@import "@fontsource/manrope/400.css";
+@import "@fontsource/manrope/500.css";
+@import "@fontsource/manrope/600.css";
+@import "@fontsource/manrope/700.css";
+@import "@fontsource/sora/500.css";
+@import "@fontsource/sora/600.css";
+@import "@fontsource/jetbrains-mono/400.css";
