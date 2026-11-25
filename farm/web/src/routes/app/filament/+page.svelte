@@ -1,0 +1,529 @@
+<script>
+  import { base as basePath } from '$app/paths';
+  import Icon from '$lib/components/AppIcon.svelte';
+  import { onMount } from 'svelte';
+  import { api } from '$lib/api';
+  import EngineError from '$lib/components/EngineError.svelte';
+  import PageTitle from '$lib/components/PageTitle.svelte';
+  import PageHead from '$lib/components/PageHead.svelte';
+  import { branding } from '$lib/stores/appearance';
+
+  let loading = $state(true);
+  let error = $state(null);
+  let spools = $state([]);
+  let backend = $state(null);      // { mode: 'spoolman' | 'internal' } from the control-plane
+  let printers = $state([]);
+  let assignments = $state([]);    // slot bindings, either backend's shape
+
+  let busyId = $state(null);
+  let toast = $state(null);
+  let confirmArch = $state(null);
+
+  // ---- GenFilament presets (link a spool to a generated slicer preset) ----
+  let gfBase = $state(null);       // browser-reachable GenFilament API base; '' = not set up
+  let presets = $state(null);      // loaded on first use
+  let gfErr = $state(null);
+  let gfLoading = $state(false);
+  async function loadPresets() {
+    if (presets || gfLoading || !gfBase) return;
+    gfLoading = true; gfErr = null;
+    try { presets = (await api.genfilamentPresets(gfBase)) || []; }
+    catch (e) { gfErr = e.message || 'GenFilament unavailable'; }
+    finally { gfLoading = false; }
+  }
+  const presetText = (p) => (p.name + ' ' + (p.vendor || '') + ' ' + (p.specs?.filament_type || '')).toLowerCase();
+  function matchPresets(q, limit = 12) {
+    if (!presets) return [];
+    const words = String(q || '').toLowerCase().split(/\s+/).filter(Boolean);
+    const hits = words.length ? presets.filter((p) => { const t = presetText(p); return words.every((w) => t.includes(w)); }) : presets;
+    return hits.slice(0, limit);
+  }
+  const isBasic = (x) => !x || ['basic', 'standard', 'none'].includes(String(x).toLowerCase());
+  let cur = $state('USD');
+  const CUR_SYM = { USD: '$', EUR: '€', GBP: '£', CAD: '$', AUD: '$', NZD: '$', JPY: '¥', CNY: '¥', CHF: 'CHF ', SEK: 'kr ', NOK: 'kr ', DKK: 'kr ', PLN: 'zł ', INR: '₹', ZAR: 'R ', BRL: 'R$ ', MXN: '$' };
+  const sym = $derived(CUR_SYM[cur] || (cur + ' '));
+  const money = (v) => sym + (Number(v) || 0).toFixed(2);
+
+  function norm(d) {
+    const arr = Array.isArray(d) ? d : (d?.spools || d?.items || d?.results || []);
+    return arr.map((s) => {
+      const label = s.label_weight ?? s.total_weight ?? s.spool_weight ?? null;
+      const used = s.weight_used ?? null;
+      const remaining = s.remaining_weight ?? s.remaining_grams ?? s.weight_remaining ??
+        (label != null && used != null ? Math.max(0, label - used) : null);
+      // Bambu AMS colours come as RRGGBBAA hex; browsers accept 8-digit hex but
+      // drop the alpha so the swatch is always opaque.
+      const raw = s.rgba || s.color_hex || s.color || '';
+      const color = raw ? (String(raw).startsWith('#') ? raw : '#' + String(raw).slice(0, 6)) : '';
+      const cpk = s.cost_per_kg ?? null;
+      const value = (cpk != null && remaining != null) ? (cpk * remaining / 1000) : null;
+      return {
+        id: s.id ?? s.spool_id ?? s.tray_uuid,
+        name: s.slicer_filament_name ?? s.name ?? s.filament_name ??
+          (`${s.brand ?? ''} ${s.material ?? ''} ${s.subtype ?? ''}`.replace(/\s+/g, ' ').trim() || 'Spool'),
+        material: [s.material ?? s.filament_type, s.subtype].filter(Boolean).join(' · '),
+        brand: s.brand ?? '',
+        colorName: s.color_name ?? '',
+        color,
+        remaining: remaining != null ? Math.round(remaining) : null,
+        total: label,
+        costPerKg: cpk,
+        value,
+        location: s.storage_location ?? s.location ?? s.location_name ?? '',
+        // Slicer preset the spool is linked to (GenFilament presets are "P" + 7 hex).
+        presetId: s.slicer_filament || '',
+        presetName: s.slicer_filament ? (s.slicer_filament_name || '') : ''
+      };
+    });
+  }
+  async function load() {
+    loading = true; error = null;
+    try {
+      // First visit after a deploy brings the tenant's Spoolman up and moves any
+      // existing spools into it; later visits return straight away.
+      if (!backend) backend = await api.filamentBackend().catch(() => ({ mode: 'internal' }));
+      const eng = await api.engineSettings().catch(() => null);
+      if (eng?.currency) cur = eng.currency;
+      if (gfBase === null) gfBase = (await api.myInstance().catch(() => null))?.genfilamentApi || '';
+      spools = norm(await api.spools());
+      printers = ((await api.printers().catch(() => [])) || []);
+      assignments = ((await api.slotAssignments().catch(() => [])) || []);
+    }
+    catch (e) { error = e.status === 409 ? 'no-instance' : (e.message || 'engine unreachable'); }
+    finally { loading = false; }
+  }
+  onMount(load);
+
+  // ---- slot bindings (which spool feeds which printer) ----
+  const isExternal = (p) => String(p?.connection_type || 'bambu').toLowerCase() !== 'bambu';
+  const spoolIdOf = (a) => a.spoolman_spool_id ?? a.spool_id;
+  const printerName = (id) => printers.find((p) => p.id === id)?.name || `Printer ${id}`;
+  function slotLabel(printerId, amsId, trayId) {
+    const p = printers.find((x) => x.id === printerId);
+    if (amsId === 255 || amsId === 254) return isExternal(p) ? 'extruder' : 'external spool';
+    if (amsId >= 128) return `AMS HT ${amsId - 127}`;
+    return `AMS ${String.fromCharCode(65 + amsId)}${trayId + 1}`;
+  }
+  const bindingsFor = (s) => assignments.filter((a) => spoolIdOf(a) === s.id);
+
+  let assign = $state(null);   // { spool, printerId, slot }
+  let asBusy = $state(false);
+  function slotOptions(printerId) {
+    const p = printers.find((x) => x.id === Number(printerId));
+    if (!p) return [];
+    if (isExternal(p)) return [{ v: '255:0', l: 'Extruder' }];
+    const out = [];
+    for (let a = 0; a < 4; a++) for (let t = 0; t < 4; t++) out.push({ v: `${a}:${t}`, l: `AMS ${String.fromCharCode(65 + a)} slot ${t + 1}` });
+    out.push({ v: '255:0', l: 'External spool' });
+    return out;
+  }
+  function openAssign(s) {
+    const first = printers[0];
+    assign = { spool: s, printerId: first ? String(first.id) : '', slot: first ? slotOptions(first.id)[0]?.v : '' };
+  }
+  function onPrinterChange() { if (assign) assign.slot = slotOptions(assign.printerId)[0]?.v || ''; }
+  async function saveAssign() {
+    if (!assign?.printerId || !assign.slot) return;
+    asBusy = true;
+    const [amsId, trayId] = assign.slot.split(':').map(Number);
+    try {
+      await api.assignSpool(assign.spool.id, Number(assign.printerId), amsId, trayId);
+      toast = { kind: 'ok', text: `${assign.spool.name} now feeds ${printerName(Number(assign.printerId))} (${slotLabel(Number(assign.printerId), amsId, trayId)}).` };
+      assign = null; await load();
+    } catch (e) { toast = { kind: 'err', text: e.message || 'could not assign' }; }
+    finally { asBusy = false; setTimeout(() => (toast = null), 5000); }
+  }
+  async function removeBinding(a) {
+    try { await api.unassignSpool(a); await load(); }
+    catch (e) { toast = { kind: 'err', text: e.message || 'could not unassign' }; setTimeout(() => (toast = null), 5000); }
+  }
+  const pct = (s) => (s.remaining != null && s.total ? Math.max(0, Math.min(100, Math.round((s.remaining / s.total) * 100))) : null);
+
+  // Inventory summary (deep inventory: standing stock, weight, value).
+  const summary = $derived.by(() => {
+    const remG = spools.reduce((a, s) => a + (s.remaining || 0), 0);
+    const val = spools.reduce((a, s) => a + (s.value || 0), 0);
+    const hasVal = spools.some((s) => s.value != null);
+    return { count: spools.length, kg: remG / 1000, value: hasVal ? val : null };
+  });
+
+  async function archive(s) {
+    busyId = s.id;
+    try {
+      await api.archiveSpool(s.id);
+      toast = { kind: 'ok', text: `Archived ${s.name}.` };
+      await load();
+    } catch (e) { toast = { kind: 'err', text: e.message || 'could not archive' }; }
+    finally { busyId = null; confirmArch = null; setTimeout(() => (toast = null), 5000); }
+  }
+
+  // ---- add spool (#16, manual add; only `material` is required) ----
+  const MATERIALS = ['PLA', 'PLA Matte', 'PLA Silk', 'PETG', 'ABS', 'ASA', 'TPU', 'PC', 'Nylon (PA)', 'PVA', 'HIPS', 'PLA-CF', 'PETG-CF', 'PA-CF', 'PA-GF'];
+  let locations = $state([]);
+  let showAdd = $state(false);
+  let saving = $state(false);
+  let addErr = $state(null);
+  let form = $state(newForm());
+  function newForm() {
+    return { material: 'PLA', subtype: '', brand: '', color_name: '', color: '#1f9d55', label_weight: 1000, cost_per_kg: '', storage_location: '', nozzle_temp_min: '', nozzle_temp_max: '', note: '', quantity: 1, preset: null };
+  }
+  let presetQ = $state('');
+  // Fill the form from a generated preset. Brand is the parent vendor (one Spoolman
+  // vendor per maker); the sub-brand and series go into the sub-type.
+  function applyPreset(p) {
+    const sp = p.specs || {};
+    form.preset = { id: p.filament_id, name: p.name };
+    form.brand = p.vendor || p.brand || '';
+    form.material = p.material_type || sp.filament_type || form.material;
+    form.subtype = [p.sub_brand, isBasic(p.series) ? '' : p.series].filter(Boolean).join(' ');
+    if (sp.nozzle_temp_range_low) form.nozzle_temp_min = sp.nozzle_temp_range_low;
+    if (sp.nozzle_temp_range_high) form.nozzle_temp_max = sp.nozzle_temp_range_high;
+    if (Number(sp.filament_cost_estimate) > 0) form.cost_per_kg = Number(sp.filament_cost_estimate);
+    const c = (p.colors || [])[0];
+    if (c) { if (c.name) form.color_name = c.name; if (c.hex) form.color = c.hex; }
+    presetQ = '';
+  }
+  async function openAdd() {
+    form = newForm(); addErr = null; showAdd = true; presetQ = '';
+    loadPresets();
+    try { locations = (await api.spoolLocations().catch(() => [])) || []; } catch { locations = []; }
+  }
+  function hexToRgba(hex) { const h = String(hex || '').replace('#', ''); return (h.length >= 6 ? h.slice(0, 6) : 'ffffff').toUpperCase() + 'FF'; }
+  async function saveAdd() {
+    const f = form;
+    if (!f.material.trim()) { addErr = 'Material is required.'; return; }
+    saving = true; addErr = null;
+    const body = { material: f.material.trim(), rgba: hexToRgba(f.color), label_weight: Math.max(1, Math.round(Number(f.label_weight) || 1000)) };
+    if (f.subtype.trim()) body.subtype = f.subtype.trim();
+    if (f.brand.trim()) body.brand = f.brand.trim();
+    if (f.color_name.trim()) body.color_name = f.color_name.trim();
+    if (f.cost_per_kg !== '') body.cost_per_kg = Number(f.cost_per_kg);
+    if (f.storage_location.trim()) body.storage_location = f.storage_location.trim();
+    if (f.nozzle_temp_min !== '') body.nozzle_temp_min = Number(f.nozzle_temp_min);
+    if (f.nozzle_temp_max !== '') body.nozzle_temp_max = Number(f.nozzle_temp_max);
+    if (f.note.trim()) body.note = f.note.trim();
+    if (f.preset) { body.slicer_filament = f.preset.id; body.slicer_filament_name = f.preset.name; }
+    try {
+      const qty = Math.max(1, Math.round(Number(f.quantity) || 1));
+      if (qty > 1) await api.addSpoolsBulk(body, qty); else await api.addSpool(body);
+      toast = { kind: 'ok', text: qty > 1 ? `Added ${qty} spools.` : `Added ${(body.brand || '') + ' ' + body.material}`.trim() + ' spool.' };
+      showAdd = false; await load();
+    } catch (e) { addErr = e.message || 'could not add spool'; }
+    finally { saving = false; setTimeout(() => (toast = null), 5000); }
+  }
+
+  // ---- link an existing spool to a generated preset ----
+  let link = $state(null);   // { spool, q }
+  let linkBusy = $state(false);
+  function openLink(s) { link = { spool: s, q: '' }; loadPresets(); }
+  async function saveLink(p) {
+    if (!link) return;
+    linkBusy = true;
+    const s = link.spool;
+    try {
+      await api.updateSpool(s.id, p ? { slicer_filament: p.filament_id, slicer_filament_name: p.name } : { slicer_filament: '', slicer_filament_name: '' });
+      toast = { kind: 'ok', text: p ? `${s.name} now uses the ${p.name} preset.` : `Removed the preset link from ${s.name}.` };
+      link = null; await load();
+    } catch (e) { toast = { kind: 'err', text: e.message || 'could not link preset' }; }
+    finally { linkBusy = false; setTimeout(() => (toast = null), 5000); }
+  }
+
+  // ---- adjust remaining weight (log waste / manual usage) ----
+  let adjust = $state(null);   // { id, name, total, remaining }
+  let adjBusy = $state(false);
+  function openAdjust(s) { adjust = { id: s.id, name: s.name, total: s.total, remaining: s.remaining }; }
+  async function saveAdjust() {
+    if (!adjust) return;
+    adjBusy = true;
+    try {
+      const total = Number(adjust.total) || 0;
+      const rem = Math.max(0, total ? Math.min(total, Number(adjust.remaining) || 0) : (Number(adjust.remaining) || 0));
+      const body = total ? { weight_used: Math.max(0, total - rem) } : {};
+      await api.updateSpool(adjust.id, body);
+      toast = { kind: 'ok', text: `Updated ${adjust.name}.` };
+      adjust = null; await load();
+    } catch (e) { toast = { kind: 'err', text: e.message || 'could not update' }; }
+    finally { adjBusy = false; setTimeout(() => (toast = null), 5000); }
+  }
+
+  // ---- printable spool label ----
+  let labelSpool = $state(null);
+  function printLabel(s) {
+    labelSpool = s;
+    if (typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(() => window.print());
+    else window.print();
+  }
+</script>
+<svelte:window onafterprint={() => (labelSpool = null)} />
+
+<PageTitle page="Filament" />
+
+<PageHead title="Filament">
+  {#snippet actions()}
+    <button class="btn" onclick={load}><Icon name="refresh" size={16} />Refresh</button>
+    <button class="btn btn-primary" onclick={openAdd}><Icon name="plus" size={16} />Add spool</button>
+  {/snippet}
+  Spool inventory, usage and cost.{#if backend?.mode === 'spoolman'} <span class="chip live" title="Inventory is stored in your own Spoolman">Spoolman</span>{/if}
+</PageHead>
+
+{#if toast}<div class="toast {toast.kind}">{toast.text}</div>{/if}
+
+{#if loading}
+  <div class="card card-pad muted">{backend ? 'Loading spools' : 'Setting up your filament inventory'}</div>
+{:else if error === 'no-instance'}
+  <div class="card card-pad"><p class="muted">Provision your instance from the <a href="{basePath}/app">overview</a> first.</p></div>
+{:else if error}
+  <EngineError {error} onretry={load} />
+{:else if spools.length === 0}
+  <div class="card card-pad empty">
+    <div class="ic"><Icon name="spool" size={28} /></div>
+    <h3>No spools yet</h3>
+    <p class="muted">Track your filament here, remaining weight is deducted automatically as you print, with per-print cost.</p>
+    <button class="btn btn-primary btn-sm" onclick={openAdd}>Add your first spool</button>
+  </div>
+{:else}
+  <div class="sumrow">
+    <div class="card card-pad st"><span class="muted">Spools</span><b>{summary.count}</b></div>
+    <div class="card card-pad st"><span class="muted">Remaining</span><b>{summary.kg.toFixed(2)} kg</b></div>
+    {#if summary.value != null}<div class="card card-pad st"><span class="muted">Stock value</span><b>{money(summary.value)}</b></div>{/if}
+  </div>
+  <div class="grid spools">
+    {#each spools as s}
+      <div class="card card-pad spool">
+        <div class="flex center gap">
+          <span class="dot" style="background:{s.color || 'var(--ophq-faint)'}"></span>
+          <div class="grow">
+            <div class="sname">{s.name}</div>
+            <div class="muted mono mat">{s.material}{#if s.colorName} · {s.colorName}{/if}</div>
+          </div>
+        </div>
+        {#if pct(s) != null}
+          <div class="bar"><div class="fill" style="width:{pct(s)}%"></div></div>
+          <div class="muted mono rem">{s.remaining} g left · {pct(s)}%{#if s.value != null} · {money(s.value)}{/if}</div>
+        {/if}
+        {#if s.presetId && s.presetName && s.presetName !== s.name}
+          <div class="muted mono tiny preset" title="Slicer preset {s.presetId}">Preset: {s.presetName}</div>
+        {:else if /^P[0-9a-f]{7}$/.test(s.presetId)}
+          <div class="muted mono tiny preset" title="Slicer preset {s.presetId}">GenFilament preset</div>
+        {/if}
+        {#each bindingsFor(s) as a}
+          <div class="bind muted mono tiny">On {printerName(a.printer_id)}, {slotLabel(a.printer_id, a.ams_id, a.tray_id)} <button class="btn btn-ghost btn-xs" onclick={() => removeBinding(a)} title="Unassign from this slot" aria-label="Unassign"><Icon name="x" size={14} /></button></div>
+        {/each}
+        <div class="sfoot">
+          <span class="muted mono tiny">{s.brand}{#if s.location} · {s.location}{/if}{#if s.costPerKg != null} · {sym}{s.costPerKg}/kg{/if}</span>
+          <div class="acts">
+            {#if printers.length}<button class="btn btn-ghost btn-xs" onclick={() => openAssign(s)} disabled={busyId === s.id} title="Load this spool on a printer, so its prints are charged to it">Assign</button>{/if}
+            {#if gfBase}<button class="btn btn-ghost btn-xs" onclick={() => openLink(s)} disabled={busyId === s.id} title="Link this spool to a GenFilament slicer preset">Preset</button>{/if}
+            <button class="btn btn-ghost btn-xs" onclick={() => openAdjust(s)} disabled={busyId === s.id} title="Adjust remaining weight / log waste">Adjust</button>
+            <button class="btn btn-ghost btn-xs" onclick={() => printLabel(s)} title="Print a spool label">Label</button>
+            {#if confirmArch === s.id}
+              <button class="btn btn-danger btn-xs" onclick={() => archive(s)} disabled={busyId === s.id}>Confirm</button><button class="btn btn-ghost btn-xs" onclick={() => (confirmArch = null)} aria-label="Cancel archive"><Icon name="x" size={14} /></button>
+            {:else}
+              <button class="btn btn-ghost btn-xs" onclick={() => (confirmArch = s.id)} disabled={busyId === s.id} title="Archive (used up / removed)">Archive</button>
+            {/if}
+          </div>
+        </div>
+      </div>
+    {/each}
+  </div>
+{/if}
+
+{#if showAdd}
+  <div class="overlay no-print" role="presentation" onclick={() => (showAdd = false)}>
+    <div class="dialog card" role="dialog" onclick={(e) => e.stopPropagation()}>
+      <div class="dhead"><div><span class="eyebrow">Inventory</span><h3>Add spool</h3></div><button class="btn btn-ghost btn-sm" onclick={() => (showAdd = false)} aria-label="Close"><Icon name="x" size={14} /></button></div>
+      {#if gfBase}
+        <div class="gfpick">
+          <label for="gfq">GenFilament preset</label>
+          {#if form.preset}
+            <div class="chosen"><span class="mono">{form.preset.name}</span><button class="btn btn-ghost btn-xs" onclick={() => (form.preset = null)} aria-label="Clear preset"><Icon name="x" size={14} /></button></div>
+          {:else}
+            <input id="gfq" class="input" bind:value={presetQ} placeholder={gfLoading ? 'Loading presets' : 'Search generated presets, e.g. polylite pla'} autocomplete="off" />
+            {#if gfErr}<p class="err">{gfErr}</p>{/if}
+            {#if presetQ.trim()}
+              <div class="plist">
+                {#each matchPresets(presetQ) as p (p.filament_id)}
+                  <button class="pitem" onclick={() => applyPreset(p)}><span>{p.name}</span><span class="muted mono tiny">{p.specs?.nozzle_temp_range_low ?? ''}{#if p.specs?.nozzle_temp_range_high}-{p.specs.nozzle_temp_range_high}&deg;C{/if}</span></button>
+                {:else}
+                  <div class="muted tiny pad">{presets ? 'No matching presets.' : ''}</div>
+                {/each}
+              </div>
+            {/if}
+          {/if}
+          <p class="muted hint">Optional. Fills in the details below and links the spool to the preset, so a printer slot it is assigned to uses that preset.</p>
+        </div>
+      {/if}
+      <div class="grid2">
+        <div class="fld">
+          <label for="mat">Material *</label>
+          <input id="mat" class="input" list="mats" bind:value={form.material} placeholder="PLA" />
+          <datalist id="mats">{#each MATERIALS as m}<option value={m}></option>{/each}</datalist>
+        </div>
+        <div class="fld"><label for="sub">Sub-type</label><input id="sub" class="input" bind:value={form.subtype} placeholder="Matte, Silk, CF" /></div>
+        <div class="fld"><label for="brd">Brand</label><input id="brd" class="input" bind:value={form.brand} placeholder="Bambu, Polymaker" /></div>
+        <div class="fld"><label for="cn">Colour name</label><input id="cn" class="input" bind:value={form.color_name} placeholder="Galaxy Black" /></div>
+        <div class="fld"><label for="col">Colour</label><input id="col" class="input color" type="color" bind:value={form.color} /></div>
+        <div class="fld"><label for="wt">Net weight (g)</label><input id="wt" class="input" type="number" min="1" step="50" bind:value={form.label_weight} /></div>
+        <div class="fld"><label for="cpk">Cost /kg ({sym.trim()})</label><input id="cpk" class="input" type="number" min="0" step="0.5" bind:value={form.cost_per_kg} placeholder="optional" /></div>
+        <div class="fld">
+          <label for="loc">Location</label>
+          <input id="loc" class="input" list="locs" bind:value={form.storage_location} placeholder="Dry box A" />
+          <datalist id="locs">{#each locations as l}<option value={l.name || l.location_name || l}></option>{/each}</datalist>
+        </div>
+        <div class="fld"><label for="tmin">Nozzle °C min</label><input id="tmin" class="input" type="number" bind:value={form.nozzle_temp_min} placeholder="optional" /></div>
+        <div class="fld"><label for="tmax">Nozzle °C max</label><input id="tmax" class="input" type="number" bind:value={form.nozzle_temp_max} placeholder="optional" /></div>
+        <div class="fld"><label for="qty">Quantity</label><input id="qty" class="input" type="number" min="1" max="50" bind:value={form.quantity} /></div>
+      </div>
+      <div class="fld"><label for="nt">Note</label><input id="nt" class="input" bind:value={form.note} placeholder="optional" /></div>
+      {#if addErr}<p class="err">{addErr}</p>{/if}
+      <div class="flex gap dactions">
+        <button class="btn btn-primary" onclick={saveAdd} disabled={saving}>{saving ? 'Saving' : (Number(form.quantity) > 1 ? `Add ${form.quantity} spools` : 'Add spool')}</button>
+        <button class="btn btn-ghost" onclick={() => (showAdd = false)} disabled={saving}>Cancel</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if adjust}
+  <div class="overlay no-print" role="presentation" onclick={() => (adjust = null)}>
+    <div class="dialog card sm" role="dialog" onclick={(e) => e.stopPropagation()}>
+      <div class="dhead"><div><span class="eyebrow">Adjust / log waste</span><h3>{adjust.name}</h3></div><button class="btn btn-ghost btn-sm" onclick={() => (adjust = null)} aria-label="Close"><Icon name="x" size={14} /></button></div>
+      <div class="fld"><label for="rem">Remaining weight (g){#if adjust.total} of {adjust.total}{/if}</label><input id="rem" class="input" type="number" min="0" max={adjust.total || undefined} bind:value={adjust.remaining} /></div>
+      <p class="muted hint">Set the true remaining weight, e.g. after weighing the spool, or to write off wasted filament. Used weight is recalculated so cost stays accurate.</p>
+      <div class="flex gap dactions">
+        <button class="btn btn-primary" onclick={saveAdjust} disabled={adjBusy}>{adjBusy ? 'Saving' : 'Save'}</button>
+        <button class="btn btn-ghost" onclick={() => (adjust = null)} disabled={adjBusy}>Cancel</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if link}
+  <div class="overlay no-print" role="presentation" onclick={() => (link = null)}>
+    <div class="dialog card" role="dialog" onclick={(e) => e.stopPropagation()}>
+      <div class="dhead"><div><span class="eyebrow">GenFilament preset</span><h3>{link.spool.name}</h3></div><button class="btn btn-ghost btn-sm" onclick={() => (link = null)} aria-label="Close"><Icon name="x" size={14} /></button></div>
+      {#if link.spool.presetId}<p class="muted tiny">Currently: <span class="mono">{link.spool.presetName || link.spool.presetId}</span></p>{/if}
+      <input class="input" bind:value={link.q} placeholder={gfLoading ? 'Loading presets' : 'Search generated presets'} autocomplete="off" />
+      {#if gfErr}<p class="err">{gfErr}</p>{/if}
+      <div class="plist tall">
+        {#each matchPresets(link.q, 40) as p (p.filament_id)}
+          <button class="pitem" onclick={() => saveLink(p)} disabled={linkBusy}><span>{p.name}</span><span class="muted mono tiny">{p.specs?.nozzle_temp_range_low ?? ''}{#if p.specs?.nozzle_temp_range_high}-{p.specs.nozzle_temp_range_high}&deg;C{/if}</span></button>
+        {:else}
+          <div class="muted tiny pad">{presets ? 'No matching presets.' : ''}</div>
+        {/each}
+      </div>
+      <p class="muted hint">Only the preset link changes; brand, colour and weight stay as they are. Install the matching bundle in your slicer from the GenFilament tab.</p>
+      <div class="flex gap dactions">
+        {#if link.spool.presetId}<button class="btn btn-ghost" onclick={() => saveLink(null)} disabled={linkBusy}>Remove link</button>{/if}
+        <button class="btn btn-ghost" onclick={() => (link = null)} disabled={linkBusy}>Cancel</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if assign}
+  <div class="overlay no-print" role="presentation" onclick={() => (assign = null)}>
+    <div class="dialog card sm" role="dialog" onclick={(e) => e.stopPropagation()}>
+      <div class="dhead"><div><span class="eyebrow">Load on a printer</span><h3>{assign.spool.name}</h3></div><button class="btn btn-ghost btn-sm" onclick={() => (assign = null)} aria-label="Close"><Icon name="x" size={14} /></button></div>
+      <div class="fld">
+        <label for="asp">Printer</label>
+        <select id="asp" class="input" bind:value={assign.printerId} onchange={onPrinterChange}>
+          {#each printers as p}<option value={String(p.id)}>{p.name}</option>{/each}
+        </select>
+      </div>
+      <div class="fld">
+        <label for="ass">Slot</label>
+        <select id="ass" class="input" bind:value={assign.slot}>
+          {#each slotOptions(assign.printerId) as o}<option value={o.v}>{o.l}</option>{/each}
+        </select>
+      </div>
+      <p class="muted hint">Filament used by prints on this slot is deducted from this spool. Bambu spools with an RFID tag are bound automatically when loaded.</p>
+      <div class="flex gap dactions">
+        <button class="btn btn-primary" onclick={saveAssign} disabled={asBusy || !assign.slot}>{asBusy ? 'Saving' : 'Assign'}</button>
+        <button class="btn btn-ghost" onclick={() => (assign = null)} disabled={asBusy}>Cancel</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if labelSpool}
+  <div class="printonly">
+    <div class="label-card">
+      <div class="lc-top"><span class="lc-dot" style="background:{labelSpool.color || '#ccc'}"></span><span class="lc-name">{labelSpool.name}</span></div>
+      <div class="lc-mat">{labelSpool.material}{#if labelSpool.colorName} · {labelSpool.colorName}{/if}</div>
+      <div class="lc-row"><span>{labelSpool.brand || ''}</span><span>{labelSpool.total ? labelSpool.total + ' g' : ''}</span></div>
+      {#if labelSpool.location}<div class="lc-loc">{labelSpool.location}</div>{/if}
+      <div class="lc-foot">{$branding.siteName}</div>
+    </div>
+  </div>
+{/if}
+
+<style>
+  .empty { text-align: center; padding: 2.6rem; }
+  .empty .ic { font-size: 1.8rem; margin-bottom: 0.3rem; }
+  .empty p { max-width: 48ch; margin: 0.6rem auto 0; }
+  .spools { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+  .dot { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--ophq-border); flex: none; }
+  .sname { font-weight: 500; }
+  .mat { font-size: 0.8rem; }
+  .bar { height: 6px; background: var(--ophq-bg-2); border-radius: 3px; margin-top: 0.8rem; overflow: hidden; }
+  .fill { height: 100%; background: var(--ophq-primary); }
+  .rem { font-size: 0.8rem; margin-top: 0.4rem; }
+  .grow { flex: 1; }
+  .sumrow { display: flex; gap: 1rem; margin-bottom: 1.2rem; flex-wrap: wrap; }
+  .st { display: flex; flex-direction: column; gap: 0.2rem; min-width: 130px; }
+  .st b { font-family: var(--ah-font-display); font-weight: 500; letter-spacing: -0.03em; font-size: 26px; font-variant-numeric: tabular-nums; }
+  .sfoot { display: flex; flex-direction: column; align-items: stretch; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--ah-row-line); }
+  .tiny { font-size: 0.74rem; }
+  .btn-xs { padding: 0.12rem 0.5rem; font-size: 0.72rem; }
+  .toast { padding: 0.7rem 1rem; border-radius: var(--radius-sm); margin-bottom: 1.1rem; font-size: 0.9rem; border: 1px solid; }
+  .toast.ok { color: var(--ophq-success); border-color: rgba(155,226,143,0.3); background: rgba(155,226,143,0.08); }
+  .toast.err { color: var(--ophq-danger); border-color: rgba(230,103,103,0.3); background: rgba(230,103,103,0.08); }
+  .empty .btn { margin-top: 1rem; }
+  .acts { display: flex; align-items: center; gap: 0.3rem; flex-wrap: wrap; }
+  .bind { margin-top: 0.4rem; display: flex; align-items: center; gap: 0.3rem; }
+  .preset { margin-top: 0.4rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gfpick { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.9rem; padding-bottom: 0.9rem; border-bottom: 1px solid var(--ophq-border-soft); }
+  .gfpick label { font-size: 0.78rem; color: var(--ophq-text-2); }
+  .chosen { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.45rem 0.6rem; border: 1px solid var(--ophq-border); border-radius: var(--radius-sm); }
+  .plist { display: flex; flex-direction: column; max-height: 220px; overflow-y: auto; border: 1px solid var(--ophq-border); border-radius: var(--radius-sm); margin-top: 0.3rem; }
+  .plist.tall { max-height: 340px; margin-top: 0.6rem; }
+  .pitem { display: flex; justify-content: space-between; gap: 0.6rem; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--ophq-border-soft); padding: 0.45rem 0.6rem; color: inherit; font: inherit; font-size: 0.86rem; cursor: pointer; }
+  .pitem:hover { background: var(--ophq-bg-2); }
+  .pitem:last-child { border-bottom: 0; }
+  .pad { padding: 0.5rem 0.6rem; }
+  .pill { font-size: 0.7rem; padding: 0.05rem 0.45rem; border-radius: 999px; border: 1px solid var(--ophq-border); color: var(--ophq-text-2); vertical-align: middle; }
+
+  .overlay { position: fixed; inset: 0; background: rgba(5,8,12,0.66); backdrop-filter: blur(3px); display: grid; place-items: center; z-index: 100; padding: 1.5rem; }
+  .dialog { width: 100%; max-width: 520px; max-height: calc(100vh - 3rem); overflow-y: auto; padding: 1.5rem; box-shadow: var(--shadow-glow); }
+  .dialog.sm { max-width: 380px; }
+  .dhead { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; }
+  .dhead h3 { margin: 0.2rem 0 0; font-size: 1.15rem; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem; }
+  .fld { display: flex; flex-direction: column; gap: 0.3rem; margin-top: 0.7rem; }
+  .grid2 .fld { margin-top: 0; }
+  .fld label { font-size: 0.78rem; color: var(--ophq-text-2); }
+  .input.color { padding: 0.15rem; height: 38px; }
+  .dactions { margin-top: 1.2rem; }
+  .hint { font-size: 0.8rem; margin: 0.5rem 0 0; }
+  .err { color: var(--ophq-danger); font-size: 0.88rem; margin: 0.7rem 0 0; }
+
+  /* printable label, hidden on screen, shown alone when printing */
+  .printonly { display: none; }
+  @media print {
+    :global(.side) { display: none !important; }
+    :global(.shell) * { visibility: hidden !important; }
+    .printonly, .printonly * { visibility: visible !important; }
+    .printonly { display: block !important; position: fixed; top: 0; left: 0; }
+    .no-print { display: none !important; }
+    @page { margin: 0.6cm; }
+  }
+  .label-card { width: 62mm; border: 1px solid #333; border-radius: 3mm; padding: 3mm 4mm; color: #111; font-family: var(--font-sans, sans-serif); }
+  .lc-top { display: flex; align-items: center; gap: 2mm; }
+  .lc-dot { width: 6mm; height: 6mm; border-radius: 50%; border: 0.3mm solid #333; flex: none; }
+  .lc-name { font-weight: 700; font-size: 4mm; }
+  .lc-mat { font-size: 3.2mm; margin: 1.5mm 0; }
+  .lc-row { display: flex; justify-content: space-between; font-size: 3mm; color: #333; }
+  .lc-loc { font-size: 3mm; margin-top: 1mm; }
+  .lc-foot { margin-top: 2mm; font-size: 2.6mm; color: #777; text-align: right; letter-spacing: 0.02em; }
+</style>

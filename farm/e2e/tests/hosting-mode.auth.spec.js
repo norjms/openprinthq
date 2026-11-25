@@ -1,0 +1,85 @@
+// Regression coverage for the printer hosting-mode feature (P1): the Global
+// Admin selector persists a mode, and the Printers page reshapes per mode.
+// Requires owner auth (dev-login user is the first user => owner on a fresh tier).
+import { test, expect } from '@playwright/test';
+
+// deployment_mode is platform-wide global state, so these tests must not race:
+// run them serially and each sets the mode it needs immediately before asserting.
+test.describe.configure({ mode: 'serial' });
+
+// Restore the mode to 'both' after the suite so manual testing isn't disturbed.
+test.afterAll(async ({ request }) => {
+  await request.put('/api/admin/settings', { data: { deployment_mode: 'both' } }).catch(() => {});
+});
+
+async function setMode(request, mode) {
+  const res = await request.put('/api/admin/settings', { data: { deployment_mode: mode } });
+  expect(res.ok(), `set mode ${mode}`).toBeTruthy();
+  const body = await res.json();
+  expect(body.deployment_mode).toBe(mode);
+}
+
+test.describe('hosting mode — API', () => {
+  test('accepts local, remote, both and rejects garbage (falls back to both)', async ({ request }) => {
+    for (const m of ['local', 'remote', 'both']) await setMode(request, m);
+    // legacy alias maps to remote
+    let r = await request.put('/api/admin/settings', { data: { deployment_mode: 'cloud' } });
+    expect((await r.json()).deployment_mode).toBe('remote');
+    // unknown -> both
+    r = await request.put('/api/admin/settings', { data: { deployment_mode: 'nonsense' } });
+    expect((await r.json()).deployment_mode).toBe('both');
+    // public config reflects it
+    const pub = await (await request.get('/api/pub/config')).json();
+    expect(['local', 'remote', 'both']).toContain(pub.deployment_mode);
+  });
+});
+
+test.describe('hosting mode — Printers page layout', () => {
+  test('local mode hides the connect section behind a reveal', async ({ request, page }) => {
+    await setMode(request, 'local');
+    await page.goto('/app/printers');
+    // Wait for the SPA to hydrate + fetch deployment_mode (async) before asserting
+    // the mode-specific layout. The heading confirms the page shell is up.
+    await expect(page.getByRole('heading', { name: 'Printers', exact: true })).toBeVisible();
+    // The connect/download section must be hidden in local mode.
+    await expect(page.getByText(/Download .msi installer/i)).toHaveCount(0);
+    // The reveal is an EMPTY-STATE affordance: once the tenant has printers the
+    // page shows their cards instead. This tier is shared and its printer list
+    // changes, so assert the reveal only when there is nothing else to show,
+    // rather than depending on the tenant happening to be empty.
+    const printerCards = await page.locator('a[href*="/app/printers/"]').count();
+    if (printerCards === 0) {
+      const reveal = page.getByRole('button', { name: /not on the same network/i });
+      await expect(reveal).toBeVisible({ timeout: 15000 });
+      await reveal.click();
+      await expect(page.getByRole('button', { name: /^Hide$/ })).toBeVisible();
+    } else {
+      // The mode-specific assertion that still holds with printers present: the
+      // remote-only connect/download section must stay hidden in local mode.
+      await expect(page.getByText(/Download .msi installer/i)).toHaveCount(0);
+    }
+  });
+
+  test('remote mode gates the add button until a client pairs', async ({ request, page }) => {
+    await setMode(request, 'remote');
+    await page.goto('/app/printers');
+    await expect(page.getByRole('heading', { name: 'Printers', exact: true })).toBeVisible();
+    // Whether add is enabled depends on paired clients. Assert the two coherent
+    // states rather than a fixed one, since dev may or may not have a paired client.
+    const connectors = await (await request.get('/api/connectors')).json();
+    const hasPaired = (Array.isArray(connectors) ? connectors : connectors.connectors || []).some((c) => c.has_client_key);
+    if (hasPaired) {
+      await expect(page.getByRole('link', { name: /Add (printer|your first printer)/i }).first()).toBeVisible();
+    } else {
+      // disabled affordance is a non-link span with aria-disabled
+      await expect(page.locator('[aria-disabled="true"]', { hasText: /Add/i }).first()).toBeVisible();
+    }
+  });
+
+  test('both mode exposes both add and connect paths', async ({ request, page }) => {
+    await setMode(request, 'both');
+    await page.goto('/app/printers');
+    await expect(page.getByRole('heading', { name: 'Printers', exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: /Add (printer|your first printer)/i }).first()).toBeVisible({ timeout: 15000 });
+  });
+});

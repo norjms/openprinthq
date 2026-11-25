@@ -1,0 +1,409 @@
+<script>
+  import { base as basePath } from '$app/paths';
+  // OpenPrintHQ Farm - the tenant's model library.
+  // SPDX-License-Identifier: AGPL-3.0-or-later
+  //
+  // Native pages, not a frame. The library is our fork of GyroidVault, one
+  // container per tenant, reached through the control-plane on this origin, so
+  // there is no second application, no second session and no iframe.
+  //
+  // Falls back to the engine-backed file list when no library is configured,
+  // which is any deployment without the image. A missing library degrades to
+  // the previous behaviour rather than to a broken tab.
+  import { onMount } from 'svelte';
+  import PageTitle from '$lib/components/PageTitle.svelte';
+  import PageHead from '$lib/components/PageHead.svelte';
+  import EngineFiles from '$lib/components/EngineFiles.svelte';
+  import LibraryBrowse from '$lib/components/LibraryBrowse.svelte';
+  import LibraryCollections from '$lib/components/LibraryCollections.svelte';
+  import LibrarySettings from '$lib/components/LibrarySettings.svelte';
+  import LibraryUpload from '$lib/components/LibraryUpload.svelte';
+  import { library, libraryAsset, objectKeyFor,
+           addTagsTo, inBatches, copyLibraryObject, deleteLibraryObject,
+           libraryIntegrity, integrityForModel, describeFindings } from '$lib/library.js';
+
+  let state_ = $state('checking'); // checking | library | fallback
+  let error = $state(null);
+  // Two ways into the same objects: the library's index, and the bucket as the
+  // person laid it out. Neither is a subset of the other, because a folder can
+  // hold files the index has not scanned yet.
+  let view = $state('models'); // models | folders | collections | settings
+  let uploader;                // LibraryUpload, for the drop zone below
+  let dragging = $state(false);
+  // Multi-select, for the bulk actions below.
+  let selected = $state(new Set());
+  let bulkBusy = $state(false);
+  let bulkNote = $state(null);
+  let collections = $state([]);
+  // Mesh integrity, computed by the engine and joined on the object key. A
+  // separate request from the model list because it comes from a different
+  // service, and because the grid must render whether or not it answers.
+  let integrity = $state({ enabled: false, results: {} });
+
+  function toggle(id) {
+    const next = new Set(selected);
+    next.has(id) ? next.delete(id) : next.add(id);
+    selected = next;
+  }
+  function clearSelection() { selected = new Set(); }
+  function selectAllOnPage() { selected = new Set(models.map((m) => m.id)); }
+
+  const chosenIds = () => models.filter((m) => selected.has(m.id)).map((m) => m.id);
+
+  /** The deepest folder every one of these keys sits under, '' if they share none. */
+  function commonFolder(keys) {
+    const parts = keys.map((k) => k.split('/').slice(0, -1));
+    if (parts.length === 0) return '';
+    const out = [];
+    for (let i = 0; i < parts[0].length; i++) {
+      const seg = parts[0][i];
+      if (parts.every((p) => p[i] === seg)) out.push(seg); else break;
+    }
+    return out.join('/');
+  }
+
+  async function withBulk(label, fn) {
+    bulkBusy = true; bulkNote = null;
+    try {
+      const r = await fn();
+      bulkNote = r || label;
+      clearSelection();
+      await load();
+    } catch (e) {
+      bulkNote = `${label} failed: ${e.message}`;
+    } finally {
+      bulkBusy = false;
+    }
+  }
+
+  const bulkTag = () => {
+    const raw = prompt('Add tags (comma separated)');
+    if (!raw) return;
+    const ids = chosenIds();
+    return withBulk('Tagging', async () => {
+      await addTagsTo(ids, raw.split(','));
+      return `Tagged ${ids.length} model${ids.length === 1 ? '' : 's'}.`;
+    });
+  };
+
+  const bulkCategory = (value) => {
+    if (value === '') return;
+    const ids = chosenIds();
+    return withBulk('Setting the category', async () => {
+      await library.bulk.update(ids, { category_id: value === 'none' ? null : Number(value) });
+      return `Moved ${ids.length} model${ids.length === 1 ? '' : 's'} into a category.`;
+    });
+  };
+
+  const bulkCollection = (value) => {
+    if (!value) return;
+    const ids = chosenIds();
+    return withBulk('Adding to the collection', async () => {
+      await library.bulk.addToCollection(Number(value), ids);
+      return `Added ${ids.length} model${ids.length === 1 ? '' : 's'} to the collection.`;
+    });
+  };
+
+  // Moving and deleting act on the OBJECT STORE, not on the index. The
+  // library's bucket mount is read-only, so its own bulk-move and bulk-delete
+  // cannot touch a file; they would report success and change nothing on disk.
+  async function bulkMove() {
+    const folder = prompt('Move the files of the selected models into which folder?');
+    if (folder === null) return;
+    const dest = folder.replace(/^\/+|\/+$/g, '');
+    const ids = chosenIds();
+    return withBulk('Moving', async () => {
+      const full = await inBatches(ids, (id) => library.model(id).catch(() => null));
+      // Each model keeps its own folder under the destination, and any nesting
+      // inside it. Flattening to basenames would have two models that both hold
+      // a plate.gcode overwrite each other, silently and unrecoverably.
+      const jobs = [];
+      for (const m of full.filter(Boolean)) {
+        const keys = (m.files || []).map(objectKeyFor).filter(Boolean);
+        if (keys.length === 0) continue;
+        const prefix = commonFolder(keys);
+        const folder = prefix.split('/').filter(Boolean).pop() || String(m.id);
+        for (const key of keys) {
+          const rel = prefix && key.startsWith(prefix + '/') ? key.slice(prefix.length + 1) : key.split('/').pop();
+          jobs.push({ key, to: [dest, folder, rel].filter(Boolean).join('/') });
+        }
+      }
+      let moved = 0, failed = 0;
+      await inBatches(jobs, async (j) => {
+        if (j.key === j.to) { moved++; return; }
+        try { await copyLibraryObject(j.key, j.to, { move: true }); moved++; } catch { failed++; }
+      });
+      return failed
+        ? `Moved ${moved} file${moved === 1 ? '' : 's'}, ${failed} could not be moved.`
+        : `Moved ${moved} file${moved === 1 ? '' : 's'}.`;
+    });
+  }
+
+  async function bulkDelete() {
+    const ids = chosenIds();
+    if (!confirm(`Delete the files of ${ids.length} model${ids.length === 1 ? '' : 's'} from your storage? This cannot be undone.`)) return;
+    return withBulk('Deleting', async () => {
+      const full = await inBatches(ids, (id) => library.model(id).catch(() => null));
+      const files = full.filter(Boolean).flatMap((m) => m.files || []);
+      let gone = 0, failed = 0;
+      await inBatches(files, async (f) => {
+        try { await deleteLibraryObject(objectKeyFor(f)); gone++; } catch { failed++; }
+      });
+      // The index entries go too, or the models linger as empty shells until
+      // the next scan notices their files are missing.
+      await library.bulk.remove(ids, false).catch(() => {});
+      return failed
+        ? `Deleted ${gone} file${gone === 1 ? '' : 's'}, ${failed} could not be deleted.`
+        : `Deleted ${gone} file${gone === 1 ? '' : 's'}.`;
+    });
+  }
+
+  // After an upload the library has to scan before a file becomes a model, and
+  // that is asynchronous. Reload once now and once shortly after, so the grid
+  // catches up without the person having to work out that they should refresh.
+  function afterUpload() {
+    load();
+    setTimeout(load, 4000);
+  }
+
+  let models = $state([]);
+  let categories = $state([]);
+  let totalItems = $state(0);
+  let totalPages = $state(1);
+  let loading = $state(false);
+
+  let search = $state('');
+  let category = $state('');
+  let sort = $state('updated');
+  let page_ = $state(1);
+
+  // Debounced so typing does not fire a request per keystroke. Kept small: the
+  // library is a container on the same host, so the round trip is cheap and a
+  // long delay just feels broken.
+  let searchTimer;
+  function onSearchInput() {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => { page_ = 1; load(); }, 250);
+  }
+
+  async function load() {
+    loading = true;
+    try {
+      const d = await library.models({ search, category, sort, page: page_, limit: 24 });
+      models = d.models || [];
+      totalItems = d.totalItems || 0;
+      totalPages = d.totalPages || 1;
+      error = null;
+    } catch (e) {
+      error = e.message;
+      models = [];
+    } finally {
+      loading = false;
+    }
+  }
+
+  function setSort(v) { sort = v; page_ = 1; load(); }
+  function setCategory(v) { category = v; page_ = 1; load(); }
+  function go(p) { page_ = Math.min(Math.max(1, p), totalPages); load(); }
+
+  onMount(async () => {
+    const s = await library.status();
+    if (!s.available) { state_ = 'fallback'; return; }
+    state_ = 'library';
+    // Categories are a filter, not the page: a failure here must not stop the
+    // grid rendering.
+    library.categories().then((c) => { categories = c || []; }).catch(() => {});
+    library.projects.list().then((c) => { collections = c || []; }).catch(() => {});
+    libraryIntegrity().then((r) => { integrity = r; });
+    await load();
+  });
+</script>
+
+<PageTitle page="Files" />
+
+{#if state_ === 'checking'}
+  <PageHead title="Files" description="Your private 3MF, STL and G-code library." />
+  <p class="muted">Opening your library</p>
+{:else if state_ === 'fallback'}
+  <EngineFiles />
+{:else}
+  <PageHead title="Files" description="Your private 3MF, STL and G-code library.">
+    {#snippet actions()}
+      <div class="ah-seg" role="tablist" aria-label="Library views">
+        <button type="button" role="tab" aria-selected={view === 'models'} onclick={() => (view = 'models')}>Models</button>
+        <button type="button" role="tab" aria-selected={view === 'folders'} onclick={() => (view = 'folders')}>Folders</button>
+        <button type="button" role="tab" aria-selected={view === 'collections'} onclick={() => (view = 'collections')}>Collections</button>
+        <button type="button" role="tab" aria-selected={view === 'settings'} onclick={() => (view = 'settings')}>Settings</button>
+      </div>
+    {/snippet}
+  </PageHead>
+
+{#if view === 'folders'}
+  <LibraryBrowse />
+{:else if view === 'collections'}
+  <LibraryCollections />
+{:else if view === 'settings'}
+  <LibrarySettings />
+{:else}
+  <div class="bar">
+    <input
+      class="search input"
+      type="search"
+      placeholder="Search models"
+      aria-label="Search models"
+      bind:value={search}
+      oninput={onSearchInput}
+    />
+    <select class="input" aria-label="Category" value={category} onchange={(e) => setCategory(e.currentTarget.value)}>
+      <option value="">All categories</option>
+      {#each categories as c (c.id)}
+        <option value={c.id}>{c.name}</option>
+      {/each}
+    </select>
+    <select class="input" aria-label="Sort by" value={sort} onchange={(e) => setSort(e.currentTarget.value)}>
+      <option value="updated">Recently updated</option>
+      <option value="created">Newest</option>
+      <option value="name">Name</option>
+      <option value="files">Most files</option>
+      <option value="prints">Most printed</option>
+    </select>
+    <LibraryUpload bind:this={uploader} ondone={afterUpload} />
+    <span class="count">{totalItems} model{totalItems === 1 ? '' : 's'}</span>
+  </div>
+
+  <div class="selbar" class:idle={selected.size === 0}>
+    {#if selected.size === 0}
+      <button class="act" onclick={selectAllOnPage} disabled={models.length === 0}>Select all on this page</button>
+    {:else}
+      <span>{selected.size} selected</span>
+      <button class="act" onclick={bulkTag} disabled={bulkBusy}>Add tags</button>
+      <select disabled={bulkBusy} onchange={(e) => { bulkCategory(e.currentTarget.value); e.currentTarget.value = ''; }}>
+        <option value="">Set category</option>
+        <option value="none">No category</option>
+        {#each categories as c (c.id)}<option value={c.id}>{c.name}</option>{/each}
+      </select>
+      {#if collections.length > 0}
+        <select disabled={bulkBusy} onchange={(e) => { bulkCollection(e.currentTarget.value); e.currentTarget.value = ''; }}>
+          <option value="">Add to collection</option>
+          {#each collections as c (c.id)}<option value={c.id}>{c.name}</option>{/each}
+        </select>
+      {/if}
+      <button class="act" onclick={bulkMove} disabled={bulkBusy}>Move files</button>
+      <button class="act danger" onclick={bulkDelete} disabled={bulkBusy}>Delete</button>
+      <button class="act" onclick={clearSelection} disabled={bulkBusy}>Clear</button>
+    {/if}
+    {#if bulkBusy}<span class="muted">Working</span>{/if}
+    {#if bulkNote}<span class="muted">{bulkNote}</span>{/if}
+  </div>
+
+  {#if error}<p class="warn">{error}</p>{/if}
+
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div
+  class="dropzone"
+  class:over={dragging}
+  ondragover={(e) => { e.preventDefault(); dragging = true; }}
+  ondragleave={() => (dragging = false)}
+  ondrop={(e) => { e.preventDefault(); dragging = false; uploader?.send(e.dataTransfer?.files); }}
+>
+  {#if loading && models.length === 0}
+    <p class="muted">Loading</p>
+  {:else if models.length === 0}
+    <p class="muted">
+      {search || category
+        ? 'Nothing matches that.'
+        : 'This library is empty. Drop files here, or use Upload above. They appear as models once the library scans them.'}
+    </p>
+  {:else}
+    <div class="grid" class:dim={loading}>
+      {#each models as m (m.id)}
+        <div class="mcard" class:picked={selected.has(m.id)}>
+        <label class="pick">
+          <input type="checkbox" checked={selected.has(m.id)} onchange={() => toggle(m.id)} />
+        </label>
+        <a href={`${basePath}/app/files/${m.id}`}>
+          <div class="thumb">
+            {#if m.thumbnail}
+              <img src={libraryAsset(m.thumbnail)} alt="" loading="lazy" />
+            {:else}
+              <span class="noimg">{(m.file_types || []).join(' ') || 'no preview'}</span>
+            {/if}
+          </div>
+          <div class="meta">
+            <span class="name" title={m.name}>{m.name}</span>
+            {#if integrityForModel(integrity.results, m)?.status === 'problems'}
+              {@const bad = integrityForModel(integrity.results, m)}
+              <span
+                class="mesh bad"
+                title={`Mesh problem: ${describeFindings(bad.first?.findings)}. A mesh like this often fails in a way that looks like a printer fault.`}
+              >
+                Mesh problem{bad.problems > 1 ? ` (${bad.problems} files)` : ''}
+              </span>
+            {/if}
+            <span class="sub">
+              {m.file_count} file{m.file_count === 1 ? '' : 's'}
+              {#if m.print_count}&middot; {m.print_count} print{m.print_count === 1 ? '' : 's'}{/if}
+              {#if m.category_name}&middot; {m.category_name}{/if}
+            </span>
+          </div>
+        </a>
+        </div>
+      {/each}
+    </div>
+
+    {#if totalPages > 1}
+      <div class="pager">
+        <button onclick={() => go(page_ - 1)} disabled={page_ <= 1}>Previous</button>
+        <span class="muted">Page {page_} of {totalPages}</span>
+        <button onclick={() => go(page_ + 1)} disabled={page_ >= totalPages}>Next</button>
+      </div>
+    {/if}
+  {/if}
+</div>
+{/if}
+{/if}
+
+<style>
+  /* Only a problem is badged. A clean result is the expected case and a badge
+     on every card teaches people to stop reading badges. */
+  .mesh { align-self: flex-start; font-size: 12px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--ah-field-line); color: var(--ah-text-2); }
+  .mesh.bad { border-color: var(--ah-chip-bad-line); color: var(--ah-chip-bad-text); background: linear-gradient(var(--ah-chip-bad-bg), var(--ah-chip-bad-bg)), var(--ah-chip-underlay); }
+
+  .bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; flex: none; }
+  .bar .input { width: auto; }
+  .search { flex: 1 1 16rem; min-width: 12rem; }
+  .count { color: var(--ah-text-3); font-size: 13px; margin-left: auto; }
+
+  .dropzone { border: 1px dashed transparent; border-radius: var(--ah-radius-card); min-height: 6rem; }
+  .dropzone.over { border-color: var(--ah-accent); background: var(--ah-panel); }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; }
+  /* Dimmed rather than replaced while refetching: swapping the grid for a
+     spinner on every keystroke makes the page flicker and loses scroll. */
+  .dim { opacity: 0.55; }
+
+  .mcard { position: relative; display: block; border: 1px solid var(--ah-glass-line); border-radius: var(--ah-radius-choice); overflow: hidden; background: var(--ah-glass); backdrop-filter: var(--ah-blur); -webkit-backdrop-filter: var(--ah-blur); color: inherit; }
+  .mcard:hover { border-color: rgba(255, 255, 255, 0.32); }
+  .mcard.picked { border-color: var(--ah-accent); box-shadow: 0 0 0 1px var(--ah-accent) inset; }
+  .mcard > a { display: block; color: var(--ah-text); text-decoration: none; }
+  .pick { position: absolute; top: 8px; left: 8px; z-index: 2; background: var(--ah-panel); border: 1px solid var(--ah-panel-line); border-radius: 8px; padding: 3px 4px; line-height: 0; }
+  .pick input { accent-color: var(--ah-accent); }
+  .selbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 8px 12px; border: 1px solid var(--ah-chip-live-line); border-radius: var(--ah-radius-btn); background: var(--ah-panel); flex: none; }
+  .selbar.idle { border-color: transparent; background: transparent; padding: 0; }
+  .selbar select { min-height: 32px; padding: 0 10px; border: 1px solid var(--ah-field-line); border-radius: var(--ah-radius-btn-sm); background: var(--ah-field); color: var(--ah-text); font: 13px var(--ah-font-sans); }
+  .act { height: 32px; padding: 0 12px; border: 1px solid var(--ah-field-line); border-radius: var(--ah-radius-btn-sm); background: var(--ah-glass); color: var(--ah-text); cursor: pointer; font: 600 13px var(--ah-font-sans); }
+  .act.danger { color: var(--ah-chip-bad-text); border-color: var(--ah-chip-bad-line); background: var(--ah-danger-bg); }
+  .act:disabled { opacity: 0.5; cursor: default; }
+
+  .thumb { aspect-ratio: 4 / 3; display: grid; place-items: center; background: var(--ah-panel); overflow: hidden; }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .noimg { color: var(--ah-text-3); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
+  .meta { padding: 10px 12px 12px; display: grid; gap: 2px; }
+  .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sub { color: var(--ah-text-3); font-size: 12px; }
+
+  .pager { display: flex; gap: 12px; align-items: center; justify-content: center; margin-top: 16px; }
+  .pager button { height: 32px; padding: 0 12px; border: 1px solid var(--ah-field-line); border-radius: var(--ah-radius-btn-sm); background: var(--ah-glass); color: var(--ah-text); cursor: pointer; font: 600 13px var(--ah-font-sans); }
+  .pager button:disabled { opacity: 0.4; cursor: default; }
+  .warn { color: var(--ah-chip-warn-text); }
+</style>

@@ -1,0 +1,18 @@
+# go2rtc base config — WebRTC camera media server (co-located with the printers).
+# NO streams and NO secrets here: the control-plane registers each printer's
+# camera stream at runtime from the engine DB (see control-plane/src/go2rtc.js),
+# so this file is safe to commit and a newly-added printer needs no config edit.
+api:
+  listen: ":1984"                 # signaling/API — internal only (control-plane reaches it)
+webrtc:
+  listen: ":8555"
+  candidates:
+    - 203.0.113.10:8555           # set to this host's LAN/WAN IP so browsers get media direct
+  ice_servers:
+    - urls: [stun:stun.l.google.com:19302]
+    # TURN (for remote / CGNAT) goes here once a relay endpoint exists:
+    # - urls: [turn:turn.example.org:3478]
+    #   username: <user>
+    #   credential: <secret>
+log:
+  level: info

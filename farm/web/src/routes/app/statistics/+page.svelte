@@ -1,0 +1,227 @@
+<script>
+  import { base as basePath } from '$app/paths';
+  import { onMount } from 'svelte';
+  import { api } from '$lib/api';
+  import EngineError from '$lib/components/EngineError.svelte';
+  import PageTitle from '$lib/components/PageTitle.svelte';
+  import Icon from '$lib/components/AppIcon.svelte';
+  import PageHead from '$lib/components/PageHead.svelte';
+
+  let loading = $state(true);
+  let error = $state(null);
+  let s = $state(null);
+  let printerNames = $state({});
+  let recent = $state([]);
+  let fa = $state(null);        // failure analysis
+  let cur = $state('USD');      // currency from engine settings
+  let failedCost = $state(null); // computed cost of failed prints
+
+  const CUR_SYM = { USD: '$', EUR: '€', GBP: '£', CAD: '$', AUD: '$', JPY: '¥', CHF: 'CHF ', SEK: 'kr ', NOK: 'kr ', DKK: 'kr ', PLN: 'zł ', INR: '₹', CNY: '¥', NZD: '$', ZAR: 'R ', BRL: 'R$ ', MXN: '$' };
+  const sym = $derived(CUR_SYM[cur] || (cur + ' '));
+  const money = (v) => sym + (Number(v) || 0).toFixed(2);
+
+  async function load() {
+    loading = true; error = null;
+    try {
+      s = await api.printStats();
+      const eng = await api.engineSettings().catch(() => null);
+      if (eng?.currency) cur = eng.currency;
+      const pl = await api.printers().catch(() => []);
+      const arr = Array.isArray(pl) ? pl : (pl?.printers || pl?.items || []);
+      printerNames = Object.fromEntries(arr.map((p) => [String(p.id), p.name || p.model || ('Printer ' + p.id)]));
+      fa = await api.failureAnalysis(30).catch(() => null);
+      const log = await api.printLog(200).catch(() => null);
+      const entries = (log && log.items) || (Array.isArray(log) ? log : []);
+      // Cost of failed prints = their actual filament + energy usage, valued at
+      // the fleet's average cost/gram and energy rate (per-print cost isn't stored).
+      const failed = entries.filter((e) => /fail/i.test(String(e.status || '')));
+      const costPerG = s.total_filament_grams > 0 ? (s.total_cost || 0) / s.total_filament_grams : 0;
+      const kwhPerHr = s.total_print_time_hours > 0 ? (s.total_energy_kwh || 0) / s.total_print_time_hours : 0;
+      const rate = s.total_energy_kwh > 0 ? (s.total_energy_cost || 0) / s.total_energy_kwh : 0;
+      const fGrams = failed.reduce((a, e) => a + (Number(e.filament_used_grams) || 0), 0);
+      const fHours = failed.reduce((a, e) => a + (Number(e.duration_seconds) || 0), 0) / 3600;
+      failedCost = failed.length ? (fGrams * costPerG) + (fHours * kwhPerHr * rate) : 0;
+      recent = entries.map((e) => ({
+        id: e.id,
+        name: e.print_name || 'Print',
+        printer: e.printer_name || printerNames[String(e.printer_id)] || (e.printer_id ? 'Printer ' + e.printer_id : ''),
+        status: (e.status || '').toString(),
+        dur: e.duration_seconds,
+        ftype: e.filament_type || '',
+        fcolor: e.filament_color || '',
+        grams: e.filament_used_grams,
+        when: e.completed_at || e.started_at || e.created_at
+      }));
+    }
+    catch (e) { error = e.status === 409 ? 'no-instance' : (e.message || 'engine unreachable'); }
+    finally { loading = false; }
+  }
+  onMount(load);
+
+  function fmtDur(sec) {
+    if (!sec) return '';
+    const h = Math.floor(sec / 3600), m = Math.round((sec % 3600) / 60);
+    return h > 0 ? `${h}h ${m}m` : `${m}m`;
+  }
+  function fmtWhen(v) {
+    if (!v) return '';
+    const d = new Date(v);
+    return isNaN(d) ? '' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  }
+  function rtone(x) {
+    x = (x || '').toLowerCase();
+    if (/complete|success|finish/.test(x)) return 'ok';
+    if (/fail|abort|error/.test(x)) return 'danger';
+    return '';
+  }
+
+  const successRate = $derived(s && s.total_prints > 0 ? Math.round((s.successful_prints / s.total_prints) * 100) : null);
+  const tiles = $derived(s ? [
+    { label: 'Total prints', value: s.total_prints ?? 0 },
+    { label: 'Success rate', value: successRate == null ? '' : successRate + '%', ok: true },
+    { label: 'Failed', value: s.failed_prints ?? 0, danger: (s.failed_prints ?? 0) > 0,
+      sub: (s.failed_prints ?? 0) > 0 && failedCost != null ? money(failedCost) + ' lost' : null },
+    { label: 'Print time', value: (s.total_print_time_hours ?? 0).toFixed(1) + ' h' },
+    { label: 'Filament used', value: ((s.total_filament_grams ?? 0) / 1000).toFixed(2) + ' kg' },
+    { label: 'Cost', value: money(s.total_cost ?? 0) },
+    { label: 'Energy', value: (s.total_energy_kwh ?? 0).toFixed(1) + ' kWh' },
+    { label: 'Energy cost', value: money(s.total_energy_cost ?? 0) }
+  ] : []);
+  const faReasons = $derived(fa?.failures_by_reason ? Object.entries(fa.failures_by_reason).sort((a, b) => b[1] - a[1]) : []);
+  const faPrinters = $derived(fa?.failures_by_printer ? Object.entries(fa.failures_by_printer).sort((a, b) => b[1] - a[1]) : []);
+  const faFilament = $derived(fa?.failures_by_filament ? Object.entries(fa.failures_by_filament).sort((a, b) => b[1] - a[1]) : []);
+  const byType = $derived(s?.prints_by_filament_type ? Object.entries(s.prints_by_filament_type) : []);
+  const byPrinter = $derived(s?.prints_by_printer
+    ? Object.entries(s.prints_by_printer).map(([k, v]) => [printerNames[k] || (k === 'unknown' ? 'Unknown' : `Printer ${k}`), v])
+    : []);
+</script>
+
+<PageTitle page="Statistics" />
+
+<PageHead title="Statistics" description="Production analytics for your fleet.">
+  {#snippet actions()}
+    <button class="btn" onclick={load}><Icon name="refresh" size={16} />Refresh</button>
+  {/snippet}
+</PageHead>
+
+{#if loading}
+  <div class="card card-pad muted">Loading analytics</div>
+{:else if error === 'no-instance'}
+  <div class="card card-pad"><p class="muted">Provision your instance from the <a href="{basePath}/app">overview</a> first.</p></div>
+{:else if error}
+  <EngineError {error} onretry={load} />
+{:else}
+  <div class="tiles">
+    {#each tiles as t}
+      <div class="card card-pad tile">
+        <span class="muted">{t.label}</span>
+        <b class:ok={t.ok} class:danger={t.danger}>{t.value}</b>
+        {#if t.sub}<span class="sub mono">{t.sub}</span>{/if}
+      </div>
+    {/each}
+  </div>
+  {#if s.total_prints === 0}
+    <div class="card card-pad muted note">No prints recorded yet, analytics fill in as you print across your fleet.</div>
+  {:else}
+    <div class="grid two">
+      <div class="card card-pad">
+        <span class="eyebrow">By filament type</span>
+        {#if byType.length}{#each byType as [k, v]}<div class="row"><span>{k}</span><span class="mono">{v}</span></div>{/each}{:else}<p class="muted"></p>{/if}
+      </div>
+      <div class="card card-pad">
+        <span class="eyebrow">By printer</span>
+        {#if byPrinter.length}{#each byPrinter as [k, v]}<div class="row"><span>{k}</span><span class="mono">{v}</span></div>{/each}{:else}<p class="muted"></p>{/if}
+      </div>
+    </div>
+
+    {#if recent.length}
+      <div class="card recents">
+        <div class="rrow rhead muted mono">
+          <span>Job</span><span>Printer</span><span>Filament</span><span>Time</span><span>Status</span><span class="ar">When</span>
+        </div>
+        {#each recent as r (r.id)}
+          <div class="rrow">
+            <span class="rname">{r.name}</span>
+            <span class="muted">{r.printer}</span>
+            <span class="rfil">
+              {#if r.fcolor}<span class="dot" style="background:{r.fcolor}"></span>{/if}{r.ftype || ''}{#if r.grams} · {Math.round(r.grams)} g{/if}
+            </span>
+            <span class="mono">{fmtDur(r.dur)}</span>
+            <span><span class="chip {rtone(r.status)}">{r.status}</span></span>
+            <span class="ar muted mono">{fmtWhen(r.when)}</span>
+          </div>
+        {/each}
+      </div>
+    {/if}
+
+    {#if fa && fa.failed_prints > 0}
+      <div class="card card-pad fa">
+        <div class="flex between center">
+          <span class="eyebrow">Failure analysis</span>
+          <span class="muted tiny">last {fa.period_days} days</span>
+        </div>
+        <div class="fatiles">
+          <div class="fatile"><span class="muted">Failure rate</span><b class="warn">{fa.failure_rate}%</b></div>
+          <div class="fatile"><span class="muted">Failed</span><b>{fa.failed_prints}<span class="muted of"> / {fa.total_prints}</span></b></div>
+        </div>
+        <div class="grid three">
+          <div>
+            <span class="fahd">By reason</span>
+            {#if faReasons.length}{#each faReasons as [k, v]}<div class="row"><span>{k}</span><span class="mono">{v}</span></div>{/each}{:else}<p class="muted"></p>{/if}
+          </div>
+          <div>
+            <span class="fahd">By printer</span>
+            {#if faPrinters.length}{#each faPrinters as [k, v]}<div class="row"><span>{k}</span><span class="mono">{v}</span></div>{/each}{:else}<p class="muted"></p>{/if}
+          </div>
+          <div>
+            <span class="fahd">By filament</span>
+            {#if faFilament.length}{#each faFilament as [k, v]}<div class="row"><span>{k}</span><span class="mono">{v}</span></div>{/each}{:else}<p class="muted"></p>{/if}
+          </div>
+        </div>
+        {#if fa.recent_failures?.length}
+          <span class="fahd">Recent failures</span>
+          {#each fa.recent_failures.slice(0, 6) as rf}
+            <div class="row"><span>{rf.print_name || 'Print'} <span class="muted">· {rf.failure_reason || 'unknown'}</span></span><span class="muted mono">{rf.filament_type || ''}</span></div>
+          {/each}
+        {/if}
+      </div>
+    {/if}
+  {/if}
+{/if}
+
+<style>
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+  .tile { display: flex; flex-direction: column; gap: 0.3rem; }
+  .tile b { font-family: var(--ah-font-display); font-weight: 500; letter-spacing: -0.03em; font-size: 34px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .tile b.ok { color: var(--ophq-success); }
+  .tile b.danger { color: var(--ophq-danger); }
+  .tile .sub { font-size: 0.8rem; color: var(--ophq-danger); margin-top: 0.1rem; }
+  .note { margin-top: 1.2rem; }
+  .two { grid-template-columns: 1fr 1fr; margin-top: 1.2rem; }
+  .three { grid-template-columns: repeat(3, 1fr); gap: 1.2rem; margin: 0.8rem 0; }
+  .fa { margin-top: 1.2rem; }
+  .fatiles { display: flex; gap: 2rem; margin: 0.9rem 0; }
+  .fatile { display: flex; flex-direction: column; gap: 0.2rem; }
+  .fatile b { font-family: var(--ah-font-display); font-weight: 500; letter-spacing: -0.03em; font-size: 28px; font-variant-numeric: tabular-nums; }
+  .fatile b.warn { color: var(--ophq-accent); }
+  .fatile .of { font-size: 1rem; }
+  .fahd { display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ophq-muted); margin: 0.8rem 0 0.4rem; }
+  .fa .tiny { font-size: 0.78rem; }
+  @media (max-width: 820px) { .three { grid-template-columns: 1fr; } }
+  .row { display: flex; justify-content: space-between; padding: 0.4rem 0; border-bottom: 1px solid var(--ophq-border-soft); }
+  .row:last-child { border-bottom: none; }
+
+  .recents { margin-top: 1.2rem; overflow: hidden; }
+  .rrow { display: grid; grid-template-columns: 1.4fr 1fr 1.3fr 80px 110px 70px; gap: 1rem; align-items: center; padding: 0.7rem 1.2rem; border-bottom: 1px solid var(--ophq-border); font-size: 0.9rem; }
+  .rrow:last-child { border-bottom: none; }
+  .rhead { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .rname { font-weight: 500; }
+  .ar { text-align: right; }
+  .rfil { display: flex; align-items: center; gap: 0.45rem; color: var(--ophq-text-2); }
+  .rfil .dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.15); flex-shrink: 0; }
+  @media (max-width: 820px) {
+    .tiles { grid-template-columns: repeat(2, 1fr); } .two { grid-template-columns: 1fr; }
+    .rrow { grid-template-columns: 1.4fr 1fr 70px; }
+    .rrow > :nth-child(3), .rrow > :nth-child(4), .rhead > :nth-child(3), .rhead > :nth-child(4) { display: none; }
+  }
+</style>

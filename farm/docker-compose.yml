@@ -1,0 +1,93 @@
+# OpenPrintHQ — control-plane stack
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Runs the public website + control-plane API behind a single edge router.
+# Per-user engine instances are started dynamically by the control-plane
+# (which is why it gets the Docker socket), not declared here.
+
+services:
+  router:
+    build: ./infra/router
+    image: openprinthq/router:dev
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on: [web, control-plane]
+
+  web:
+    build: ./web
+    image: openprinthq/web:dev
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+    expose:
+      - "3000"
+
+  control-plane:
+    build: ./control-plane
+    image: openprinthq/control-plane:dev
+    restart: unless-stopped
+    environment:
+      - PORT=8080
+      - DATABASE_URL=${DATABASE_URL}
+      - SESSION_SECRET=${SESSION_SECRET}
+      - OPHQ_PG_HOST=${OPHQ_PG_HOST}
+      - OPHQ_PG_PORT=${OPHQ_PG_PORT}
+      - OPHQ_PG_USER=${OPHQ_PG_USER}
+      - OPHQ_PG_PASS=${OPHQ_PG_PASS}
+      - OPHQ_ENGINE_IMAGE=${OPHQ_ENGINE_IMAGE}
+      - OPHQ_BASE_PORT=${OPHQ_BASE_PORT}
+      - OIDC_ISSUER=${OIDC_ISSUER}
+      - OPHQ_GATEWAY_SECRET=${OPHQ_GATEWAY_SECRET:-}
+      - OPHQ_ALLOW_DEV_LOGIN=${OPHQ_ALLOW_DEV_LOGIN:-}
+      - OPHQ_ENGINE_HOST=${OPHQ_ENGINE_HOST:-127.0.0.1}
+      # Optional DNS servers for tenant engines (see control-plane/src/engine-dns.js).
+      - OPHQ_ENGINE_DNS=${OPHQ_ENGINE_DNS:-}
+      # Slicing ships with the app (bundled orca-slicer-api service below).
+      - OPHQ_SLICER_URL=${OPHQ_SLICER_URL:-http://orca-slicer-api:3000}
+      - OPHQ_DOCKER_NETWORK=${OPHQ_DOCKER_NETWORK:-openprinthq_default}
+      # Authentik admin API (signup creates the login user); owner/user groups.
+      # dev/test = homelab Authentik; prod = bundled. Blank -> signup disabled.
+      - OPHQ_AUTHENTIK_URL=${OPHQ_AUTHENTIK_URL:-}
+      - OPHQ_AUTHENTIK_TOKEN=${OPHQ_AUTHENTIK_TOKEN:-}
+      - OPHQ_OWNER_GROUP=${OPHQ_OWNER_GROUP:-openprinthq-owners}
+      - OPHQ_USER_GROUP=${OPHQ_USER_GROUP:-openprinthq-users}
+      # Cloudflare TURN (remote/CGNAT camera relay); STUN-only if unset.
+      - OPHQ_CF_TURN_KEY_ID=${OPHQ_CF_TURN_KEY_ID:-}
+      - OPHQ_CF_TURN_API_TOKEN=${OPHQ_CF_TURN_API_TOKEN:-}
+    volumes:
+      # lets the provisioner start per-tenant engine containers
+      - /var/run/docker.sock:/var/run/docker.sock
+    expose:
+      - "8080"
+
+  # The slicing service: OrcaSlicer's command line behind an HTTP API, built from
+  # slicer/ for the version in slicer/orcaslicer.env. Engines reach it by name on
+  # the shared network via OPHQ_SLICER_URL (http://orca-slicer-api:3000).
+  orca-slicer-api:
+    image: ${OPHQ_SLICER_IMAGE:-ghcr.io/norjms/openprinthq-farm-slicer:latest}
+    restart: unless-stopped
+    environment:
+      - PORT=3000
+    volumes:
+      - orca_data:/app/data
+    expose:
+      - "3000"
+
+  # WebRTC camera media server, co-located with the printers. Ingests each
+  # printer's RTSP camera and streams it peer-to-peer to browsers; the
+  # control-plane only relays SDP signaling (never video). Streams are
+  # registered at runtime by the control-plane (control-plane/src/go2rtc.js),
+  # so the mounted config carries no streams or secrets.
+  go2rtc:
+    image: alexxit/go2rtc:latest
+    container_name: openprinthq-go2rtc
+    restart: unless-stopped
+    ports:
+      - "8555:8555/tcp"   # WebRTC media (published so LAN browsers reach it direct)
+      - "8555:8555/udp"
+    volumes:
+      - ./infra/go2rtc/go2rtc.yaml:/config/go2rtc.yaml
+
+volumes:
+  orca_data:
