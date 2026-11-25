@@ -1,0 +1,9 @@
+# gitleaks: the default rules, and one exception. Pinned upstream commit IDs (40 hex characters on a *_COMMIT= line,
+# as in farm/slicer/orcaslicer.env) are public identifiers, not secrets, but the generic-api-key rule reads them as one.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Pinned upstream commit IDs"
+regexTarget = "match"
+regexes = ['''^[A-Z0-9_]*_COMMIT=[0-9a-f]{40}$''']
