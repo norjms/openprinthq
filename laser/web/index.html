@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en" class="ah-root ah-page" data-theme="glass-dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Convert files · OpenPrintHQ Laser</title>
+<meta name="description" content="Convert laser projects between Bambu Suite (.lac), xTool Studio (.xcs, .xs), Falcon Design Space (.fds) and SVG, right in your browser. Files never leave your computer.">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="fonts/fonts.css">
+<link rel="stylesheet" href="vendor/openprinthq-ui/theme.css">
+<link rel="stylesheet" href="vendor/openprinthq-ui/base.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="ah-shell">
+  <div class="ah-shell__side">
+    <aside class="ah-glass ah-sidebar">
+      <a class="ah-sidebar__brand" href="/" id="brand">
+        <span class="ah-mark">
+          <span class="ah-icon-tile ah-mark__tile lc-brandtile" aria-hidden="true" id="brand-icon"></span>
+          <span class="ah-mark__name" id="brand-name">OpenPrintHQ</span>
+        </span>
+      </a>
+      <nav class="ah-sidebar__nav" id="nav" aria-label="OpenPrintHQ navigation"></nav>
+    </aside>
+  </div>
+  <main class="ah-shell__main">
+    <header class="ah-header">
+      <nav class="ah-header__crumbs" aria-label="Breadcrumb">Laser Crafting / <b>Convert files</b></nav>
+    </header>
+    <div class="ah-titlerow">
+      <div class="lc-titletext">
+        <h1 class="ah-title">Convert files</h1>
+        <p class="ah-secondary lc-desc">Move laser projects between Bambu Suite, xTool Studio, Falcon Design Space and SVG. <span id="ver" class="ah-muted"></span></p>
+      </div>
+      <span class="ah-chip ah-chip--ok lc-privacy" title="Conversion runs in this browser tab. Nothing is uploaded.">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 5 6v5c0 4.4 3 8.3 7 9.5 4-1.2 7-5.1 7-9.5V6l-7-3Z"/><path d="m9 12 2 2 4-4"/></svg>
+        Files stay on your computer
+      </span>
+    </div>
+    <div class="ah-shell__body">
+      <div class="ah-shell__content">
+        <div class="lc-grid">
+          <section class="ah-glass ah-card lc-col" aria-labelledby="h-open">
+            <div class="lc-step"><span class="lc-num">1</span><h2 id="h-open" class="ah-card-title">Open a project</h2></div>
+            <label id="drop" class="lc-drop" tabindex="0">
+              <input id="file" type="file" accept=".lac,.xcs,.xs,.fds,.svg,.obj,.stl" hidden>
+              <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V4m0 0-4 4m4-4 4 4"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
+              <strong>Drop a file here</strong>
+              <span class="ah-muted">or click to choose: .lac .xcs .xs .fds .svg .obj .stl</span>
+            </label>
+            <div class="ah-scroll lc-side">
+              <div id="info" class="lc-info hidden"></div>
+              <details class="ah-panel lc-note">
+                <summary>What carries over, and what to check before cutting</summary>
+                <ul>
+                  <li><b>Carried over:</b> every shape, its position on the plate, and its operation (cut, score or fill engrave). Plates and materials stay separate. 3D models keep their mesh, textures and size.</li>
+                  <li><b>Not carried over:</b> power, speed and passes. Each machine and laser source is different, so outputs start from the target software's default settings. Pick your material preset before cutting.</li>
+                  <li><b>Kerf:</b> kerf offsets are not converted. Test a joint first.</li>
+                  <li><b>Not converted yet:</b> text objects (convert text to paths first), bitmap images, and Falcon 2D layouts. Anything skipped is listed after you open the file.</li>
+                  <li><b>Licences:</b> models from MakerWorld, Atomm and similar sites keep their designer's licence after conversion. Converting a file for your own machine is not permission to share or sell it.</li>
+                </ul>
+              </details>
+              <details class="ah-panel lc-note">
+                <summary>How each format was checked</summary>
+                <ul id="verify"></ul>
+              </details>
+            </div>
+          </section>
+
+          <section class="ah-glass ah-card lc-col" aria-labelledby="h-preview">
+            <div class="lc-step"><span class="lc-num">2</span><h2 id="h-preview" class="ah-card-title">Check the preview</h2>
+              <div class="lc-legend" id="legend" aria-label="Operation colours">
+                <span><i class="lc-sw lc-sw--cut"></i>Cut</span><span><i class="lc-sw lc-sw--score"></i>Score</span><span><i class="lc-sw lc-sw--fill"></i>Fill engrave</span>
+              </div>
+            </div>
+            <div class="ah-seg lc-tabs hidden" id="tabs" role="tablist"></div>
+            <div class="lc-stage" id="stage">
+              <canvas id="canvas"></canvas>
+              <div class="lc-empty" id="empty">Your project preview appears here</div>
+            </div>
+          </section>
+
+          <section class="ah-glass ah-card lc-col" aria-labelledby="h-target">
+            <div class="lc-step"><span class="lc-num">3</span><h2 id="h-target" class="ah-card-title">Convert to</h2></div>
+            <div class="ah-scroll lc-targets" id="targets"></div>
+            <button id="go" class="ah-btn ah-btn--primary lc-go" disabled>Convert</button>
+            <div id="results" class="lc-results"></div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="vendor/jszip.min.js"></script>
+<script type="module" src="shell.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>

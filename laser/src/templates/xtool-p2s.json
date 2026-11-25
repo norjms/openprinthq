@@ -1,0 +1,213 @@
+{
+ "label": "xTool P2S (55 W CO2)",
+ "kind": "2d",
+ "version": "1.10.21",
+ "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) xToolStudio/1.10.21 Chrome/136.0.7103.49 Electron/36.2.0 Safari/537.36",
+ "minRequiredVersion": "2.6.0",
+ "extId": "P2S",
+ "extName": "P2S",
+ "device": {
+  "id": "ZY013-1",
+  "deviceCode": "ZY013",
+  "extId": "P2S",
+  "extName": "P2S",
+  "power": [
+   55
+  ]
+ },
+ "mode": "LASER_PLANE",
+ "modeData": {
+  "material": 1,
+  "glbModel": null,
+  "purifierV3Gear": 0,
+  "backpackPurifierGear": 100,
+  "ap2miniPurifierGear": 0,
+  "fanGear": 0,
+  "purifierGear": 0,
+  "xcsUsed": [
+   "glbModel",
+   "purifierV3Gear",
+   "backpackPurifierGear",
+   "ap2miniPurifierGear",
+   "axis_y_transmission_ratio_roll_material"
+  ],
+  "diameter": null,
+  "perimeter": null,
+  "thickness": 3,
+  "precautionCodes": [
+   "FLAMMABLE",
+   "TURN_ON_AIR_PUMP",
+   "ODOR_PROTECTION"
+  ],
+  "pathPlanning": "auto",
+  "fillPlanning": "group",
+  "isProcessByLayer": false,
+  "dreedyTsp": false
+ },
+ "extendInfo": {
+  "version": "2.16.5",
+  "minCanvasVersion": "0.0.0",
+  "displayProcessConfigMap": {},
+  "rulerPluginData": {
+   "rulerGuide": []
+  },
+  "type": "2d"
+ },
+ "params": {
+  "VECTOR_CUTTING": {
+   "materialType": "official",
+   "materialId": 1,
+   "paramSchemeId": 1745651,
+   "paramSource": "official",
+   "planType": "official",
+   "parameter": {
+    "official": {
+     "power": 60,
+     "speed": 27,
+     "repeat": 1,
+     "cuttingDrop": false,
+     "sinkingMethod": "one",
+     "firstCuttingDropValue": 1,
+     "cuttingDropValue": 1,
+     "descentIntervalDescent": 1,
+     "descentPerStep": 1,
+     "enableBreakPoint": false,
+     "breakPointGenMode": "auto",
+     "breakPointSize": 0.5,
+     "breakPointMode": "count",
+     "breakPointCount": 2,
+     "breakPointDistance": 100,
+     "breakPointPower": 0,
+     "enableKerf": false,
+     "kerfDistance": 0,
+     "airPump": 100,
+     "enableOverCut": false,
+     "overCutDistance": 0.5
+    }
+   }
+  },
+  "VECTOR_ENGRAVING": {
+   "materialType": "official",
+   "materialId": 1,
+   "paramSchemeId": 1745649,
+   "paramSource": "official",
+   "planType": "official",
+   "parameter": {
+    "official": {
+     "power": 10,
+     "speed": 200,
+     "repeat": 1,
+     "enableKerf": false,
+     "kerfDistance": 0,
+     "airPump": 25,
+     "defocus": false,
+     "defocus_distance": 8
+    }
+   }
+  },
+  "FILL_VECTOR_ENGRAVING": {
+   "materialType": "official",
+   "materialId": 1,
+   "paramSchemeId": 1745650,
+   "paramSource": "official",
+   "planType": "official",
+   "parameter": {
+    "official": {
+     "scanAngle": 0,
+     "angleType": 2,
+     "crossAngle": false,
+     "imageCorrection": false,
+     "power": 15,
+     "speed": 400,
+     "repeat": 1,
+     "density": 100,
+     "bitmapScanMode": "zMode",
+     "airPump": 25,
+     "enableKerf": false,
+     "kerfDistance": 0,
+     "defocus": false,
+     "defocus_distance": 8,
+     "ramp": false,
+     "ramp_length": 0.5,
+     "ramp_min_power": 1,
+     "ramp_outer_edge": false,
+     "fill_type": "regular",
+     "offset_fill_direction": "IN_TO_OUT"
+    }
+   }
+  }
+ },
+ "xs": {
+  "versionInfo": {
+   "source": "pc",
+   "appVersion": "1.10.21",
+   "savedAt": 1795107223508,
+   "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) xToolStudio/1.10.21 Chrome/136.0.7103.49 Electron/36.2.0 Safari/537.36",
+   "minRequiredVersion": "2.6.0",
+   "appMinRequiredVersion": "",
+   "webMinRequiredVersion": ""
+  },
+  "persistenceMeta": {
+   "schemaVersion": "2.0.0",
+   "protocol": "xcs-workspace-v2"
+  },
+  "format": "v2",
+  "baseProfiles": {
+   "VECTOR_ENGRAVING": {
+    "power": 1,
+    "speed": 20,
+    "repeat": 1,
+    "enableKerf": false,
+    "kerfDistance": 0,
+    "airPump": 25,
+    "defocus": false,
+    "defocus_distance": 8
+   },
+   "FILL_VECTOR_ENGRAVING": {
+    "scanAngle": 0,
+    "angleType": 2,
+    "crossAngle": false,
+    "imageCorrection": false,
+    "power": 1,
+    "speed": 80,
+    "repeat": 1,
+    "density": 100,
+    "bitmapScanMode": "zMode",
+    "airPump": 25,
+    "enableKerf": false,
+    "kerfDistance": 0,
+    "defocus": false,
+    "defocus_distance": 8,
+    "ramp": false,
+    "ramp_length": 0.5,
+    "ramp_min_power": 1,
+    "ramp_outer_edge": false,
+    "fill_type": "regular",
+    "offset_fill_direction": "IN_TO_OUT"
+   },
+   "VECTOR_CUTTING": {
+    "power": 1,
+    "speed": 16,
+    "repeat": 1,
+    "cuttingDrop": false,
+    "sinkingMethod": "one",
+    "firstCuttingDropValue": 1,
+    "cuttingDropValue": 1,
+    "descentIntervalDescent": 1,
+    "descentPerStep": 1,
+    "enableBreakPoint": false,
+    "breakPointGenMode": "auto",
+    "breakPointSize": 0.5,
+    "breakPointMode": "count",
+    "breakPointCount": 2,
+    "breakPointDistance": 100,
+    "breakPointPower": 0,
+    "enableKerf": false,
+    "kerfDistance": 0,
+    "airPump": 100,
+    "enableOverCut": false,
+    "overCutDistance": 0.5
+   }
+  }
+ }
+}
