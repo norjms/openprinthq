@@ -1,10 +1,10 @@
-# Keep OpenPrintHQ Farm on the newest OrcaSlicer, in step with linuxserver/orcaslicer.
+# Keep the farm (farm/) on the newest OrcaSlicer, in step with linuxserver/orcaslicer.
 #
-# Every day: when OrcaSlicer has a newer full release than slicer/orcaslicer.env names, and linuxserver.io
+# Every day: when OrcaSlicer has a newer full release than farm/slicer/orcaslicer.env names, and linuxserver.io
 # has published linuxserver/orcaslicer at that same version, open a pull request moving the farm's slicer to
 # it, with the release's checksums. Until linuxserver.io has it, nothing moves, so the farm's slicer and the
 # OrcaSlicer desktop the OpenPrintHQ installer can add always run the same version.
-name: orcaslicer-watch
+name: farm-orcaslicer-watch
 
 on:
   schedule:
@@ -28,7 +28,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          . slicer/orcaslicer.env
+          . farm/slicer/orcaslicer.env
           gh api repos/OrcaSlicer/OrcaSlicer/releases/latest > release.json
           version="$(jq -r .tag_name release.json | sed 's/^v//')"
           if [ "$(jq -r .prerelease release.json)" != "false" ] || [ -z "$version" ]; then
@@ -52,7 +52,7 @@ jobs:
             -e "s/^ORCASLICER_VERSION=.*/ORCASLICER_VERSION=$version/" \
             -e "s/^ORCASLICER_AMD64_SHA256=.*/ORCASLICER_AMD64_SHA256=$amd64/" \
             -e "s/^ORCASLICER_ARM64_SHA256=.*/ORCASLICER_ARM64_SHA256=$arm64/" \
-            slicer/orcaslicer.env
+            farm/slicer/orcaslicer.env
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Open a pull request
@@ -62,17 +62,17 @@ jobs:
           VERSION: ${{ steps.next.outputs.version }}
         run: |
           set -euo pipefail
-          branch="orcaslicer-$VERSION"
+          branch="farm-orcaslicer-$VERSION"
           if git ls-remote --exit-code --heads origin "$branch" > /dev/null; then
             echo "a pull request for OrcaSlicer $VERSION is already open"; exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git switch -c "$branch"
-          git commit -am "Slicer: OrcaSlicer $VERSION"
+          git commit -am "Farm slicer: OrcaSlicer $VERSION"
           git push origin "$branch"
           body="OrcaSlicer $VERSION is a full release, and linuxserver/orcaslicer has published $VERSION too, so the farm's slicer and the OrcaSlicer desktop stay at one version. Checksums are the release's own. Once merged, build and publish the slicer image at $VERSION; the OpenPrintHQ installer then pins both images at $VERSION."
           # Where this repository does not let workflows open pull requests, an issue points at the branch.
-          gh pr create --base main --head "$branch" --title "Slicer: OrcaSlicer $VERSION" --body "$body" ||
-            gh issue create --title "Slicer: OrcaSlicer $VERSION is ready" --body \
+          gh pr create --base main --head "$branch" --title "Farm slicer: OrcaSlicer $VERSION" --body "$body" ||
+            gh issue create --title "Farm slicer: OrcaSlicer $VERSION is ready" --body \
               "$body Open a pull request from \`$branch\`: https://github.com/$GITHUB_REPOSITORY/compare/main...$branch"

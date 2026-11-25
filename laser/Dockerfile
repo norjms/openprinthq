@@ -8,7 +8,7 @@ RUN sh tools/build.sh
 
 FROM nginx:1.27-alpine
 LABEL org.opencontainers.image.title="OpenPrintHQ Laser" \
-      org.opencontainers.image.source="https://github.com/norjms/openprinthq-laser" \
+      org.opencontainers.image.source="https://github.com/norjms/openprinthq" \
       org.opencontainers.image.licenses="AGPL-3.0-only"
 COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html/apps/laser

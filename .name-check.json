@@ -13,7 +13,8 @@
     "dc=artisanhub",
     "artisan-hub(-[0-9.]+|-\\d)?\\.apk",
     "\\(\\?:openprinthq\\|artisan-hub\\)",
-    "artisan-hub-<version>\\.apk"
+    "artisan-hub-<version>\\.apk",
+    "formerly ArtisanHub Farm"
   ],
   "allow_until_renamed": [
     "(github\\.com/|ghcr\\.io/)?norjms/artisan-?hub[A-Za-z0-9_.-]*",

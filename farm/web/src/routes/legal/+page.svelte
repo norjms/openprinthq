@@ -10,7 +10,8 @@
   // AGPL §13 source offer, the complete corresponding source is published in the
   // public repositories (the app + the print engine). Linking them satisfies the
   // network-use source requirement and stays current with the deployed version.
-  const APP_REPO = 'https://github.com/norjms/openprinthq-farm';
+  // The farm is farm/ in the OpenPrintHQ repository.
+  const APP_REPO = 'https://github.com/norjms/openprinthq';
   const UPSTREAM_REPO = 'https://github.com/norjms/openprinthq-classic';
   const ENGINE_REPO = 'https://github.com/norjms/openprinthq-engine';
   const CLIENT_REPO = 'https://github.com/norjms/openprinthq-cloud-client';
@@ -18,8 +19,8 @@
   // link to the exact running version; otherwise fall back to the repo default branch.
   const appCommit = (typeof __OPHQ_APP_COMMIT__ === 'string') ? __OPHQ_APP_COMMIT__ : '';
   const engineCommit = (typeof __OPHQ_ENGINE_COMMIT__ === 'string') ? __OPHQ_ENGINE_COMMIT__ : '';
-  const APP_SRC = appCommit ? `${APP_REPO}/src/commit/${appCommit}` : APP_REPO;
-  const ENGINE_SRC = engineCommit ? `${ENGINE_REPO}/src/commit/${engineCommit}` : ENGINE_REPO;
+  const APP_SRC = appCommit ? `${APP_REPO}/tree/${appCommit}/farm` : `${APP_REPO}/tree/main/farm`;
+  const ENGINE_SRC = engineCommit ? `${ENGINE_REPO}/tree/${engineCommit}` : ENGINE_REPO;
   const LICENSE_TXT = APP_REPO + '/src/branch/main/LICENSE';
   const NOTICE_TXT = ENGINE_REPO + '/src/branch/main/NOTICE';
 </script>

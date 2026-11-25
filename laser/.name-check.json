@@ -1,6 +1,0 @@
-{
-  "mode": "enforce",
-  "allow": [],
-  "allow_until_renamed": [],
-  "skip": ["CHANGELOG*"]
-}

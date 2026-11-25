@@ -63,7 +63,7 @@ The image (`ghcr.io/norjms/openprinthq-laser`) is nginx serving the page at `/ap
 the hub's proxy, which asks the hub's sign-in first. To try it on its own:
 
 ```sh
-docker build -t openprinthq-laser .
+docker build -t openprinthq-laser laser          # from the repository root
 docker run --rm -p 8080:80 openprinthq-laser     # http://localhost:8080/apps/laser/
 ```
 

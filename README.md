@@ -7,6 +7,19 @@ the web store.
 
 Licence: [GNU AGPL-3.0](LICENSE).
 
+## What is in this repository
+
+| Folder | What it is |
+|---|---|
+| `backend/`, `frontend/`, `woocommerce/` | The hub: FastAPI backend, SvelteKit frontend and the WooCommerce connector |
+| `farm/` | The print farm, served under the hub's name at `/apps/farm` (web app, control plane, router, slicing service) |
+| `laser/` | OpenPrintHQ Laser, the Laser Crafting tools at `/apps/laser` |
+| `ui/` | The shared look of every OpenPrintHQ app (MIT, `ui/LICENSE`); released as `ui-vX.Y.Z` tags |
+
+The farm, Laser and the shared look had repositories of their own until November 2026 (`norjms/openprinthq-farm`,
+`norjms/openprinthq-laser`, `norjms/openprinthq-ui`, now archived); their histories are kept here. The print engine
+stays in its own repository, `norjms/openprinthq-engine`, since it follows Bambuddy.
+
 ## Features
 
 - **Models as products.** Photos, model and print files, colour options, bill of materials, licence records and

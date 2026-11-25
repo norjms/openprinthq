@@ -1,4 +1,10 @@
-# Keep the build context to what the Dockerfile copies (frontend/, backend/requirements.txt, backend/app).
+# Keep the build context to what the Dockerfile copies (frontend/, ui/, backend/requirements.txt, backend/app).
+# The farm and laser have their own Dockerfiles and ignore files.
+farm
+laser
+ui/gallery
+ui/test
+ui/node_modules
 .git
 **/node_modules
 frontend/build

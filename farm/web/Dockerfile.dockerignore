@@ -1,0 +1,10 @@
+# The farm web image is built from the repository root: only farm/web and ui/ go into the context.
+*
+!farm/web
+!ui
+farm/web/node_modules
+farm/web/build
+farm/web/.svelte-kit
+ui/node_modules
+ui/gallery
+ui/test

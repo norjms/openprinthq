@@ -21,12 +21,15 @@ GridTable, ProgressBar, Banner, Icon and Mark (the OpenPrintHQ mark beside the p
 
 ## Use it
 
-Pin a tag in `package.json` (the repository keeps its old name until the repositories are renamed; GitHub will
-redirect it):
+Inside this repository, an app takes it from the folder, installed as a copy (`install-links=true` in the app's
+`.npmrc`), so every app always has the current look:
 
 ```json
-"openprinthq-ui": "github:norjms/openprinthq-ui#v0.2.0"
+"openprinthq-ui": "file:../ui"
 ```
+
+From outside, use a release: `ui-vX.Y.Z` tags of `norjms/openprinthq`, with the package in `ui/`. Releases up to
+0.3.0 are also tagged `vX.Y.Z` in the archived `norjms/openprinthq-ui`.
 
 Then, once in the app's root layout:
 
